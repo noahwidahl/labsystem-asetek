@@ -1,0 +1,20 @@
+# Miljøvariabler og API-nøgler
+.env
+
+# Databasefiler
+*.sql
+
+# Python cache og logs
+__pycache__/
+*.log
+
+# Virtual environments (Python)
+venv/
+
+# Node.js-moduler (hvis du bruger Node.js)
+node_modules/
+
+# IDE-specifikke filer
+.vscode/
+.DS_Store
+Thumbs.db

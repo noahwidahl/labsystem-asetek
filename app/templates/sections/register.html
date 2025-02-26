@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="register" class="content-section">
+    <div class="registration-container">
+        <div class="registration-steps">
+            <div class="steps-container">
+                <div class="step active">
+                    <span>Information</span>
+                </div>
+                <div class="step">
+                    <span>Identifikation</span>
+                </div>
+                <div class="step">
+                    <span>Placering</span>
+                </div>
+            </div>
+            <div class="progress mt-3">
+                <div class="progress-bar" role="progressbar" style="width: 33%"></div>
+            </div>
+        </div>
+
+        <div class="registration-form">
+            <!-- Step 1: Grundlæggende Information -->
+            <div class="form-step active" id="step1">
+                <div class="copy-buttons">
+                    <button class="btn-copy">
+                        <i class="fas fa-clone"></i>
+                        Kopier Sidste
+                    </button>
+                    <button class="btn-copy">
+                        <i class="fas fa-copy"></i>
+                        Kopier Eksisterende
+                    </button>
+                </div>
+                <h3>Prøve Information</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Varenummer</label>
+                        <input type="text" class="form-control" name="partNumber" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Beskrivelse</label>
+                        <input type="text" class="form-control" name="description" required>
+                    </div>
+
+                    <!-- Pakke/mængde håndtering -->
+                    <div class="form-group package-container">
+                        <label>Pakke Type</label>
+                        <select class="form-control" name="packageType" onchange="updateAmountFields()">
+                            <option value="single">Enkelt pakke</option>
+                            <option value="multiple">Multiple pakker</option>
+                            <option value="bulk">Løs mængde (væske/meter)</option>
+                        </select>
+                    </div>
+            
+                    <div class="form-group" id="packageCountContainer" style="display: none;">
+                        <label>Antal Pakker</label>
+                        <input type="number" class="form-control" name="packageCount" min="1">
+                    </div>
+            
+                    <div class="form-group" id="itemsPerPackageContainer" style="display: none;">
+                        <label>Antal per Pakke</label>
+                        <input type="number" class="form-control" name="itemsPerPackage" min="1">
+                    </div>
+            
+                    <div class="form-group">
+                        <label>Total Mængde</label>
+                        <input type="number" class="form-control" name="totalAmount" required min="1">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Enhed</label>
+                        <select class="form-control" name="unit" required>
+                            <option value="pcs">Stk</option>
+                            <option value="m">Meter</option>
+                            <option value="l">Liter</option>
+                            <option value="kg">Kg</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Ejer</label>
+                        <select class="form-control" name="owner" required>
+                            <option value="">Vælg ejer</option>
+                            {% for user in users %}
+                            <option value="{{ user.id }}">{{ user.username }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Leverandør</label>
+                        <select class="form-control" name="supplier" required>
+                            <option value="">Vælg leverandør</option>
+                            {% for supplier in suppliers %}
+                            <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Udløbsdato</label>
+                        <input type="date" class="form-control" name="expiryDate" required>
+                        <small class="text-muted">Standard: 2 måneder fra i dag</small>
+                    </div>
+                </div>
+                <div class="form-group mt-4">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="hasSerialNumbers" name="hasSerialNumbers">
+                        <label for="hasSerialNumbers">Prøverne har individuelle serienumre</label>
+                    </div>
+                </div>
+            
+                <div class="form-group">
+                    <label>Andet</label>
+                    <textarea class="form-control" name="other" rows="3" placeholder="Indtast eventuelle bemærkninger eller andre detaljer"></textarea>
+                </div>
+            </div>
+
+            <!-- Step 2: Identifikation -->
+            <div class="form-step" id="step2">
+                <h3>Prøve Identifikation</h3>
+                <div class="scanner-section">
+                    <div class="scanner-header">
+                        <div class="counter">Scannede prøver: <span id="scannedCount">0</span> af <span id="totalCount">0</span></div>
+                        <button class="btn btn-outline-primary" id="scanButton">
+                            <i class="fas fa-barcode"></i> Start Scanning
+                        </button>
+                    </div>
+                    <div class="scan-input-group">
+                        <input type="text" class="form-control" id="barcodeInput" placeholder="Scan eller indtast serienummer" disabled>
+                        <button class="btn btn-secondary" id="manualInputBtn">Manuel Indtastning</button>
+                    </div>
+                    <div class="scanned-items">
+                        <!-- Scannede items vises her -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Placering -->
+            <div class="form-step" id="step3">
+                <h3>Vælg Placering</h3>
+                <div class="storage-selector">
+                    <div class="form-group mb-4">
+                        <label>Lagerplads</label>
+                        <select class="form-control" name="storageLocation" required>
+                            <option value="">Vælg lagerplads</option>
+                            <option value="A1">Sektion A1</option>
+                            <option value="A2">Sektion A2</option>
+                            <option value="B1">Sektion B1</option>
+                        </select>
+                    </div>
+                    <div class="storage-grid">
+                        <!-- Dynamisk genereret grid af ledige pladser -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-navigation">
+                <div class="form-nav-buttons">
+                    <button id="prevButton" class="btn btn-secondary" disabled>Tilbage</button>
+                    <button id="nextButton" class="btn btn-primary">Næste</button>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar" role="progressbar" style="width: 33%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

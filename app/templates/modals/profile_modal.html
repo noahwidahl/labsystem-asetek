@@ -1,0 +1,28 @@
+<div class="modal" id="profileModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Vælg Brugerprofil</h5>
+            </div>
+            <div class="modal-body">
+                <div class="profile-selection">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="userProfile" id="adminProfile" value="admin">
+                        <label class="form-check-label" for="adminProfile">Administrator</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="userProfile" id="userProfile" value="user" checked>
+                        <label class="form-check-label" for="userProfile">Bruger</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="userProfile" id="guestProfile" value="guest">
+                        <label class="form-check-label" for="guestProfile">Gæst</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="saveProfiles()">Gem profiler</button>
+            </div>
+        </div>
+    </div>
+</div>

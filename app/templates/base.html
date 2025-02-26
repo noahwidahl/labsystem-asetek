@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Laboratorie Prøvesystem{% endblock %}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <!-- Basis favicon for de fleste browsere -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon/favicon.ico') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon/favicon-96x96.png') }}">
+    <!-- For Apple enheder -->
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon/apple-touch-icon.png') }}">
+</head>
+<body class="lab-system">
+    <!-- Profile Selection Modal -->
+    {% include 'modals/profile_modal.html' %}
+
+    <!-- Copy Registration Modal -->
+    {% include 'modals/copy_registration_modal.html' %}
+
+    <!-- Expiring Samples Detail Modal -->
+    {% include 'modals/expiring_details_modal.html' %}
+
+    <!-- Test Creation Modal -->
+    {% include 'modals/create_test_modal.html' %}
+
+    <header class="main-header">
+        <div class="header-brand">
+            <h1>Asetek Lab System</h1>
+        </div>
+        <div class="header-center">
+            <div class="search-container">
+                <input type="text" placeholder="Søg på tværs af alle prøver..." class="global-search">
+                <button class="search-btn">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </div>
+        <div class="header-controls">
+            <div class="lab-badge">DK-Lab</div>
+            <div class="user-info">
+                <div class="domain-info">
+                    <span class="domain-name">ASETEK\</span>
+                    <span class="user-name">BWM</span>
+                </div>
+                <div class="user-roles">
+                    <span class="role-badge admin">Admin</span>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="showProfileModal()">
+                    <i class="fas fa-user-cog"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <nav class="side-nav">
+            <div class="nav-section">
+                <a href="#dashboard" class="nav-item" data-section="dashboard">
+                    <i class="fas fa-home"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#register" class="nav-item" data-section="register">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Registrer Prøver</span>
+                </a>
+                <a href="#storage" class="nav-item" data-section="storage">
+                    <i class="fas fa-box"></i>
+                    <span>Prøveoversigt</span>
+                </a>
+                <a href="#testing" class="nav-item" data-section="testing">
+                    <i class="fas fa-flask"></i>
+                    <span>Test Administration</span>
+                </a>
+                <a href="#history" class="nav-item" data-section="history">
+                    <i class="fas fa-history"></i>
+                    <span>Historik</span>
+                </a>
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <!-- All content will be dynamically loaded here -->
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/script_v2.js') }}?v=2"></script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="storage" class="content-section">
+    <div class="section-header">
+        <h2>Prøveoversigt</h2>
+        <div class="actions">
+            <button class="btn btn-outline-primary">
+                <i class="fas fa-filter"></i> Filter
+            </button>
+            <button class="btn btn-outline-primary">
+                <i class="fas fa-download"></i> Eksporter
+            </button>
+        </div>
+    </div>
+    
+    <!-- Hvis du vil lade JS'en oprette storage-grid dynamisk, behøver du ikke have det her -->
+    <div class="storage-grid"></div>
+    
+    <!-- Alternativt kan du undlade storage-grid her og lade JS oprette det -->
+    <div class="storage-table mb-6">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Beskrivelse</th>
+                    <th>Antal</th>
+                    <th>Placering</th>
+                    <th>Status</th>
+                    <th>Handling</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sample in samples %}
+                <tr>
+                    <td>{{ sample.id }}</td>
+                    <td>{{ sample.description }}</td>
+                    <td>{{ sample.amount }} stk</td>
+                    <td>{{ sample.location }}</td>
+                    <td>
+                        <span class="status-badge status-{{ sample.status|lower }}">
+                            {{ sample.status }}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary">Detaljer</button>
+                        <button class="btn btn-sm btn-outline">Flyt</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

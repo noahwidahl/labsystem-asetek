@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="error-container">
+    <h1>404 - Siden blev ikke fundet</h1>
+    <p>Beklager, men siden du leder efter findes ikke.</p>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Gå til forsiden</a>
+</div>
+{% endblock %}
