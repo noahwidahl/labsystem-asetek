@@ -1,0 +1,86 @@
+<!-- Test Creation Modal -->
+<div class="modal" id="createTestModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Opret Ny Test</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Test Type</label>
+                            <select class="form-control" name="testType" required>
+                                <option value="">Vælg test type</option>
+                                <option value="pressure">Tryk Test</option>
+                                <option value="thermal">Termisk Test</option>
+                                <option value="endurance">Holdbarhed Test</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Test Ejer</label>
+                            <select class="form-control" name="testOwner" required>
+                                <option value="">Vælg ejer</option>
+                                {% for user in users %}
+                                <option value="{{ user.UserID }}">{{ user.Name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group mb-3">
+                    <label>Vælg Prøver</label>
+                    <div class="sample-selector">
+                        <div class="sample-search mb-2">
+                            <input type="text" class="form-control" placeholder="Søg efter prøver...">
+                        </div>
+                        <div class="available-samples">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>
+                                            <input type="checkbox" id="selectAll">
+                                        </th>
+                                        <th>ID</th>
+                                        <th>Beskrivelse</th>
+                                        <th>Placering</th>
+                                        <th>Antal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if samples %}
+                                        {% for sample in samples %}
+                                        <tr>
+                                            <td>
+                                                <input type="checkbox" name="selectedSamples" value="{{ sample.SampleID }}">
+                                            </td>
+                                            <td>{{ sample.SampleID }}</td>
+                                            <td>{{ sample.Description }}</td>
+                                            <td>{{ sample.LocationID }}</td>
+                                            <td>
+                                                <input type="number" class="form-control form-control-sm" value="1" min="1" max="{{ sample.Amount }}">
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="5" class="text-center">Ingen prøver tilgængelige</td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuller</button>
+                <button type="button" class="btn btn-primary" onclick="createTest()">Opret Test</button>
+            </div>
+        </div>
+    </div>
+</div>

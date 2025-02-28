@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Historik - Laboratorie Prøvesystem{% endblock %}
+
+{% block content %}
+<section id="history" class="content-section">
+    <div class="section-header">
+        <h2>Historik</h2>
+        <div class="history-filters">
+            <input type="text" class="form-control" placeholder="Søg på prøve ID...">
+            <select class="form-control">
+                <option>Alle typer</option>
+                <option>Modtaget</option>
+                <option>Test</option>
+                <option>Kasseret</option>
+            </select>
+            <button class="btn btn-secondary">
+                <i class="fas fa-filter"></i> Filter
+            </button>
+        </div>
+    </div>
+
+    <div class="chain-of-custody">
+        {% if history_items %}
+            {% for item in history_items %}
+            <div class="custody-item">
+                <div class="custody-timeline">
+                    <div class="timeline-date">{{ item.Timestamp }}</div>
+                    <div class="timeline-connector"></div>
+                </div>
+                <div class="custody-content">
+                    <div class="custody-header">
+                        <span class="custody-type {{ item.ActionType|lower }}">{{ item.ActionType }}</span>
+                        <span class="custody-id">ID: {{ item.SampleDesc }}</span>
+                    </div>
+                    <div class="custody-details">
+                        {{ item.Notes }}
+                        <br>
+                        Håndteret af: {{ item.UserName }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="custody-item">
+                <div class="custody-timeline">
+                    <div class="timeline-date">Ingen historik</div>
+                </div>
+                <div class="custody-content">
+                    <div class="custody-details">
+                        Der er ingen registreret historik i systemet endnu.
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

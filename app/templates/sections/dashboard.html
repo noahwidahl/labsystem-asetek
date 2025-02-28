@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% block title %}Dashboard - Laboratorie Prøvesystem{% endblock %}
+
 {% block content %}
 <section id="dashboard" class="content-section active">
     <div class="dashboard-container">
@@ -10,27 +12,29 @@
                     <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
                     <div class="stat-info">
                         <h4>Udløber Snart</h4>
-                        <p class="stat-value">8</p>
+                        <p class="stat-value">{{ expiring_count|default(0) }}</p>
                         <p class="stat-trend negative">Inden for 14 dage</p>
                         <button class="btn btn-sm btn-warning mt-2" onclick="showExpiringDetails()">
                             Se detaljer
                         </button>
                     </div>
                 </div>
+                <!-- Sample count card -->
                 <div class="stat-card">
                     <div class="stat-icon"><i class="fas fa-box"></i></div>
                     <div class="stat-info">
                         <h4>På Lager</h4>
-                        <p class="stat-value">45</p>
-                        <p class="stat-trend positive">+5 i dag</p>
+                        <p class="stat-value">{{ sample_count|default(0) }}</p>
+                        <p class="stat-trend positive">+{{ new_today|default(0) }} i dag</p>
                     </div>
                 </div>
+                <!-- Active tests card -->
                 <div class="stat-card">
                     <div class="stat-icon"><i class="fas fa-flask"></i></div>
                     <div class="stat-info">
                         <h4>I Test</h4>
-                        <p class="stat-value">3</p>
-                        <p class="stat-trend">3 tests aktive</p>
+                        <p class="stat-value">{{ active_tests_count|default(0) }}</p>
+                        <p class="stat-trend">{{ active_tests_count|default(0) }} tests aktive</p>
                     </div>
                 </div>
             </div>
@@ -40,14 +44,27 @@
             <div class="storage-map">
                 <h3>Lageroversigt</h3>
                 <div class="storage-grid">
-                    <!-- Dynamisk genererede celler -->
+                    <!-- Dynamisk genererede celler via JavaScript -->
                 </div>
             </div>
             
             <div class="activity-feed">
                 <h3>Seneste Aktivitet</h3>
                 <div class="activity-list">
-                    <!-- Dynamisk genereret aktivitetsfeed -->
+                    {% if history_items %}
+                        {% for item in history_items[:5] %}
+                        <div class="activity-item">
+                            <span class="activity-time">{{ item.Timestamp|default('Nu') }}</span>
+                            <span class="activity-type {{ item.ActionType|lower }}">{{ item.ActionType }}</span>
+                            <span class="activity-desc">{{ item.Notes }}</span>
+                            <span class="activity-user">{{ item.UserName }}</span>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="activity-item">
+                            <span class="activity-desc">Ingen nylig aktivitet</span>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

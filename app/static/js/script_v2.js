@@ -1,160 +1,143 @@
-// ============================================
-// Konstanter og globale variabler
-// ============================================
+// Constants
 const DEFAULT_EXPIRY_MONTHS = 2;
-const NOTIFICATION_THRESHOLDS = { WARNING: 14, CRITICAL: 7 };
-
+const NOTIFICATION_THRESHOLDS = {
+    WARNING: 14, // days
+    CRITICAL: 7  // days
+};
 let currentStep = 1;
-const MAX_STEPS_WITH_SERIAL = 3;
-const MAX_STEPS_WITHOUT_SERIAL = 2;
+const totalSteps = 3;
 let scannedItems = [];
 let selectedLocation = null;
 
-// ============================================
-// Initialisering
-// ============================================
+// Initialize when document loads
 document.addEventListener('DOMContentLoaded', () => {
     initializeApplication();
 });
 
+// Initialization
 function initializeApplication() {
-    console.log("initializeApplication kører");
-    // Global initialisering – fx navigation, dashboard og brugerprofil
-    setupNavigationListeners();
+    showStep(1);
+    setDefaultExpiryDate();
     initializeUserProfile();
     loadDashboardData();
-    updateUIWithDomainUser({ username: 'BWM', domain: 'ASETEK', roles: ['Admin'] });
+    setupFormListeners();
+    setupNavigationListeners();
+    setupScannerListeners();
+    setupStorageGridListeners();
+    setupRegistrationSteps();
+    setupSerialNumberToggle()
 
-    // Find hvilken sektion, der skal vises ud fra URL-hash (default: dashboard)
+    // Show initial content
     const initialSection = window.location.hash.substring(1) || 'dashboard';
     showContent(initialSection);
 
-    // Registrerings-side initialisering, hvis vi er på siden (findes .form-step)
-    if (document.querySelector('.form-step')) {
-        showStep(1);
-        setDefaultExpiryDate();
-        setupFormListeners();
-        setupScannerListeners();
-        setupStorageGridListeners();
-        setupRegistrationSteps(); // Dummy – tilpas med logik senere
-        setupSerialNumberToggle();
-    }
+    // Mock domain user info
+    const domainUser = {
+        username: 'BWM',
+        domain: 'ASETEK',
+        roles: ['Admin']
+    };
 
-    // Hvis storage-siden er synlig ved load, initialiser grid
-    if (document.getElementById('storage')) {
-        setupStorageGrid();
-    }
+    // Update UI with domain user
+    updateUIWithDomainUser(domainUser);
 }
 
-// ============================================
-// Dummy registration steps function (tilpass efter behov)
-// ============================================
-function setupRegistrationSteps() {
-    console.log("setupRegistrationSteps kaldt (ingen logik implementeret).");
-}
-
-// ============================================
-// Funktion til at opdatere UI for profiler
-// ============================================
-function updateUIForProfiles(profiles) {
-    const userRoles = document.querySelector('.user-roles');
-    if (userRoles) {
-        userRoles.innerHTML = '';
-        if (profiles.admin) {
-            userRoles.innerHTML += '<span class="role-badge admin">Admin</span>';
-            enableAdminFeatures();
-        }
-        if (profiles.user) {
-            userRoles.innerHTML += '<span class="role-badge user">Bruger</span>';
-        }
-        if (profiles.guest) {
-            userRoles.innerHTML += '<span class="role-badge guest">Gæst</span>';
-            disableEditingFeatures();
-        }
-    }
-}
-
-// ============================================
-// Funktion til at opdatere UI med domæne-bruger
-// ============================================
-function updateUIWithDomainUser(userInfo) {
-    const userNameElem = document.querySelector('.user-name');
-    if (userNameElem) {
-        userNameElem.textContent = userInfo.username;
-    }
-    const userRoles = document.querySelector('.user-roles');
-    if (userRoles) {
-        userRoles.innerHTML = '';
-        userInfo.roles.forEach(role => {
-            userRoles.innerHTML += `<span class="role-badge ${role.toLowerCase()}">${role}</span>`;
-        });
-    }
-}
-
-// ============================================
-// Funktion til at initialisere brugerprofilen
-// ============================================
-function initializeUserProfile() {
-    const storedProfiles = localStorage.getItem('userProfiles');
-    if (storedProfiles) {
-        updateUIForProfiles(JSON.parse(storedProfiles));
-    }
-}
-
-// ============================================
-// Navigation og sidevisning
-// ============================================
+// Navigation
 function showContent(sectionId) {
-    // Skjul alle content-sektioner
+    // Hide all sections
     document.querySelectorAll('.content-section').forEach(section => {
         section.style.display = 'none';
         section.classList.remove('active');
     });
 
-    // Fjern active-klasse fra alle nav-items
+    // Remove active class from all nav items
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
     });
 
-    // Vis den ønskede sektion, hvis den findes
+    // Show the selected section
     const targetSection = document.getElementById(sectionId);
     if (targetSection) {
         targetSection.style.display = 'block';
         targetSection.classList.add('active');
     }
 
-    // Hvis storage-siden vælges, initialiser storage grid
-    if (sectionId === 'storage') {
-        setupStorageGrid();
-    }
-
-    // Marker det tilsvarende navigationselement
+    // Update the navigation item
     const activeNav = document.querySelector(`a[href="#${sectionId}"]`);
     if (activeNav) {
         activeNav.classList.add('active');
     }
 }
 
-// ============================================
-// Registreringsfunktioner (kører kun hvis .form-step findes)
-// ============================================
-function updateProgress(step) {
-    const serialCheckbox = document.getElementById('hasSerialNumbers');
-    const hasSerial = serialCheckbox ? serialCheckbox.checked : false;
-    const totalSteps = hasSerial ? MAX_STEPS_WITH_SERIAL : MAX_STEPS_WITHOUT_SERIAL;
+// Profile Management Functions
+function showProfileModal() {
+    const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+    modal.show();
+}
 
-    if (!serialCheckbox) {
-        console.warn('Elementet med id "hasSerialNumbers" blev ikke fundet.');
+function saveProfiles() {
+    const profiles = {
+        admin: document.getElementById('adminProfile').checked,
+        user: document.getElementById('userProfile').checked,
+        guest: document.getElementById('guestProfile').checked
+    };
+
+    updateUIForProfiles(profiles);
+    saveProfilesToLocalStorage(profiles);
+
+    const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
+    modal.hide();
+}
+
+function updateUIForProfiles(profiles) {
+    const userRoles = document.querySelector('.user-roles');
+    userRoles.innerHTML = '';
+
+    if (profiles.admin) {
+        userRoles.innerHTML += '<span class="role-badge admin">Admin</span>';
+        enableAdminFeatures();
     }
+    if (profiles.user) {
+        userRoles.innerHTML += '<span class="role-badge user">Bruger</span>';
+    }
+    if (profiles.guest) {
+        userRoles.innerHTML += '<span class="role-badge guest">Gæst</span>';
+        disableEditingFeatures();
+    }
+}
+
+function updateUIWithDomainUser(userInfo) {
+    document.querySelector('.user-name').textContent = userInfo.username;
+
+    const userRoles = document.querySelector('.user-roles');
+    userRoles.innerHTML = '';
+
+    userInfo.roles.forEach(role => {
+        userRoles.innerHTML += `<span class="role-badge ${role.toLowerCase()}">${role}</span>`;
+    });
+}
+
+// Registration Steps Functions
+function updateProgress(step) {
+    const hasSerialNumbers = document.getElementById('hasSerialNumbers').checked;
+    const totalSteps = hasSerialNumbers ? 3 : 2;
+    
+    // Beregn progress baseret på antal steps
     const progress = ((step - 1) / (totalSteps - 1)) * 100;
     const progressBar = document.querySelector('.progress-bar');
     if (progressBar) {
         progressBar.style.width = `${progress}%`;
     }
 
+    // Opdater steps visning - vis alle steps men markér kun de relevante
     document.querySelectorAll('.step').forEach((el, index) => {
         el.classList.remove('active', 'completed');
-        if (!hasSerial && index === 1) return; // Spring step 2 over, hvis ingen serienumre
+        
+        // Hvis vi ikke har serienumre og er på step 2, skip denne iteration
+        if (!hasSerialNumbers && index === 1) {
+            return;
+        }
+
         if (index + 1 < step) {
             el.classList.add('completed');
         } else if (index + 1 === step) {
@@ -163,35 +146,37 @@ function updateProgress(step) {
     });
 }
 
-function showStep(step) {
-    const formSteps = document.querySelectorAll('.form-step');
-    if (formSteps.length === 0) return;
+function setupSerialNumberToggle() {
+    const checkbox = document.getElementById('hasSerialNumbers');
+    checkbox.addEventListener('change', () => {
+        const currentStep = document.querySelector('.form-step.active').id.replace('step', '');
+        updateProgress(parseInt(currentStep));
+    });
+}
 
-    formSteps.forEach(el => el.classList.remove('active'));
-    const targetStep = document.querySelector(`.form-step:nth-child(${step})`);
-    if (targetStep) {
-        targetStep.classList.add('active');
-    }
+function showStep(step) {
+    document.querySelectorAll('.form-step').forEach(el => {
+        el.classList.remove('active');
+    });
+
+    document.querySelector(`.form-step:nth-child(${step})`).classList.add('active');
     updateProgress(step);
     updateNavigationButtons(step);
 
-    // Hvis sidste trin (f.eks. lagertrin), opsæt lagergrid
-    if (step === MAX_STEPS_WITH_SERIAL || step === MAX_STEPS_WITHOUT_SERIAL) {
+    if (step === 3) {
         setupStorageGrid();
     }
 }
 
 function updateNavigationButtons(step) {
-    const prevButton = document.getElementById('prevButton');
-    const nextButton = document.getElementById('nextButton');
+    const prevButton = document.querySelector('#prevButton');
+    const nextButton = document.querySelector('#nextButton');
 
     if (prevButton) {
-        prevButton.style.display = (step === 1 ? 'none' : 'block');
+        prevButton.style.display = step === 1 ? 'none' : 'block';
     }
+
     if (nextButton) {
-        const serialCheckbox = document.getElementById('hasSerialNumbers');
-        const hasSerial = serialCheckbox ? serialCheckbox.checked : false;
-        const totalSteps = hasSerial ? MAX_STEPS_WITH_SERIAL : MAX_STEPS_WITHOUT_SERIAL;
         if (step === totalSteps) {
             nextButton.textContent = 'Afslut';
             nextButton.onclick = handleFormSubmission;
@@ -204,37 +189,41 @@ function updateNavigationButtons(step) {
 
 function nextStep() {
     if (validateCurrentStep()) {
-        const serialCheckbox = document.getElementById('hasSerialNumbers');
-        const hasSerial = serialCheckbox ? serialCheckbox.checked : false;
-        if (currentStep === 1 && !hasSerial) {
-            currentStep = MAX_STEPS_WITHOUT_SERIAL;
+        const hasSerialNumbers = document.getElementById('hasSerialNumbers').checked;
+        
+        // Hvis vi er på step 1 og der ikke er serienumre, spring til step 3
+        if (currentStep === 1 && !hasSerialNumbers) {
+            currentStep = 3;
         } else {
-            currentStep = Math.min(
-                currentStep + 1,
-                hasSerial ? MAX_STEPS_WITH_SERIAL : MAX_STEPS_WITHOUT_SERIAL
-            );
+            currentStep = Math.min(currentStep + 1, totalSteps);
         }
+        
         showStep(currentStep);
     }
 }
 
 function previousStep() {
-    const serialCheckbox = document.getElementById('hasSerialNumbers');
-    const hasSerial = serialCheckbox ? serialCheckbox.checked : false;
-    if (currentStep === (hasSerial ? MAX_STEPS_WITH_SERIAL : MAX_STEPS_WITHOUT_SERIAL)) {
+    const hasSerialNumbers = document.getElementById('hasSerialNumbers').checked;
+    
+    if (currentStep === 3 && !hasSerialNumbers) {
         currentStep = 1;
     } else {
         currentStep = Math.max(currentStep - 1, 1);
     }
+    
     showStep(currentStep);
-    const prevButton = document.getElementById('prevButton');
+    
+    // Aktivér/deaktivér tilbage-knappen
+    const prevButton = document.querySelector('#prevButton');
     if (prevButton) {
-        prevButton.disabled = (currentStep === 1);
+        prevButton.disabled = currentStep === 1;
     }
 }
 
-function handleFormSubmission() {
+// Form Validation and Submission
+async function handleFormSubmission() {
     showSuccessMessage('Prøver er blevet registreret succesfuldt');
+    
     setTimeout(() => {
         resetForm();
         showContent('storage');
@@ -242,45 +231,25 @@ function handleFormSubmission() {
 }
 
 function validateCurrentStep() {
-    // Implementer evt. specifik validering for hvert trin
+    // For demo formål, godkend altid
     return true;
 }
 
-// ============================================
-// Lager / Storage grid funktioner
-// ============================================
+// Storage Grid Functions
 function setupStorageGrid() {
-    // Forsøg at finde containeren med id "storage"
-    const storageContainer = document.getElementById('storage');
-    if (!storageContainer) {
-        console.warn('Storage container (id="storage") blev ikke fundet.');
-        return;
-    }
-    
-    // Forsøg at finde et eksisterende grid inde i containeren
-    let grid = storageContainer.querySelector('.storage-grid');
-    if (!grid) {
-        // Opret grid'et dynamisk, hvis det ikke findes
-        grid = document.createElement('div');
-        grid.className = 'storage-grid';
-        storageContainer.appendChild(grid);
-        console.log('Storage grid oprettet dynamisk.');
-    }
-    
-    // Nulstil grid-indholdet
+    const grid = document.querySelector('.storage-grid');
+    if (!grid) return;
+
     grid.innerHTML = '';
-    
-    // Opret 12 celler med tilfældig "occupied"-status
+
     for (let i = 1; i <= 12; i++) {
         const cell = document.createElement('div');
         cell.className = 'storage-cell';
-        if (Math.random() > 0.7) {
-            cell.classList.add('occupied');
-        }
+        if (Math.random() > 0.7) cell.classList.add('occupied');
 
         const location = document.createElement('div');
         location.className = 'location';
-        location.textContent = `A${Math.ceil(i / 4)}.B${i % 4 || 4}`;
+        location.textContent = `A${Math.ceil(i/4)}.B${i % 4 || 4}`;
 
         const capacity = document.createElement('div');
         capacity.className = 'capacity';
@@ -307,13 +276,10 @@ function setupStorageGridListeners() {
 function selectStorageCell(cell) {
     document.querySelectorAll('.storage-cell').forEach(c => c.classList.remove('selected'));
     cell.classList.add('selected');
-    const locElem = cell.querySelector('.location');
-    if (locElem) selectedLocation = locElem.textContent;
+    selectedLocation = cell.querySelector('.location').textContent;
 }
 
-// ============================================
-// Scanner funktioner
-// ============================================
+// Scanner Functions
 function setupScannerListeners() {
     const scannerInput = document.getElementById('barcodeInput');
     if (scannerInput) {
@@ -331,8 +297,9 @@ function handleScan(event) {
 
 function processScan(barcode) {
     if (!barcode) return;
-    const totalExpectedInput = document.querySelector('[name="amount"]');
-    const totalExpected = totalExpectedInput ? parseInt(totalExpectedInput.value) : 0;
+
+    const totalExpected = parseInt(document.querySelector('[name="amount"]')?.value) || 0;
+
     if (scannedItems.length < totalExpected) {
         scannedItems.push(barcode);
         updateScanUI();
@@ -344,24 +311,25 @@ function processScan(barcode) {
 function updateScanUI() {
     const counter = document.getElementById('scannedCount');
     const totalCounter = document.getElementById('totalCount');
-    const totalInput = document.querySelector('[name="amount"]');
-    const total = totalInput ? totalInput.value : 0;
+    const total = document.querySelector('[name="amount"]')?.value || 0;
+
     if (counter) counter.textContent = scannedItems.length;
     if (totalCounter) totalCounter.textContent = total;
+
     const container = document.querySelector('.scanned-items');
     if (container) {
         container.innerHTML = scannedItems.map((code, index) => `
             <div class="scanned-item">
                 <span>${code}</span>
-                <button onclick="removeScannedItem(${index})" class="btn btn-sm btn-danger">Fjern</button>
+                <button onclick="removeScannedItem(${index})" class="btn btn-sm btn-danger">
+                    Fjern
+                </button>
             </div>
         `).join('');
     }
 }
 
-// ============================================
-// Globale event listeners
-// ============================================
+// Setup Event Listeners
 function setupFormListeners() {
     document.querySelectorAll('input, select').forEach(input => {
         input.addEventListener('input', () => {
@@ -373,90 +341,88 @@ function setupFormListeners() {
 }
 
 function setupNavigationListeners() {
+    // Navigation menu click listeners
     document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', event => {
+        item.addEventListener('click', (event) => {
             event.preventDefault();
             const sectionId = item.getAttribute('href').substring(1);
             showContent(sectionId);
         });
     });
-    const prevButton = document.getElementById('prevButton');
+
+    // Form navigation listeners
+    const prevButton = document.querySelector('#prevButton');
+    const nextButton = document.querySelector('#nextButton');
+    
     if (prevButton) {
         prevButton.addEventListener('click', previousStep);
     }
-    const nextButton = document.getElementById('nextButton');
-    if (nextButton) {
-        nextButton.addEventListener('click', nextStep);
-    }
 }
 
-function setupSerialNumberToggle() {
-    const checkbox = document.getElementById('hasSerialNumbers');
-    if (checkbox) {
-        checkbox.addEventListener('change', () => {
-            // Genberegn registrerings-trinene ved ændring
-            showStep(currentStep);
-        });
-    }
-}
-
-// ============================================
-// Utility funktioner
-// ============================================
+// Utility Functions
 function showSuccessMessage(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast show';
-    toast.role = 'alert';
-    toast.ariaLive = 'assertive';
-    toast.style.position = 'fixed';
-    toast.style.top = '20px';
-    toast.style.right = '20px';
-    toast.style.zIndex = '1050';
-    toast.innerHTML = `
+    const successToast = document.createElement('div');
+    successToast.className = 'toast show';
+    successToast.role = 'alert';
+    successToast.ariaLive = 'assertive';
+    successToast.style.position = 'fixed';
+    successToast.style.top = '20px';
+    successToast.style.right = '20px';
+    successToast.style.zIndex = '1050';
+    successToast.innerHTML = `
         <div class="toast-header bg-success text-white">
             <strong class="me-auto">Succes</strong>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
         <div class="toast-body">${message}</div>
     `;
-    document.body.appendChild(toast);
-    setTimeout(() => { toast.remove(); }, 3000);
+    document.body.appendChild(successToast);
+
+    setTimeout(() => {
+        successToast.remove();
+    }, 3000);
 }
 
 function showErrorMessage(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast show';
-    toast.role = 'alert';
-    toast.ariaLive = 'assertive';
-    toast.style.position = 'fixed';
-    toast.style.top = '20px';
-    toast.style.right = '20px';
-    toast.style.zIndex = '1050';
-    toast.innerHTML = `
+    const errorToast = document.createElement('div');
+    errorToast.className = 'toast show';
+    errorToast.role = 'alert';
+    errorToast.ariaLive = 'assertive';
+    errorToast.style.position = 'fixed';
+    errorToast.style.top = '20px';
+    errorToast.style.right = '20px';
+    errorToast.style.zIndex = '1050';
+    errorToast.innerHTML = `
         <div class="toast-header bg-danger text-white">
             <strong class="me-auto">Fejl</strong>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
         <div class="toast-body">${message}</div>
     `;
-    document.body.appendChild(toast);
-    setTimeout(() => { toast.remove(); }, 3000);
+    document.body.appendChild(errorToast);
+
+    setTimeout(() => {
+        errorToast.remove();
+    }, 3000);
 }
 
 function resetForm() {
     currentStep = 1;
     scannedItems = [];
     selectedLocation = null;
+
     document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"])').forEach(input => {
         input.value = '';
     });
     document.querySelectorAll('select').forEach(select => {
         select.selectedIndex = 0;
     });
+
     setDefaultExpiryDate();
     showStep(1);
 }
 
+// Helper Functions
 function validateField(input) {
     if (!input.value) {
         markInvalid(input);
@@ -476,9 +442,9 @@ function markValid(element) {
 function setDefaultExpiryDate() {
     const expiryInput = document.querySelector('input[name="expiryDate"]');
     if (expiryInput) {
-        const date = new Date();
-        date.setMonth(date.getMonth() + DEFAULT_EXPIRY_MONTHS);
-        expiryInput.valueAsDate = date;
+        const defaultDate = new Date();
+        defaultDate.setMonth(defaultDate.getMonth() + DEFAULT_EXPIRY_MONTHS);
+        expiryInput.valueAsDate = defaultDate;
     }
 }
 
@@ -503,19 +469,24 @@ function saveProfilesToLocalStorage(profiles) {
     localStorage.setItem('userProfiles', JSON.stringify(profiles));
 }
 
+function initializeUserProfile() {
+    const savedProfiles = localStorage.getItem('userProfiles');
+    if (savedProfiles) {updateUIForProfiles(JSON.parse(savedProfiles));
+    }
+}
+
 function loadDashboardData() {
     console.log('Loading dashboard data...');
-    // evt. AJAX/fetch kald
 }
 
 function enableAdminFeatures() {
+    // Implementation af admin features
     console.log('Admin features enabled');
-    // evt. implementer admin logik
 }
 
 function disableEditingFeatures() {
+    // Implementation af read-only mode
     console.log('Editing features disabled');
-    // evt. implementer read-only logik
 }
 
 function removeScannedItem(index) {
@@ -523,32 +494,25 @@ function removeScannedItem(index) {
     updateScanUI();
 }
 
-// ============================================
-// Test- og oprettelsesfunktioner
-// ============================================
+// Test Creation Functions
 function showCreateTestModal() {
-    const modalElem = document.getElementById('createTestModal');
-    if (modalElem) {
-        const modal = new bootstrap.Modal(modalElem);
-        modal.show();
-    }
+    const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
+    modal.show();
 }
 
 function createTest() {
-    const testTypeInput = document.querySelector('[name="testType"]');
-    const testOwnerInput = document.querySelector('[name="testOwner"]');
     const testData = {
-        type: testTypeInput ? testTypeInput.value : '',
-        owner: testOwnerInput ? testOwnerInput.value : '',
+        type: document.querySelector('[name="testType"]').value,
+        owner: document.querySelector('[name="testOwner"]').value,
         samples: getSelectedSamples()
     };
+
     console.log('Creating test:', testData);
     showSuccessMessage('Test oprettet succesfuldt');
-    const modalElem = document.getElementById('createTestModal');
-    if (modalElem) {
-        const modal = bootstrap.Modal.getInstance(modalElem);
-        if (modal) modal.hide();
-    }
+
+    const modal = bootstrap.Modal.getInstance(document.getElementById('createTestModal'));
+    modal.hide();
+
     updateTestOverview();
 }
 
@@ -556,44 +520,31 @@ function getSelectedSamples() {
     const selectedSamples = [];
     document.querySelectorAll('[name="selectedSamples"]:checked').forEach(checkbox => {
         const row = checkbox.closest('tr');
-        if (row) {
-            const idCell = row.querySelector('td:nth-child(2)');
-            const amountInput = row.querySelector('input[type="number"]');
-            if (idCell && amountInput) {
-                selectedSamples.push({
-                    id: idCell.textContent,
-                    amount: parseInt(amountInput.value)
-                });
-            }
-        }
+        selectedSamples.push({
+            id: row.querySelector('td:nth-child(2)').textContent,
+            amount: parseInt(row.querySelector('input[type="number"]').value)
+        });
     });
     return selectedSamples;
 }
 
 function updateTestOverview() {
+    // Implementation would update the test overview UI
     console.log('Updating test overview');
-    // evt. opdatering af UI for testoversigt
 }
 
-// ============================================
-// Udløbsdato og ekspiration
-// ============================================
+// Expiry Check Functions
 function showExpiringDetails() {
-    const modalElem = document.getElementById('expiringDetailsModal');
-    if (modalElem) {
-        const modal = new bootstrap.Modal(modalElem);
-        modal.show();
-    }
+    const modal = new bootstrap.Modal(document.getElementById('expiringDetailsModal'));
+    modal.show();
 }
 
 function checkForExpiringSamples() {
+    // Implementation would connect to backend
     console.log('Checking for expiring samples...');
-    // evt. backend kald eller lokal logik
 }
 
-// ============================================
-// Eksporter funktioner (til test mv.)
-// ============================================
+// Export necessary functions for testing
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         validateForm,

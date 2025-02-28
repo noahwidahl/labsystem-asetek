@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 def setup_database():
     """
-    Opretter databasen og kører SQL-scriptet for at oprette tabeller og indsætte startdata.
+    Opretter databasen og kører SQL-scriptet for at opsætte tabeller og startdata.
     """
     # Indlæs miljøvariabler fra .env-filen
     load_dotenv()
@@ -12,7 +12,7 @@ def setup_database():
     mysql_host = os.getenv('MYSQL_HOST')
     mysql_user = os.getenv('MYSQL_USER')
     mysql_password = os.getenv('MYSQL_PASSWORD')
-    mysql_db = os.getenv('MYSQL_DB')
+    mysql_db = os.getenv('MYSQL_DB', 'lab_system')  # Default til lab_system
     
     # Forbind til MySQL-server (uden database først)
     conn = mysql.connector.connect(
@@ -31,7 +31,7 @@ def setup_database():
         print(f"Database '{mysql_db}' er oprettet eller eksisterer allerede.")
         
         # Læs SQL-scriptet
-        with open('database_setup.sql', 'r') as f:
+        with open('database_setup.sql', 'r', encoding='utf-8') as f:
             sql_commands = f.read()
         
         # Split scriptet ved semikolon og kør hver kommando

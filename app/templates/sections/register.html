@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% block title %}Registrer Prøver - Laboratorie Prøvesystem{% endblock %}
+
 {% block content %}
 <section id="register" class="content-section">
     <div class="registration-container">
@@ -28,7 +30,7 @@
                         <i class="fas fa-clone"></i>
                         Kopier Sidste
                     </button>
-                    <button class="btn-copy">
+                    <button class="btn-copy" data-bs-toggle="modal" data-bs-target="#copyRegistrationModal">
                         <i class="fas fa-copy"></i>
                         Kopier Eksisterende
                     </button>
@@ -72,10 +74,10 @@
                     <div class="form-group">
                         <label>Enhed</label>
                         <select class="form-control" name="unit" required>
-                            <option value="pcs">Stk</option>
-                            <option value="m">Meter</option>
-                            <option value="l">Liter</option>
-                            <option value="kg">Kg</option>
+                            <option value="">Vælg enhed</option>
+                            {% for unit in units %}
+                            <option value="{{ unit.UnitID }}">{{ unit.UnitName }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="form-group">
@@ -83,7 +85,7 @@
                         <select class="form-control" name="owner" required>
                             <option value="">Vælg ejer</option>
                             {% for user in users %}
-                            <option value="{{ user.id }}">{{ user.username }}</option>
+                            <option value="{{ user.UserID }}">{{ user.Name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -92,7 +94,7 @@
                         <select class="form-control" name="supplier" required>
                             <option value="">Vælg leverandør</option>
                             {% for supplier in suppliers %}
-                            <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                            <option value="{{ supplier.SupplierID }}">{{ supplier.SupplierName }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -130,7 +132,7 @@
                         <button class="btn btn-secondary" id="manualInputBtn">Manuel Indtastning</button>
                     </div>
                     <div class="scanned-items">
-                        <!-- Scannede items vises her -->
+                        <!-- Scannede items vises her via JavaScript -->
                     </div>
                 </div>
             </div>
@@ -143,13 +145,13 @@
                         <label>Lagerplads</label>
                         <select class="form-control" name="storageLocation" required>
                             <option value="">Vælg lagerplads</option>
-                            <option value="A1">Sektion A1</option>
-                            <option value="A2">Sektion A2</option>
-                            <option value="B1">Sektion B1</option>
+                            {% for location in locations %}
+                            <option value="{{ location.LocationID }}">{{ location.LocationName }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="storage-grid">
-                        <!-- Dynamisk genereret grid af ledige pladser -->
+                        <!-- Dynamisk genereret grid af ledige pladser via JavaScript -->
                     </div>
                 </div>
             </div>

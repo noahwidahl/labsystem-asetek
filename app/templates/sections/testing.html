@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Test Administration - Laboratorie Prøvesystem{% endblock %}
+
+{% block content %}
+<section id="testing" class="content-section">
+    <div class="section-header">
+        <h2>Test Administration</h2>
+        <div class="section-actions">
+            <button class="btn btn-primary" onclick="showCreateTestModal()">
+                <i class="fas fa-plus"></i> Start Ny Test
+            </button>
+        </div>
+    </div>
+
+    <!-- Aktive Tests -->
+    <div class="active-tests">
+        <h3>Aktive Tests</h3>
+        <div class="test-grid">
+            {% if active_tests %}
+                {% for test in active_tests %}
+                <div class="test-card">
+                    <div class="test-header">
+                        <span class="test-id">{{ test.TestID }}</span>
+                        <span class="test-status active">Aktiv</span>
+                    </div>
+                    <div class="test-content">
+                        <h4>{{ test.TestName|default('Test') }}</h4>
+                        <div class="test-info">
+                            <div class="info-row">
+                                <span class="label">Antal Prøver:</span>
+                                <span class="value">{{ test.sample_count }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Start Dato:</span>
+                                <span class="value">{{ test.CreatedDate }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Ejer:</span>
+                                <span class="value">{{ test.UserName }}</span>
+                            </div>
+                        </div>
+                        <div class="sample-list">
+                            <div class="sample-item">{{ test.TestID }}_1</div>
+                            <div class="sample-item">{{ test.TestID }}_2</div>
+                            {% if test.sample_count > 2 %}
+                            <div class="sample-more">+{{ test.sample_count - 2 }} mere</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="test-actions">
+                        <button class="btn btn-secondary">Se Detaljer</button>
+                        <button class="btn btn-outline">Afslut Test</button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-info">
+                    Ingen aktive tests fundet. Opret en ny test for at komme i gang.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}
