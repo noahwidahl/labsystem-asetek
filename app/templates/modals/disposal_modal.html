@@ -1,0 +1,61 @@
+<div class="modal" id="disposalModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Registrer Kassation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group mb-3">
+                    <label>Vælg Prøve</label>
+                    <select class="form-control" id="sampleSelect" required>
+                        <option value="">Vælg prøve</option>
+                        {% for sample in available_samples %}
+                        <option value="{{ sample.SampleID }}">{{ sample.SampleIDFormatted }} - {{ sample.Description }} ({{ sample.AmountRemaining }} {{ sample.Unit }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group mb-3">
+                    <label>Antal</label>
+                    <input type="number" class="form-control" id="disposalAmount" min="1" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label>Kasseret Af</label>
+                    <select class="form-control" id="disposalUser" required>
+                        <option value="">Vælg bruger</option>
+                        {% for user in users %}
+                        <option value="{{ user.UserID }}">{{ user.Name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group mb-3">
+                    <label>Noter</label>
+                    <textarea class="form-control" id="disposalNotes" rows="3"></textarea>
+                </div>
+                
+                <hr class="mb-4">
+                
+                <h6>Seneste Kassationer</h6>
+                <div class="recent-disposals mt-3">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Prøve ID</th>
+                                <th>Dato</th>
+                                <th>Antal</th>
+                                <th>Bruger</th>
+                            </tr>
+                        </thead>
+                        <tbody id="disposalTableBody">
+                            <!-- Dynamisk indhold via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuller</button>
+                <button type="button" class="btn btn-danger" onclick="createDisposal()">Registrer Kassation</button>
+            </div>
+        </div>
+    </div>
+</div>

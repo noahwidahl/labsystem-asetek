@@ -26,6 +26,12 @@
 
     <!-- Test Creation Modal -->
     {% include 'modals/create_test_modal.html' %}
+    
+    <!-- Container Administration Modal -->
+    {% include 'modals/container_modal.html' %}
+    
+    <!-- Disposal Registration Modal -->
+    {% include 'modals/disposal_modal.html' %}
 
     <header class="main-header">
         <div class="header-brand">
@@ -79,13 +85,24 @@
                 <span>Historik</span>
             </a>
         </div>
+        
+        <div class="nav-section mt-4">
+            <div class="nav-header px-3 text-muted small">VÆRKTØJER</div>
+            <a href="#" class="nav-item" onclick="showContainerModal(event)">
+                <i class="fas fa-archive"></i>
+                <span>Containere</span>
+            </a>
+            <a href="#" class="nav-item" onclick="showDisposalModal(event)">
+                <i class="fas fa-trash-alt"></i>
+                <span>Kassation</span>
+            </a>
+        </div>
     </nav>
 
-        <main class="content-area">
-            <!-- All content will be dynamically loaded here -->
-            {% block content %}{% endblock %}
-        </main>
-    </div>
+    <main class="content-area">
+        <!-- All content will be dynamically loaded here -->
+        {% block content %}{% endblock %}
+    </main>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/script_v2.js') }}?v=2"></script>
