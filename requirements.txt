@@ -3,3 +3,4 @@ flask-mysqldb==1.0.1
 python-dotenv==1.0.0
 mysql-connector-python==8.0.33
 pyinstaller==6.12.0
+mysql-connector-python==25.0.1

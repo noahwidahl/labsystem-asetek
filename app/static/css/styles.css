@@ -168,8 +168,11 @@ body {
     padding: 1.5rem 0;
     box-shadow: var(--shadow-sm);
     position: fixed;
+    top: var(--header-height);
+    left: 0;
     height: calc(100vh - var(--header-height));
     overflow-y: auto;
+    z-index: 100;
 }
 
 .nav-section {
@@ -210,15 +213,23 @@ body {
     flex: 1;
     margin-left: var(--sidebar-width);
     padding: 2rem;
+    padding-top: 2rem;
+    position: relative; 
+    top: 0;
 }
 
 .content-section {
-    display: none;
+    display: block;
     animation: fadeIn 0.3s ease;
+    position: relative;
+    margin-top: 1rem;
+    padding-top: 1rem;
 }
 
-.content-section.active {
-    display: block;
+.content-section h2, 
+.content-section .section-header {
+    margin-top: 1rem;
+    margin-bottom: 2rem;
 }
 
 /* Modal Styles */
@@ -261,8 +272,13 @@ body {
 
 /* Dashboard Components */
 .dashboard-container {
-    display: grid;
-    gap: 2rem;
+    margin-top: 1rem;
+}
+
+.registration-container,
+.storage-table-container,
+.chain-of-custody {
+    margin-top: 1rem;
 }
 
 .stats-grid {

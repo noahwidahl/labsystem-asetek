@@ -56,31 +56,30 @@
         </div>
     </header>
 
-    <div class="main-container">
-        <nav class="side-nav">
-            <div class="nav-section">
-                <a href="#dashboard" class="nav-item" data-section="dashboard">
-                    <i class="fas fa-home"></i>
-                    <span>Dashboard</span>
-                </a>
-                <a href="#register" class="nav-item" data-section="register">
-                    <i class="fas fa-plus-circle"></i>
-                    <span>Registrer Prøver</span>
-                </a>
-                <a href="#storage" class="nav-item" data-section="storage">
-                    <i class="fas fa-box"></i>
-                    <span>Prøveoversigt</span>
-                </a>
-                <a href="#testing" class="nav-item" data-section="testing">
-                    <i class="fas fa-flask"></i>
-                    <span>Test Administration</span>
-                </a>
-                <a href="#history" class="nav-item" data-section="history">
-                    <i class="fas fa-history"></i>
-                    <span>Historik</span>
-                </a>
-            </div>
-        </nav>
+    <nav class="side-nav">
+        <div class="nav-section">
+            <a href="{{ url_for('dashboard') }}" class="nav-item {% if request.path == url_for('dashboard') or request.path == '/' %}active{% endif %}">
+                <i class="fas fa-home"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="{{ url_for('register') }}" class="nav-item {% if request.path == url_for('register') %}active{% endif %}">
+                <i class="fas fa-plus-circle"></i>
+                <span>Registrer Prøver</span>
+            </a>
+            <a href="{{ url_for('storage') }}" class="nav-item {% if request.path == url_for('storage') %}active{% endif %}">
+                <i class="fas fa-box"></i>
+                <span>Prøveoversigt</span>
+            </a>
+            <a href="{{ url_for('testing') }}" class="nav-item {% if request.path == url_for('testing') %}active{% endif %}">
+                <i class="fas fa-flask"></i>
+                <span>Test Administration</span>
+            </a>
+            <a href="{{ url_for('history') }}" class="nav-item {% if request.path == url_for('history') %}active{% endif %}">
+                <i class="fas fa-history"></i>
+                <span>Historik</span>
+            </a>
+        </div>
+    </nav>
 
         <main class="content-area">
             <!-- All content will be dynamically loaded here -->

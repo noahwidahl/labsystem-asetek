@@ -16,21 +16,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Initialization
 function initializeApplication() {
-    showStep(1);
-    setDefaultExpiryDate();
+    // Generelle initialiseringer
     initializeUserProfile();
-    loadDashboardData();
     setupFormListeners();
-    setupNavigationListeners();
     setupScannerListeners();
     setupStorageGridListeners();
-    setupRegistrationSteps();
-    setupSerialNumberToggle()
-
-    // Show initial content
-    const initialSection = window.location.hash.substring(1) || 'dashboard';
-    showContent(initialSection);
-
+    
+    // Initialiser funktioner baseret på den aktuelle sti
+    const currentPath = window.location.pathname;
+    
+    if (currentPath === '/' || currentPath.includes('/dashboard')) {
+        loadDashboardData();
+    } else if (currentPath.includes('/register')) {
+        setDefaultExpiryDate();
+        setupRegistrationSteps();
+        setupSerialNumberToggle();
+        showStep(1);
+    } else if (currentPath.includes('/storage')) {
+        // Lager-specifikke initialiseringer
+    } else if (currentPath.includes('/testing')) {
+        // Test-specifikke initialiseringer
+    }
+    
     // Mock domain user info
     const domainUser = {
         username: 'BWM',
@@ -42,31 +49,47 @@ function initializeApplication() {
     updateUIWithDomainUser(domainUser);
 }
 
-// Navigation
-function showContent(sectionId) {
-    // Hide all sections
-    document.querySelectorAll('.content-section').forEach(section => {
-        section.style.display = 'none';
-        section.classList.remove('active');
+// Load Storage Locations
+function loadStorageLocations() {
+    fetch('/api/storage-locations')
+        .then(response => response.json())
+        .then(data => {
+            if (data.locations) {
+                updateStorageGrid(data.locations);
+            }
+        })
+        .catch(error => console.error('Error loading storage locations:', error));
+}
+
+function updateStorageGrid(locations) {
+    const grid = document.querySelector('.storage-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+
+    locations.forEach(location => {
+        const cell = document.createElement('div');
+        cell.className = 'storage-cell';
+        if (location.status === 'occupied') {
+            cell.classList.add('occupied');
+        }
+
+        const locationEl = document.createElement('div');
+        locationEl.className = 'location';
+        locationEl.textContent = location.LocationName;
+
+        const capacity = document.createElement('div');
+        capacity.className = 'capacity';
+        capacity.textContent = location.status === 'occupied' ? `${location.count} prøver` : 'Ledig';
+
+        cell.appendChild(locationEl);
+        cell.appendChild(capacity);
+        grid.appendChild(cell);
+
+        if (location.status !== 'occupied') {
+            cell.addEventListener('click', () => selectStorageCell(cell));
+        }
     });
-
-    // Remove active class from all nav items
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-    });
-
-    // Show the selected section
-    const targetSection = document.getElementById(sectionId);
-    if (targetSection) {
-        targetSection.style.display = 'block';
-        targetSection.classList.add('active');
-    }
-
-    // Update the navigation item
-    const activeNav = document.querySelector(`a[href="#${sectionId}"]`);
-    if (activeNav) {
-        activeNav.classList.add('active');
-    }
 }
 
 // Profile Management Functions
@@ -119,8 +142,11 @@ function updateUIWithDomainUser(userInfo) {
 
 // Registration Steps Functions
 function updateProgress(step) {
-    const hasSerialNumbers = document.getElementById('hasSerialNumbers').checked;
-    const totalSteps = hasSerialNumbers ? 3 : 2;
+    const hasSerialNumbers = document.getElementById('hasSerialNumbers');
+    if (!hasSerialNumbers) return; // Afbryd hvis elementet ikke findes
+    
+    const isChecked = hasSerialNumbers.checked;
+    const totalSteps = isChecked ? 3 : 2;
     
     // Beregn progress baseret på antal steps
     const progress = ((step - 1) / (totalSteps - 1)) * 100;
@@ -129,12 +155,15 @@ function updateProgress(step) {
         progressBar.style.width = `${progress}%`;
     }
 
-    // Opdater steps visning - vis alle steps men markér kun de relevante
-    document.querySelectorAll('.step').forEach((el, index) => {
+    // Opdater steps visning
+    const steps = document.querySelectorAll('.step');
+    if (steps.length === 0) return;
+    
+    steps.forEach((el, index) => {
         el.classList.remove('active', 'completed');
         
         // Hvis vi ikke har serienumre og er på step 2, skip denne iteration
-        if (!hasSerialNumbers && index === 1) {
+        if (!isChecked && index === 1) {
             return;
         }
 
@@ -148,23 +177,36 @@ function updateProgress(step) {
 
 function setupSerialNumberToggle() {
     const checkbox = document.getElementById('hasSerialNumbers');
-    checkbox.addEventListener('change', () => {
-        const currentStep = document.querySelector('.form-step.active').id.replace('step', '');
-        updateProgress(parseInt(currentStep));
-    });
+    if (checkbox) {
+        checkbox.addEventListener('change', () => {
+            const currentStep = document.querySelector('.form-step.active').id.replace('step', '');
+            updateProgress(parseInt(currentStep));
+        });
+    }
 }
 
 function showStep(step) {
-    document.querySelectorAll('.form-step').forEach(el => {
+    const formSteps = document.querySelectorAll('.form-step');
+    if (formSteps.length === 0) {
+        console.warn("No form steps found");
+        return; // Afbryd hvis der ikke er nogen form-trin
+    }
+    
+    formSteps.forEach(el => {
         el.classList.remove('active');
     });
 
-    document.querySelector(`.form-step:nth-child(${step})`).classList.add('active');
-    updateProgress(step);
-    updateNavigationButtons(step);
+    const currentStep = document.querySelector(`.form-step:nth-child(${step})`);
+    if (currentStep) {
+        currentStep.classList.add('active');
+        updateProgress(step);
+        updateNavigationButtons(step);
 
-    if (step === 3) {
-        setupStorageGrid();
+        if (step === 3) {
+            setupStorageGrid();
+        }
+    } else {
+        console.warn(`Step ${step} not found`);
     }
 }
 
@@ -222,334 +264,599 @@ function previousStep() {
 
 // Form Validation and Submission
 async function handleFormSubmission() {
-    showSuccessMessage('Prøver er blevet registreret succesfuldt');
+    if (!validateCurrentStep()) return;
     
-    setTimeout(() => {
-        resetForm();
-        showContent('storage');
-    }, 1500);
-}
-
-function validateCurrentStep() {
-    // For demo formål, godkend altid
-    return true;
-}
-
-// Storage Grid Functions
-function setupStorageGrid() {
-    const grid = document.querySelector('.storage-grid');
-    if (!grid) return;
-
-    grid.innerHTML = '';
-
-    for (let i = 1; i <= 12; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'storage-cell';
-        if (Math.random() > 0.7) cell.classList.add('occupied');
-
-        const location = document.createElement('div');
-        location.className = 'location';
-        location.textContent = `A${Math.ceil(i/4)}.B${i % 4 || 4}`;
-
-        const capacity = document.createElement('div');
-        capacity.className = 'capacity';
-        capacity.textContent = cell.classList.contains('occupied') ? 'Optaget' : 'Ledig';
-
-        cell.appendChild(location);
-        cell.appendChild(capacity);
-        grid.appendChild(cell);
-
-        if (!cell.classList.contains('occupied')) {
-            cell.addEventListener('click', () => selectStorageCell(cell));
+    const formData = {
+        description: document.querySelector('[name="description"]').value,
+        totalAmount: parseInt(document.querySelector('[name="totalAmount"]').value),
+        unit: document.querySelector('[name="unit"]').value,
+        owner: document.querySelector('[name="owner"]').value,
+        supplier: document.querySelector('[name="supplier"]').value,
+        expiryDate: document.querySelector('[name="expiryDate"]').value,
+        hasSerialNumbers: document.getElementById('hasSerialNumbers').checked,
+        other: document.querySelector('[name="other"]').value,
+        serialNumbers: scannedItems,
+        storageLocation: document.querySelector('[name="storageLocation"]').value || selectedLocation
+    };
+    
+    try {
+        const response = await fetch('/api/samples', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccessMessage(`Prøve ${result.sample_id} er blevet registreret succesfuldt`);
+            
+            setTimeout(() => {
+                resetForm();
+                showContent('storage');
+            }, 1500);
+        } else {
+            showErrorMessage(`Fejl ved registrering: ${result.error}`);
+        }
+    } catch (error) {
+        console.error('Error submitting form:', error);
+        showErrorMessage('Der opstod en fejl ved registrering. Prøv igen senere.');
+    }
+    }
+    
+    function validateCurrentStep() {
+        switch (currentStep) {
+            case 1:
+                // Valider den grundlæggende information
+                const requiredFields = [
+                    'description',
+                    'totalAmount',
+                    'unit',
+                    'owner',
+                    'supplier',
+                    'expiryDate'
+                ];
+                
+                let isValid = true;
+                
+                requiredFields.forEach(field => {
+                    const input = document.querySelector(`[name="${field}"]`);
+                    if (!input || !input.value.trim()) {
+                        markInvalid(input);
+                        isValid = false;
+                    } else {
+                        markValid(input);
+                    }
+                });
+                
+                return isValid;
+                
+            case 2:
+                // Validering af serienumre, hvis de er påkrævet
+                const hasSerialNumbers = document.getElementById('hasSerialNumbers').checked;
+                const totalAmount = parseInt(document.querySelector('[name="totalAmount"]').value) || 0;
+                
+                if (hasSerialNumbers && scannedItems.length < totalAmount) {
+                    showErrorMessage(`Der mangler at blive scannet ${totalAmount - scannedItems.length} prøver`);
+                    return false;
+                }
+                
+                return true;
+                
+            case 3:
+                // Validering af lagerplacering
+                const locationSelect = document.querySelector('[name="storageLocation"]');
+                
+                if ((!locationSelect || !locationSelect.value) && !selectedLocation) {
+                    showErrorMessage('Vælg venligst en lagerplacering');
+                    return false;
+                }
+                
+                return true;
+                
+            default:
+                return true;
         }
     }
-}
-
-function setupStorageGridListeners() {
-    document.querySelectorAll('.storage-cell').forEach(cell => {
-        if (!cell.classList.contains('occupied')) {
-            cell.addEventListener('click', () => selectStorageCell(cell));
+    
+    // Storage Grid Functions
+    function setupStorageGrid() {
+        // Hent lagerplaceringer fra API'en
+        fetch('/api/storage-locations')
+            .then(response => response.json())
+            .then(data => {
+                if (data.locations) {
+                    updateStorageGrid(data.locations);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading storage locations:', error);
+                // Fallback til dummy data hvis API-kaldet fejler
+                createDummyStorageGrid();
+            });
+    }
+    
+    function createDummyStorageGrid() {
+        const grid = document.querySelector('.storage-grid');
+        if (!grid) return;
+    
+        grid.innerHTML = '';
+    
+        for (let i = 1; i <= 12; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'storage-cell';
+            if (Math.random() > 0.7) cell.classList.add('occupied');
+    
+            const location = document.createElement('div');
+            location.className = 'location';
+            location.textContent = `A${Math.ceil(i/4)}.B${i % 4 || 4}`;
+    
+            const capacity = document.createElement('div');
+            capacity.className = 'capacity';
+            capacity.textContent = cell.classList.contains('occupied') ? 'Optaget' : 'Ledig';
+    
+            cell.appendChild(location);
+            cell.appendChild(capacity);
+            grid.appendChild(cell);
+    
+            if (!cell.classList.contains('occupied')) {
+                cell.addEventListener('click', () => selectStorageCell(cell));
+            }
         }
-    });
-}
-
-function selectStorageCell(cell) {
-    document.querySelectorAll('.storage-cell').forEach(c => c.classList.remove('selected'));
-    cell.classList.add('selected');
-    selectedLocation = cell.querySelector('.location').textContent;
-}
-
-// Scanner Functions
-function setupScannerListeners() {
-    const scannerInput = document.getElementById('barcodeInput');
-    if (scannerInput) {
-        scannerInput.addEventListener('keypress', handleScan);
     }
-}
-
-function handleScan(event) {
-    if (event.key === 'Enter') {
-        event.preventDefault();
-        processScan(event.target.value);
-        event.target.value = '';
-    }
-}
-
-function processScan(barcode) {
-    if (!barcode) return;
-
-    const totalExpected = parseInt(document.querySelector('[name="amount"]')?.value) || 0;
-
-    if (scannedItems.length < totalExpected) {
-        scannedItems.push(barcode);
-        updateScanUI();
-    } else {
-        showErrorMessage('Maksimalt antal prøver er nået');
-    }
-}
-
-function updateScanUI() {
-    const counter = document.getElementById('scannedCount');
-    const totalCounter = document.getElementById('totalCount');
-    const total = document.querySelector('[name="amount"]')?.value || 0;
-
-    if (counter) counter.textContent = scannedItems.length;
-    if (totalCounter) totalCounter.textContent = total;
-
-    const container = document.querySelector('.scanned-items');
-    if (container) {
-        container.innerHTML = scannedItems.map((code, index) => `
-            <div class="scanned-item">
-                <span>${code}</span>
-                <button onclick="removeScannedItem(${index})" class="btn btn-sm btn-danger">
-                    Fjern
-                </button>
-            </div>
-        `).join('');
-    }
-}
-
-// Setup Event Listeners
-function setupFormListeners() {
-    document.querySelectorAll('input, select').forEach(input => {
-        input.addEventListener('input', () => {
-            if (input.classList.contains('invalid')) {
-                validateField(input);
+    
+    function setupStorageGridListeners() {
+        document.querySelectorAll('.storage-cell').forEach(cell => {
+            if (!cell.classList.contains('occupied')) {
+                cell.addEventListener('click', () => selectStorageCell(cell));
             }
         });
-    });
-}
-
-function setupNavigationListeners() {
-    // Navigation menu click listeners
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', (event) => {
-            event.preventDefault();
-            const sectionId = item.getAttribute('href').substring(1);
-            showContent(sectionId);
-        });
-    });
-
-    // Form navigation listeners
-    const prevButton = document.querySelector('#prevButton');
-    const nextButton = document.querySelector('#nextButton');
+    }
     
-    if (prevButton) {
-        prevButton.addEventListener('click', previousStep);
+    function selectStorageCell(cell) {
+        document.querySelectorAll('.storage-cell').forEach(c => c.classList.remove('selected'));
+        cell.classList.add('selected');
+        selectedLocation = cell.querySelector('.location').textContent;
     }
-}
-
-// Utility Functions
-function showSuccessMessage(message) {
-    const successToast = document.createElement('div');
-    successToast.className = 'toast show';
-    successToast.role = 'alert';
-    successToast.ariaLive = 'assertive';
-    successToast.style.position = 'fixed';
-    successToast.style.top = '20px';
-    successToast.style.right = '20px';
-    successToast.style.zIndex = '1050';
-    successToast.innerHTML = `
-        <div class="toast-header bg-success text-white">
-            <strong class="me-auto">Succes</strong>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-        <div class="toast-body">${message}</div>
-    `;
-    document.body.appendChild(successToast);
-
-    setTimeout(() => {
-        successToast.remove();
-    }, 3000);
-}
-
-function showErrorMessage(message) {
-    const errorToast = document.createElement('div');
-    errorToast.className = 'toast show';
-    errorToast.role = 'alert';
-    errorToast.ariaLive = 'assertive';
-    errorToast.style.position = 'fixed';
-    errorToast.style.top = '20px';
-    errorToast.style.right = '20px';
-    errorToast.style.zIndex = '1050';
-    errorToast.innerHTML = `
-        <div class="toast-header bg-danger text-white">
-            <strong class="me-auto">Fejl</strong>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-        <div class="toast-body">${message}</div>
-    `;
-    document.body.appendChild(errorToast);
-
-    setTimeout(() => {
-        errorToast.remove();
-    }, 3000);
-}
-
-function resetForm() {
-    currentStep = 1;
-    scannedItems = [];
-    selectedLocation = null;
-
-    document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"])').forEach(input => {
-        input.value = '';
-    });
-    document.querySelectorAll('select').forEach(select => {
-        select.selectedIndex = 0;
-    });
-
-    setDefaultExpiryDate();
-    showStep(1);
-}
-
-// Helper Functions
-function validateField(input) {
-    if (!input.value) {
-        markInvalid(input);
-    } else {
-        markValid(input);
+    
+    // Scanner Functions
+    function setupScannerListeners() {
+        const scannerInput = document.getElementById('barcodeInput');
+        if (scannerInput) {
+            scannerInput.addEventListener('keypress', handleScan);
+        }
     }
-}
-
-function markInvalid(element) {
-    element.classList.add('invalid');
-}
-
-function markValid(element) {
-    element.classList.remove('invalid');
-}
-
-function setDefaultExpiryDate() {
-    const expiryInput = document.querySelector('input[name="expiryDate"]');
-    if (expiryInput) {
-        const defaultDate = new Date();
-        defaultDate.setMonth(defaultDate.getMonth() + DEFAULT_EXPIRY_MONTHS);
-        expiryInput.valueAsDate = defaultDate;
+    
+    function handleScan(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            processScan(event.target.value);
+            event.target.value = '';
+        }
     }
-}
-
-function validateForm() {
-    let isValid = true;
-    document.querySelectorAll('[required]').forEach(input => {
+    
+    function processScan(barcode) {
+        if (!barcode) return;
+    
+        const totalExpected = parseInt(document.querySelector('[name="amount"]')?.value) || 0;
+    
+        if (scannedItems.length < totalExpected) {
+            scannedItems.push(barcode);
+            updateScanUI();
+        } else {
+            showErrorMessage('Maksimalt antal prøver er nået');
+        }
+    }
+    
+    function updateScanUI() {
+        const counter = document.getElementById('scannedCount');
+        const totalCounter = document.getElementById('totalCount');
+        const total = document.querySelector('[name="amount"]')?.value || 0;
+    
+        if (counter) counter.textContent = scannedItems.length;
+        if (totalCounter) totalCounter.textContent = total;
+    
+        const container = document.querySelector('.scanned-items');
+        if (container) {
+            container.innerHTML = scannedItems.map((code, index) => `
+                <div class="scanned-item">
+                    <span>${code}</span>
+                    <button onclick="removeScannedItem(${index})" class="btn btn-sm btn-danger">
+                        Fjern
+                    </button>
+                </div>
+            `).join('');
+        }
+    }
+    
+    // Setup Event Listeners
+    function setupFormListeners() {
+        document.querySelectorAll('input, select').forEach(input => {
+            input.addEventListener('input', () => {
+                if (input.classList.contains('invalid')) {
+                    validateField(input);
+                }
+            });
+        });
+    }
+    
+    function setupRegistrationSteps() {
+        // Implementering kan tilpasses efter behov
+        console.log('Setting up registration steps');
+    }
+    
+    // Test Creation Functions
+    function showCreateTestModal() {
+        const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
+        modal.show();
+    }
+    
+    function createTest() {
+        // Valider inputs
+        const testType = document.querySelector('[name="testType"]');
+        const testOwner = document.querySelector('[name="testOwner"]');
+        
+        if (!testType.value) {
+            testType.classList.add('invalid');
+            return;
+        }
+        
+        if (!testOwner.value) {
+            testOwner.classList.add('invalid');
+            return;
+        }
+        
+        const selectedSamples = getSelectedSamples();
+        if (selectedSamples.length === 0) {
+            showErrorMessage('Vælg mindst én prøve til testen');
+            return;
+        }
+        
+        const testData = {
+            type: testType.value,
+            owner: testOwner.value,
+            testName: `${testType.options[testType.selectedIndex].text} Test`,
+            description: `Test oprettet ${new Date().toLocaleDateString('da-DK')}`,
+            samples: selectedSamples
+        };
+    
+        // Send til API
+        fetch('/api/createTest', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(testData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSuccessMessage(`Test ${data.test_id} oprettet succesfuldt`);
+                
+                const modal = bootstrap.Modal.getInstance(document.getElementById('createTestModal'));
+                modal.hide();
+                
+                // Reload testing page efter kortere delay
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                showErrorMessage(`Fejl ved oprettelse af test: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            console.error('Error creating test:', error);
+            showErrorMessage('Der opstod en fejl ved oprettelse af test. Prøv igen senere.');
+        });
+    }
+    
+    function getSelectedSamples() {
+        const selectedSamples = [];
+        document.querySelectorAll('[name="selectedSamples"]:checked').forEach(checkbox => {
+            const row = checkbox.closest('tr');
+            const amountInput = row.querySelector('input[type="number"]');
+            
+            // Kontroller at mængden er gyldig
+            if (amountInput && parseInt(amountInput.value) > 0) {
+                selectedSamples.push({
+                    id: row.querySelector('td:nth-child(2)').textContent,
+                    amount: parseInt(amountInput.value)
+                });
+            } else if (amountInput) {
+                amountInput.classList.add('invalid');
+            }
+        });
+        return selectedSamples;
+    }
+    
+    function updateTestOverview() {
+        // Implementation would update the test overview UI
+        console.log('Updating test overview');
+    }
+    
+    // Expiry Check Functions
+    function showExpiringDetails() {
+        // Indlæs udløbende prøver fra API
+        fetch('/api/expiring-samples')
+            .then(response => response.json())
+            .then(data => {
+                if (data.samples && data.samples.length > 0) {
+                    updateExpiringModal(data.samples);
+                } else {
+                    updateExpiringModal([]);
+                }
+                const modal = new bootstrap.Modal(document.getElementById('expiringDetailsModal'));
+                modal.show();
+            })
+            .catch(error => {
+                console.error('Error loading expiring samples:', error);
+                showErrorMessage('Kunne ikke indlæse udløbende prøver. Prøv igen senere.');
+            });
+    }
+    
+    function updateExpiringModal(samples) {
+        const modalBody = document.querySelector('#expiringDetailsModal .modal-body');
+        
+        if (samples.length === 0) {
+            modalBody.innerHTML = '<div class="alert alert-info">Ingen prøver der udløber inden for de næste 14 dage.</div>';
+            return;
+        }
+        
+        let tableContent = `
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Prøve ID</th>
+                            <th>Beskrivelse</th>
+                            <th>Udløbsdato</th>
+                            <th>Dage til udløb</th>
+                            <th>Placering</th>
+                            <th>Handling</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        samples.forEach(sample => {
+            const warningClass = sample.days_until_expiry <= 7 ? 'danger' : 'warning';
+            const formattedDate = new Date(sample.ExpireDate).toLocaleDateString('da-DK');
+            
+            tableContent += `
+                <tr class="${warningClass}">
+                    <td>${sample.SampleID}</td>
+                    <td>${sample.Description}</td>
+                    <td>${formattedDate}</td>
+                    <td>${sample.days_until_expiry}</td>
+                    <td>${sample.LocationName}</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" onclick="extendExpiryDate('${sample.SampleID}')">
+                            Forlæng
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        tableContent += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        modalBody.innerHTML = tableContent;
+    }
+    
+    function extendExpiryDate(sampleId) {
+        // Dette skal implementeres senere med et API-kald
+        console.log(`Extending expiry date for sample: ${sampleId}`);
+        showSuccessMessage(`Udløbsdato forlænget med 30 dage for ${sampleId}`);
+    }
+    
+    function checkForExpiringSamples() {
+        fetch('/api/expiring-samples')
+            .then(response => response.json())
+            .then(data => {
+                if (data.samples && data.samples.length > 0) {
+                    // Vis notifikation
+                    showWarningMessage(`${data.samples.length} prøver udløber snart. Klik for detaljer.`, () => showExpiringDetails());
+                }
+            })
+            .catch(error => console.error('Error checking expiring samples:', error));
+    }
+    
+    // Utility Functions
+    function showSuccessMessage(message) {
+        const successToast = document.createElement('div');
+        successToast.className = 'toast show';
+        successToast.role = 'alert';
+        successToast.ariaLive = 'assertive';
+        successToast.style.position = 'fixed';
+        successToast.style.top = '20px';
+        successToast.style.right = '20px';
+        successToast.style.zIndex = '1050';
+        successToast.innerHTML = `
+            <div class="toast-header bg-success text-white">
+                <strong class="me-auto">Succes</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">${message}</div>
+        `;
+        document.body.appendChild(successToast);
+    
+        setTimeout(() => {
+            successToast.remove();
+        }, 3000);
+    }
+    
+    function showErrorMessage(message) {
+        const errorToast = document.createElement('div');
+        errorToast.className = 'toast show';
+        errorToast.role = 'alert';
+        errorToast.ariaLive = 'assertive';
+        errorToast.style.position = 'fixed';
+        errorToast.style.top = '20px';
+        errorToast.style.right = '20px';
+        errorToast.style.zIndex = '1050';
+        errorToast.innerHTML = `
+            <div class="toast-header bg-danger text-white">
+                <strong class="me-auto">Fejl</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">${message}</div>
+        `;
+        document.body.appendChild(errorToast);
+    
+        setTimeout(() => {
+            errorToast.remove();
+        }, 3000);
+    }
+    
+    function showWarningMessage(message, clickCallback = null) {
+        const warningToast = document.createElement('div');
+        warningToast.className = 'toast show';
+        warningToast.role = 'alert';
+        warningToast.ariaLive = 'assertive';
+        warningToast.style.position = 'fixed';
+        warningToast.style.top = '20px';
+        warningToast.style.right = '20px';
+        warningToast.style.zIndex = '1050';
+        warningToast.style.cursor = clickCallback ? 'pointer' : 'default';
+        
+        if (clickCallback) {
+            warningToast.addEventListener('click', clickCallback);
+        }
+        
+        warningToast.innerHTML = `
+            <div class="toast-header bg-warning text-dark">
+                <strong class="me-auto">Advarsel</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">${message}</div>
+        `;
+        document.body.appendChild(warningToast);
+    
+        setTimeout(() => {
+            warningToast.remove();
+        }, 5000);
+    }
+    
+    function resetForm() {
+        currentStep = 1;
+        scannedItems = [];
+        selectedLocation = null;
+    
+        document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"])').forEach(input => {
+            input.value = '';
+            input.classList.remove('invalid');
+        });
+        document.querySelectorAll('select').forEach(select => {
+            select.selectedIndex = 0;
+            select.classList.remove('invalid');
+        });
+        
+        // Reset checkbox
+        if (document.getElementById('hasSerialNumbers')) {
+            document.getElementById('hasSerialNumbers').checked = false;
+        }
+        
+        // Clear scanned items container
+        const scannedItemsContainer = document.querySelector('.scanned-items');
+        if (scannedItemsContainer) {
+            scannedItemsContainer.innerHTML = '';
+        }
+    
+        setDefaultExpiryDate();
+        showStep(1);
+    }
+    
+    // Helper Functions
+    function validateField(input) {
         if (!input.value) {
-            isValid = false;
             markInvalid(input);
         } else {
             markValid(input);
         }
-    });
-    return isValid;
-}
-
-function saveRegistrationData(formData) {
-    localStorage.setItem('registeredSamples', JSON.stringify(formData));
-}
-
-function saveProfilesToLocalStorage(profiles) {
-    localStorage.setItem('userProfiles', JSON.stringify(profiles));
-}
-
-function initializeUserProfile() {
-    const savedProfiles = localStorage.getItem('userProfiles');
-    if (savedProfiles) {updateUIForProfiles(JSON.parse(savedProfiles));
     }
-}
-
-function loadDashboardData() {
-    console.log('Loading dashboard data...');
-}
-
-function enableAdminFeatures() {
-    // Implementation af admin features
-    console.log('Admin features enabled');
-}
-
-function disableEditingFeatures() {
-    // Implementation af read-only mode
-    console.log('Editing features disabled');
-}
-
-function removeScannedItem(index) {
-    scannedItems.splice(index, 1);
-    updateScanUI();
-}
-
-// Test Creation Functions
-function showCreateTestModal() {
-    const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
-    modal.show();
-}
-
-function createTest() {
-    const testData = {
-        type: document.querySelector('[name="testType"]').value,
-        owner: document.querySelector('[name="testOwner"]').value,
-        samples: getSelectedSamples()
-    };
-
-    console.log('Creating test:', testData);
-    showSuccessMessage('Test oprettet succesfuldt');
-
-    const modal = bootstrap.Modal.getInstance(document.getElementById('createTestModal'));
-    modal.hide();
-
-    updateTestOverview();
-}
-
-function getSelectedSamples() {
-    const selectedSamples = [];
-    document.querySelectorAll('[name="selectedSamples"]:checked').forEach(checkbox => {
-        const row = checkbox.closest('tr');
-        selectedSamples.push({
-            id: row.querySelector('td:nth-child(2)').textContent,
-            amount: parseInt(row.querySelector('input[type="number"]').value)
+    
+    function markInvalid(element) {
+        element.classList.add('invalid');
+    }
+    
+    function markValid(element) {
+        element.classList.remove('invalid');
+    }
+    
+    function setDefaultExpiryDate() {
+        const expiryInput = document.querySelector('input[name="expiryDate"]');
+        if (expiryInput) {
+            const defaultDate = new Date();
+            defaultDate.setMonth(defaultDate.getMonth() + DEFAULT_EXPIRY_MONTHS);
+            expiryInput.valueAsDate = defaultDate;
+        }
+    }
+    
+    function validateForm() {
+        let isValid = true;
+        document.querySelectorAll('[required]').forEach(input => {
+            if (!input.value) {
+                isValid = false;
+                markInvalid(input);
+            } else {
+                markValid(input);
+            }
         });
-    });
-    return selectedSamples;
-}
-
-function updateTestOverview() {
-    // Implementation would update the test overview UI
-    console.log('Updating test overview');
-}
-
-// Expiry Check Functions
-function showExpiringDetails() {
-    const modal = new bootstrap.Modal(document.getElementById('expiringDetailsModal'));
-    modal.show();
-}
-
-function checkForExpiringSamples() {
-    // Implementation would connect to backend
-    console.log('Checking for expiring samples...');
-}
-
-// Export necessary functions for testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        validateForm,
-        handleScan,
-        showContent,
-        updateUIForProfiles
-    };
-}
+        return isValid;
+    }
+    
+    function saveRegistrationData(formData) {
+        localStorage.setItem('registeredSamples', JSON.stringify(formData));
+    }
+    
+    function saveProfilesToLocalStorage(profiles) {
+        localStorage.setItem('userProfiles', JSON.stringify(profiles));
+    }
+    
+    function initializeUserProfile() {
+        const savedProfiles = localStorage.getItem('userProfiles');
+        if (savedProfiles) {
+            updateUIForProfiles(JSON.parse(savedProfiles));
+        }
+    }
+    
+    function loadDashboardData() {
+        // Hent udløbende prøver
+        checkForExpiringSamples();
+        
+        // Hent lagerpladser
+        loadStorageLocations();
+        
+        // Andre dashboard data kunne hentes her
+    }
+    
+    function enableAdminFeatures() {
+        // Implementation af admin features
+        console.log('Admin features enabled');
+    }
+    
+    function disableEditingFeatures() {
+        // Implementation af read-only mode
+        console.log('Editing features disabled');
+    }
+    
+    function removeScannedItem(index) {
+        scannedItems.splice(index, 1);
+        updateScanUI();
+    }
+    
+    // Export necessary functions for testing
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = {
+            validateForm,
+            handleScan,
+            showContent,
+            updateUIForProfiles
+        };
+    }
