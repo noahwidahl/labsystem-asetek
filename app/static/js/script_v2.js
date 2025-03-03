@@ -5,7 +5,7 @@ const NOTIFICATION_THRESHOLDS = {
     CRITICAL: 7  // days
 };
 let currentStep = 1;
-const totalSteps = 3;
+const totalSteps = 4;
 let scannedItems = [];
 let selectedLocation = null;
 
@@ -142,13 +142,6 @@ function updateUIWithDomainUser(userInfo) {
 
 // Registration Steps Functions
 function updateProgress(step) {
-    const hasSerialNumbers = document.getElementById('hasSerialNumbers');
-    if (!hasSerialNumbers) return; // Afbryd hvis elementet ikke findes
-    
-    const isChecked = hasSerialNumbers.checked;
-    const totalSteps = isChecked ? 3 : 2;
-    
-    // Beregn progress baseret på antal steps
     const progress = ((step - 1) / (totalSteps - 1)) * 100;
     const progressBar = document.querySelector('.progress-bar');
     if (progressBar) {
@@ -157,16 +150,9 @@ function updateProgress(step) {
 
     // Opdater steps visning
     const steps = document.querySelectorAll('.step');
-    if (steps.length === 0) return;
-    
     steps.forEach((el, index) => {
         el.classList.remove('active', 'completed');
         
-        // Hvis vi ikke har serienumre og er på step 2, skip denne iteration
-        if (!isChecked && index === 1) {
-            return;
-        }
-
         if (index + 1 < step) {
             el.classList.add('completed');
         } else if (index + 1 === step) {
@@ -187,26 +173,32 @@ function setupSerialNumberToggle() {
 
 function showStep(step) {
     const formSteps = document.querySelectorAll('.form-step');
-    if (formSteps.length === 0) {
-        console.warn("No form steps found");
-        return; // Afbryd hvis der ikke er nogen form-trin
-    }
-    
     formSteps.forEach(el => {
         el.classList.remove('active');
     });
 
-    const currentStep = document.querySelector(`.form-step:nth-child(${step})`);
+    const currentStep = document.querySelector(`#step${step}`);
     if (currentStep) {
         currentStep.classList.add('active');
         updateProgress(step);
         updateNavigationButtons(step);
 
-        if (step === 3) {
+        // Initialiser den aktuelle side
+        if (step === 1) {
+            initReceptionDate();
+        } else if (step === 3 && document.getElementById('hasSerialNumbers').checked) {
+            focusBarcodeInput();
+        } else if (step === 4) {
             setupStorageGrid();
         }
-    } else {
-        console.warn(`Step ${step} not found`);
+    }
+}
+
+function initReceptionDate() {
+    const today = new Date();
+    const receptionDateInput = document.querySelector('[name="receptionDate"]');
+    if (receptionDateInput && !receptionDateInput.value) {
+        receptionDateInput.valueAsDate = today;
     }
 }
 
@@ -233,9 +225,9 @@ function nextStep() {
     if (validateCurrentStep()) {
         const hasSerialNumbers = document.getElementById('hasSerialNumbers').checked;
         
-        // Hvis vi er på step 1 og der ikke er serienumre, spring til step 3
-        if (currentStep === 1 && !hasSerialNumbers) {
-            currentStep = 3;
+        // Hvis vi er på step 2 og der ikke er serienumre, spring til step 4
+        if (currentStep === 2 && !hasSerialNumbers) {
+            currentStep = 4;
         } else {
             currentStep = Math.min(currentStep + 1, totalSteps);
         }
@@ -247,34 +239,36 @@ function nextStep() {
 function previousStep() {
     const hasSerialNumbers = document.getElementById('hasSerialNumbers').checked;
     
-    if (currentStep === 3 && !hasSerialNumbers) {
-        currentStep = 1;
+    if (currentStep === 4 && !hasSerialNumbers) {
+        currentStep = 2;
     } else {
         currentStep = Math.max(currentStep - 1, 1);
     }
     
     showStep(currentStep);
-    
-    // Aktivér/deaktivér tilbage-knappen
-    const prevButton = document.querySelector('#prevButton');
-    if (prevButton) {
-        prevButton.disabled = currentStep === 1;
-    }
 }
 
 // Form Validation and Submission
 async function handleFormSubmission() {
     if (!validateCurrentStep()) return;
     
+    const receptionDate = document.querySelector('[name="receptionDate"]').value;
+    const supplier = document.querySelector('[name="supplier"]').value;
+    const trackingNumber = document.querySelector('[name="trackingNumber"]').value;
+    const custodian = document.querySelector('[name="custodian"]').value;
+    
     const formData = {
         description: document.querySelector('[name="description"]').value,
         totalAmount: parseInt(document.querySelector('[name="totalAmount"]').value),
         unit: document.querySelector('[name="unit"]').value,
         owner: document.querySelector('[name="owner"]').value,
-        supplier: document.querySelector('[name="supplier"]').value,
+        supplier: supplier,
+        custodian: custodian,
+        receptionDate: receptionDate,
+        trackingNumber: trackingNumber,
         expiryDate: document.querySelector('[name="expiryDate"]').value,
         hasSerialNumbers: document.getElementById('hasSerialNumbers').checked,
-        other: document.querySelector('[name="other"]').value,
+        other: document.querySelector('[name="other"]')?.value || '',
         serialNumbers: scannedItems,
         storageLocation: document.querySelector('[name="storageLocation"]').value || selectedLocation
     };
@@ -291,7 +285,7 @@ async function handleFormSubmission() {
         const result = await response.json();
         
         if (result.success) {
-            showSuccessMessage(`Prøve ${result.sample_id} er blevet registreret succesfuldt`);
+            showSuccessMessage(`Prøve ${result.sample_id} er blevet registreret under modtagelse #${result.reception_id}`);
             
             setTimeout(() => {
                 resetForm();
@@ -309,32 +303,15 @@ async function handleFormSubmission() {
 function validateCurrentStep() {
     switch (currentStep) {
         case 1:
-            // Valider den grundlæggende information
-            const requiredFields = [
-                'description',
-                'totalAmount',
-                'unit',
-                'owner',
-                'supplier',
-                'expiryDate'
-            ];
-            
-            let isValid = true;
-            
-            requiredFields.forEach(field => {
-                const input = document.querySelector(`[name="${field}"]`);
-                if (!input || !input.value.trim()) {
-                    markInvalid(input);
-                    isValid = false;
-                } else {
-                    markValid(input);
-                }
-            });
-            
-            return isValid;
+            // Valider modtagelsesinfo
+            return validateRequiredFields(['receptionDate', 'supplier', 'custodian']);
             
         case 2:
-            // Validering af serienumre, hvis de er påkrævet
+            // Valider prøveinfo
+            return validateRequiredFields(['description', 'totalAmount', 'unit', 'owner']);
+            
+        case 3:
+            // Validering af serienumre
             const hasSerialNumbers = document.getElementById('hasSerialNumbers').checked;
             const totalAmount = parseInt(document.querySelector('[name="totalAmount"]').value) || 0;
             
@@ -342,19 +319,11 @@ function validateCurrentStep() {
                 showErrorMessage(`Der mangler at blive scannet ${totalAmount - scannedItems.length} prøver`);
                 return false;
             }
-            
             return true;
             
-        case 3:
+        case 4:
             // Validering af lagerplacering
-            const locationSelect = document.querySelector('[name="storageLocation"]');
-            
-            if ((!locationSelect || !locationSelect.value) && !selectedLocation) {
-                showErrorMessage('Vælg venligst en lagerplacering');
-                return false;
-            }
-            
-            return true;
+            return validateStorageLocation();
             
         default:
             return true;
@@ -376,6 +345,33 @@ function setupStorageGrid() {
             // Fallback til dummy data hvis API-kaldet fejler
             createDummyStorageGrid();
         });
+}
+
+function validateRequiredFields(fieldNames) {
+    let isValid = true;
+    
+    fieldNames.forEach(field => {
+        const input = document.querySelector(`[name="${field}"]`);
+        if (!input || !input.value.trim()) {
+            markInvalid(input);
+            isValid = false;
+        } else {
+            markValid(input);
+        }
+    });
+    
+    return isValid;
+}
+
+function validateStorageLocation() {
+    const locationSelect = document.querySelector('[name="storageLocation"]');
+    
+    if ((!locationSelect || !locationSelect.value) && !selectedLocation) {
+        showErrorMessage('Vælg venligst en lagerplacering');
+        return false;
+    }
+    
+    return true;
 }
     
 function createDummyStorageGrid() {
@@ -665,97 +661,6 @@ function checkForExpiringSamples() {
             }
         })
         .catch(error => console.error('Error checking expiring samples:', error));
-}
-
-// Container Functions
-function showContainerModal(event) {
-    if (event) event.preventDefault();
-    
-    // Hent container data via API
-    fetch('/api/containers')
-        .then(response => response.json())
-        .then(data => {
-            updateContainerTable(data.containers);
-            
-            // Vis modal
-            const modal = new bootstrap.Modal(document.getElementById('containerModal'));
-            modal.show();
-        })
-        .catch(error => {
-            console.error('Error loading containers:', error);
-            showErrorMessage('Kunne ikke indlæse container data. Prøv igen senere.');
-        });
-}
-
-function updateContainerTable(containers) {
-    const tableBody = document.getElementById('containerTableBody');
-    
-    if (!tableBody) return;
-    
-    if (!containers || containers.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Ingen containere fundet</td></tr>';
-        return;
-    }
-    
-    let html = '';
-    containers.forEach(container => {
-        html += `
-            <tr>
-                <td>${container.ContainerID}</td>
-                <td>${container.Description}</td>
-                <td>${container.IsMixed ? 'Ja' : 'Nej'}</td>
-                <td>${container.sample_count || 0}</td>
-            </tr>
-        `;
-    });
-    
-    tableBody.innerHTML = html;
-}
-
-function createContainer() {
-    const description = document.getElementById('containerDescription').value;
-    const isMixed = document.getElementById('isMixed').checked;
-    
-    if (!description) {
-        showErrorMessage('Indtast venligst en beskrivelse');
-        return;
-    }
-    
-    const containerData = {
-        description: description,
-        isMixed: isMixed
-    };
-    
-    fetch('/api/createContainer', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(containerData)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showSuccessMessage(`Container ${data.container_id} er oprettet`);
-            
-            // Nulstil form
-            document.getElementById('containerDescription').value = '';
-            document.getElementById('isMixed').checked = false;
-            
-            // Opdater container tabel
-            fetch('/api/containers')
-                .then(response => response.json())
-                .then(data => {
-                    updateContainerTable(data.containers);
-                });
-        } else {
-            showErrorMessage(`Fejl ved oprettelse af container: ${data.error}`);
-        }
-    })
-    .catch(error => {
-        console.error('Error creating container:', error);
-        showErrorMessage('Der opstod en fejl ved oprettelse af container. Prøv igen senere.');
-    });
 }
 
 // Disposal Functions
@@ -1112,7 +1017,6 @@ if (typeof module !== 'undefined' && module.exports) {
         handleScan,
         showContent,
         updateUIForProfiles,
-        showContainerModal,
         showDisposalModal,
         createContainer,
         createDisposal
