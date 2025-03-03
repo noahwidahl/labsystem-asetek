@@ -26,6 +26,20 @@ app.config['MYSQL_DB'] = os.getenv('MYSQL_DB')
 # Initialize MySQL
 mysql = MySQL(app)
 
+# Hjælpefunktion til at hente aktuel bruger
+def get_current_user():
+    # I et reelt system ville dette komme fra session eller autentifikation
+    # For nu bruger vi en dummy-implementering der antager, at brugeren er "Admin Bruger"
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT UserID, Name FROM User WHERE Name = 'Admin Bruger' LIMIT 1")
+    user = cursor.fetchone()
+    cursor.close()
+    
+    if user:
+        return {"UserID": user[0], "Name": user[1]}
+    else:
+        return {"UserID": 1, "Name": "Admin Bruger"}  # Fallback
+
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
@@ -53,6 +67,13 @@ def dashboard():
             WHERE DATE(ReceivedDate) = CURDATE()
         """)
         new_today = cursor.fetchone()[0]
+        
+        # Hent antal receptioner i dag
+        cursor.execute("""
+            SELECT COUNT(*) FROM Reception
+            WHERE DATE(ReceivedDate) = CURDATE()
+        """)
+        receptions_today = cursor.fetchone()[0]
         
         # Hent antal aktive tests
         cursor.execute("SELECT COUNT(*) FROM Test WHERE CreatedDate > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)")
@@ -92,6 +113,7 @@ def dashboard():
                              sample_count=sample_count,
                              expiring_count=expiring_count,
                              new_today=new_today,
+                             receptions_today=receptions_today,
                              active_tests_count=active_tests_count,
                              history_items=history_items)
     except Exception as e:
@@ -125,6 +147,12 @@ def storage():
         
         samples_data = cursor.fetchall()
         
+        # Hent aktive brugere til disposal modal
+        cursor.execute("SELECT UserID, Name FROM User")
+        users = [dict(UserID=row[0], Name=row[1]) for row in cursor.fetchall()]
+        
+        cursor.close()
+        
         # Konverter tuple data til dictionary for lettere brug i template
         samples = []
         for sample in samples_data:
@@ -139,7 +167,7 @@ def storage():
                 "LabName": sample[8]
             })
         
-        return render_template('sections/storage.html', samples=samples)
+        return render_template('sections/storage.html', samples=samples, users=users)
     except Exception as e:
         print(f"Error loading storage: {e}")
         return render_template('sections/storage.html', error="Fejl ved indlæsning af lager")
@@ -147,6 +175,9 @@ def storage():
 @app.route('/register')
 def register():
     try:
+        # Hent aktuel bruger
+        current_user = get_current_user()
+        
         cursor = mysql.connection.cursor()
         
         # Hent leverandører
@@ -157,8 +188,8 @@ def register():
         cursor.execute("SELECT UserID, Name FROM User")
         users = [dict(UserID=row[0], Name=row[1]) for row in cursor.fetchall()]
         
-        # Hent enheder
-        cursor.execute("SELECT UnitID, UnitName FROM Unit")
+        # Hent enheder (med DISTINCT for at undgå duplikater)
+        cursor.execute("SELECT DISTINCT UnitID, UnitName FROM Unit ORDER BY UnitName")
         units = [dict(UnitID=row[0], UnitName=row[1]) for row in cursor.fetchall()]
         
         # Hent labs
@@ -171,42 +202,12 @@ def register():
             FROM StorageLocation l
             JOIN Lab lb ON l.LabID = lb.LabID
         """)
-        
         locations = []
         for row in cursor.fetchall():
             locations.append({
                 'LocationID': row[0],
                 'LocationName': row[1],
                 'LabName': row[2]
-            })
-        
-        # Hent container typer
-        cursor.execute("SELECT ContainerTypeID, TypeName FROM ContainerType ORDER BY TypeName")
-        container_types = [dict(ContainerTypeID=row[0], TypeName=row[1]) for row in cursor.fetchall()]
-        
-        # Hent tilgængelige containere
-        cursor.execute("""
-            SELECT 
-                c.ContainerID,
-                c.Description,
-                c.ContainerCapacity,
-                COUNT(cs.ContainerSampleID) as sample_count,
-                c.IsMixed
-            FROM Container c
-            LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
-            WHERE c.ContainerStatus = 'Aktiv' OR c.ContainerStatus IS NULL
-            GROUP BY c.ContainerID
-            HAVING c.ContainerCapacity IS NULL OR sample_count < c.ContainerCapacity OR TRUE
-        """)
-        
-        available_containers = []
-        for row in cursor.fetchall():
-            available_containers.append({
-                'ContainerID': row[0],
-                'Description': row[1],
-                'ContainerCapacity': row[2] or float('inf'),
-                'sample_count': row[3] or 0,
-                'IsMixed': row[4]
             })
         
         cursor.close()
@@ -217,8 +218,7 @@ def register():
                              units=units,
                              locations=locations,
                              labs=labs,
-                             container_types=container_types,
-                             available_containers=available_containers)
+                             current_user=current_user)
     except Exception as e:
         print(f"Error loading register: {e}")
         return render_template('sections/register.html', error="Fejl ved indlæsning af registreringsform")
@@ -330,223 +330,13 @@ def history():
                 "UserName": item[3],
                 "SampleDesc": sample_desc,
                 "Notes": item[5],
-                "ReceptionID": item[6] if item[6] else None
+                "ReceptionID": item[6] if len(item) > 6 and item[6] else None
             })
         
         return render_template('sections/history.html', history_items=history_items)
     except Exception as e:
         print(f"Error loading history: {e}")
         return render_template('sections/history.html', error="Fejl ved indlæsning af historik")
-    
-@app.route('/containers')
-def containers():
-    try:
-        cursor = mysql.connection.cursor()
-        
-        # Get containers with type information
-        cursor.execute("""
-            SELECT 
-                c.ContainerID,
-                c.Description,
-                c.IsMixed,
-                ct.TypeName,
-                c.ContainerStatus,
-                COUNT(cs.ContainerSampleID) as sample_count,
-                SUM(cs.Amount) as total_items
-            FROM Container c
-            LEFT JOIN ContainerType ct ON c.ContainerTypeID = ct.ContainerTypeID
-            LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
-            GROUP BY c.ContainerID
-            ORDER BY c.ContainerID DESC
-        """)
-        
-        containers_data = cursor.fetchall()
-        containers = []
-        
-        for container in containers_data:
-            containers.append({
-                "ContainerID": container[0],
-                "Description": container[1],
-                "IsMixed": "Ja" if container[2] else "Nej",
-                "TypeName": container[3] or "Standard",
-                "Status": container[4] or "Aktiv",
-                "SampleCount": container[5] or 0,
-                "TotalItems": container[6] or 0
-            })
-        
-        # Get container types
-        cursor.execute("SELECT ContainerTypeID, TypeName FROM ContainerType ORDER BY TypeName")
-        container_types = [dict(ContainerTypeID=row[0], TypeName=row[1]) for row in cursor.fetchall()]
-        
-        # Get locations for placement
-        cursor.execute("""
-            SELECT l.LocationID, l.LocationName, lb.LabName
-            FROM StorageLocation l
-            JOIN Lab lb ON l.LabID = lb.LabID
-            ORDER BY l.LocationName
-        """)
-        
-        locations = []
-        for row in cursor.fetchall():
-            locations.append({
-                'LocationID': row[0],
-                'LocationName': row[1],
-                'LabName': row[2]
-            })
-        
-        cursor.close()
-        
-        return render_template('sections/containers.html', 
-                              containers=containers,
-                              container_types=container_types,
-                              locations=locations)
-    except Exception as e:
-        print(f"Error loading containers: {e}")
-        return render_template('sections/containers.html', error="Fejl ved indlæsning af containere")
-
-
-@app.route('/containers/<int:container_id>')
-def container_details(container_id):
-    try:
-        cursor = mysql.connection.cursor()
-        
-        # Get container info
-        cursor.execute("""
-            SELECT 
-                c.ContainerID,
-                c.Description,
-                c.IsMixed,
-                ct.TypeName,
-                c.ContainerStatus,
-                c.ContainerCapacity
-            FROM Container c
-            LEFT JOIN ContainerType ct ON c.ContainerTypeID = ct.ContainerTypeID
-            WHERE c.ContainerID = %s
-        """, (container_id,))
-        
-        container_data = cursor.fetchone()
-        
-        if not container_data:
-            return render_template('errors/404.html'), 404
-        
-        container = {
-            "ContainerID": container_data[0],
-            "Description": container_data[1],
-            "IsMixed": container_data[2],
-            "TypeName": container_data[3] or "Standard",
-            "Status": container_data[4] or "Aktiv",
-            "Capacity": container_data[5]
-        }
-        
-        # Get samples in the container
-        cursor.execute("""
-            SELECT 
-                s.SampleID,
-                s.Description,
-                cs.Amount,
-                sl.LocationName,
-                ss.ExpireDate,
-                DATEDIFF(ss.ExpireDate, CURRENT_DATE()) as days_until_expiry
-            FROM ContainerSample cs
-            JOIN SampleStorage ss ON cs.SampleStorageID = ss.StorageID
-            JOIN Sample s ON ss.SampleID = s.SampleID
-            JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
-            WHERE cs.ContainerID = %s
-        """, (container_id,))
-        
-        samples_data = cursor.fetchall()
-        container_samples = []
-        
-        for sample in samples_data:
-            container_samples.append({
-                "SampleID": f"PRV-{sample[0]}",
-                "Description": sample[1],
-                "Amount": sample[2],
-                "LocationName": sample[3],
-                "ExpireDate": sample[4].strftime('%Y-%m-%d') if sample[4] else "Ingen udløbsdato",
-                "days_until_expiry": sample[5] or 9999
-            })
-        
-        # Get container history
-        cursor.execute("""
-            SELECT 
-                h.LogID,
-                DATE_FORMAT(h.Timestamp, '%d. %M %Y') as FormattedDate,
-                h.ActionType,
-                u.Name,
-                h.Notes
-            FROM History h
-            JOIN User u ON h.UserID = u.UserID
-            WHERE h.Notes LIKE %s
-            ORDER BY h.Timestamp DESC
-            LIMIT 10
-        """, (f"%Container {container_id}%",))
-        
-        history_data = cursor.fetchall()
-        container_history = []
-        
-        for item in history_data:
-            container_history.append({
-                "LogID": item[0],
-                "Timestamp": item[1],
-                "ActionType": item[2],
-                "UserName": item[3],
-                "Notes": item[4]
-            })
-        
-        # Get available samples for adding to container
-        cursor.execute("""
-            SELECT 
-                s.SampleID,
-                CONCAT('PRV-', s.SampleID) as SampleIDFormatted,
-                s.Description,
-                ss.AmountRemaining,
-                u.UnitName as Unit
-            FROM Sample s
-            JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-            JOIN Unit u ON s.UnitID = u.UnitID
-            WHERE ss.AmountRemaining > 0
-            AND s.Status = 'På lager'
-            ORDER BY s.SampleID DESC
-        """)
-        
-        available_samples = []
-        for row in cursor.fetchall():
-            available_samples.append({
-                'SampleID': row[0],
-                'SampleIDFormatted': row[1],
-                'Description': row[2],
-                'AmountRemaining': row[3],
-                'Unit': row[4]
-            })
-        
-        # Get locations for move container
-        cursor.execute("""
-            SELECT l.LocationID, l.LocationName, lb.LabName
-            FROM StorageLocation l
-            JOIN Lab lb ON l.LabID = lb.LabID
-            ORDER BY l.LocationName
-        """)
-        
-        locations = []
-        for row in cursor.fetchall():
-            locations.append({
-                'LocationID': row[0],
-                'LocationName': row[1],
-                'LabName': row[2]
-            })
-        
-        cursor.close()
-        
-        return render_template('sections/container_details.html',
-                              container=container,
-                              container_samples=container_samples,
-                              container_history=container_history,
-                              available_samples=available_samples,
-                              locations=locations)
-    except Exception as e:
-        print(f"Error loading container details: {e}")
-        return render_template('errors/500.html'), 500
 
 # API Endpoints
 @app.route('/api/expiring-samples')
@@ -614,21 +404,24 @@ def create_sample():
         data = request.json
         cursor = mysql.connection.cursor()
         
-        # Opret reception post først
+        # Opret reception post først, med valgfri supplier
+        supplier_id = data.get('supplier')
         cursor.execute("""
             INSERT INTO Reception (
                 SupplierID, 
                 ReceivedDate, 
                 UserID, 
                 TrackingNumber,
+                SourceType,
                 Notes
             )
-            VALUES (%s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (
-            data.get('supplier'),
+            supplier_id if supplier_id and supplier_id != '' else None,
             data.get('receptionDate', datetime.now().strftime('%Y-%m-%d')),
-            data.get('custodian', data.get('owner')),  # Brug custodian hvis angivet, ellers owner
+            data.get('custodian', data.get('owner')),
             data.get('trackingNumber', ''),
+            'Supplier' if supplier_id and supplier_id != '' else 'Internal',
             data.get('notes', 'Registreret via lab system')
         ))
         
@@ -651,7 +444,7 @@ def create_sample():
         """, (
             data.get('barcode', ''),
             1 if data.get('hasSerialNumbers') else 0,
-            "Standard",
+            data.get('sampleType', 'Standard'),
             data.get('description'),
             "På lager",
             data.get('totalAmount'),
@@ -680,7 +473,7 @@ def create_sample():
         
         storage_id = cursor.lastrowid
         
-        # Opret container hvis det er relevant (for pakker med unikke prøver)
+        # Hvis der er serienumre og prøven er unik, registrér serienumre i container
         if data.get('hasSerialNumbers') and data.get('serialNumbers'):
             # Opret container til serienumre
             cursor.execute("""
@@ -873,32 +666,25 @@ def get_labs():
         print(f"API error: {e}")
         return jsonify({'error': 'Database fejl'}), 500
 
-@app.route('/api/containers')
-def api_containers():
+@app.route('/api/suppliers', methods=['POST'])
+def create_supplier():
     try:
+        data = request.json
+        supplier_name = data.get('name')
+        
+        if not supplier_name:
+            return jsonify({'error': 'Leverandørnavn er påkrævet'}), 400
+        
         cursor = mysql.connection.cursor()
-        cursor.execute("""
-            SELECT 
-                c.ContainerID,
-                c.Description,
-                c.IsMixed,
-                COUNT(cs.ContainerSampleID) as sample_count,
-                SUM(cs.Amount) as total_items
-            FROM Container c
-            LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
-            GROUP BY c.ContainerID
-            ORDER BY c.ContainerID DESC
-        """)
-        
-        columns = [col[0] for col in cursor.description]
-        containers = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
+        cursor.execute("INSERT INTO Supplier (SupplierName) VALUES (%s)", (supplier_name,))
+        supplier_id = cursor.lastrowid
+        mysql.connection.commit()
         cursor.close()
         
-        return jsonify({'containers': containers})
+        return jsonify({'success': True, 'supplier_id': supplier_id})
     except Exception as e:
         print(f"API error: {e}")
-        return jsonify({'error': 'Database fejl'}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/activeSamples')
 def api_active_samples():
@@ -963,333 +749,6 @@ def api_recent_disposals():
     except Exception as e:
         print(f"API error: {e}")
         return jsonify({'error': 'Database fejl'}), 500
-
-# API endpoints for container management
-@app.route('/api/containers')
-def get_containers():
-    try:
-        cursor = mysql.connection.cursor()
-        cursor.execute("""
-            SELECT 
-                c.ContainerID,
-                c.Description,
-                c.IsMixed,
-                ct.TypeName,
-                c.ContainerStatus,
-                c.ContainerCapacity,
-                COUNT(cs.ContainerSampleID) as sample_count,
-                SUM(cs.Amount) as total_items,
-                c.ContainerTypeID
-            FROM Container c
-            LEFT JOIN ContainerType ct ON c.ContainerTypeID = ct.ContainerTypeID
-            LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
-            GROUP BY c.ContainerID
-            ORDER BY c.ContainerID DESC
-        """)
-        
-        columns = [col[0] for col in cursor.description]
-        containers = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
-        cursor.close()
-        
-        return jsonify({'containers': containers})
-    except Exception as e:
-        print(f"API error: {e}")
-        return jsonify({'error': 'Database fejl'}), 500
-
-
-@app.route('/api/container-types')
-def get_container_types():
-    try:
-        cursor = mysql.connection.cursor()
-        cursor.execute("""
-            SELECT 
-                ContainerTypeID,
-                TypeName,
-                DefaultCapacity,
-                Description,
-                (SELECT COUNT(*) FROM Container WHERE ContainerTypeID = ct.ContainerTypeID) as usage_count
-            FROM ContainerType ct
-            ORDER BY TypeName
-        """)
-        
-        columns = [col[0] for col in cursor.description]
-        types = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
-        cursor.close()
-        
-        return jsonify({'types': types})
-    except Exception as e:
-        print(f"API error: {e}")
-        return jsonify({'error': 'Database fejl'}), 500
-
-
-@app.route('/api/containers/available')
-def get_available_containers():
-    try:
-        cursor = mysql.connection.cursor()
-        cursor.execute("""
-            SELECT 
-                c.ContainerID,
-                c.Description,
-                c.ContainerCapacity,
-                COUNT(cs.ContainerSampleID) as sample_count,
-                c.IsMixed
-            FROM Container c
-            LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
-            WHERE c.ContainerStatus = 'Aktiv' OR c.ContainerStatus IS NULL
-            GROUP BY c.ContainerID
-            HAVING c.ContainerCapacity IS NULL OR sample_count < c.ContainerCapacity OR TRUE
-        """)
-        
-        columns = [col[0] for col in cursor.description]
-        containers = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
-        cursor.close()
-        
-        return jsonify({'containers': containers})
-    except Exception as e:
-        print(f"API error: {e}")
-        return jsonify({'error': 'Database fejl'}), 500
-
-
-@app.route('/api/containers/<int:container_id>', methods=['DELETE'])
-def api_delete_container(container_id):
-    try:
-        cursor = mysql.connection.cursor()
-        
-        # Check if container has samples
-        cursor.execute("""
-            SELECT COUNT(*) FROM ContainerSample
-            WHERE ContainerID = %s
-        """, (container_id,))
-        
-        sample_count = cursor.fetchone()[0]
-        
-        if sample_count > 0:
-            cursor.close()
-            return jsonify({'success': False, 'error': 'Containeren indeholder prøver og kan ikke slettes. Fjern alle prøver først.'}), 400
-        
-        # Delete the container
-        cursor.execute("""
-            DELETE FROM Container
-            WHERE ContainerID = %s
-        """, (container_id,))
-        
-        # Log the deletion
-        cursor.execute("""
-            INSERT INTO History (Timestamp, ActionType, UserID, Notes)
-            VALUES (NOW(), %s, %s, %s)
-        """, (
-            'Container slettet',
-            1,  # Default user ID
-            f"Container {container_id} slettet"
-        ))
-        
-        mysql.connection.commit()
-        cursor.close()
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"API error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/containers/<int:container_id>/samples')
-def get_container_samples(container_id):
-    try:
-        cursor = mysql.connection.cursor()
-        cursor.execute("""
-            SELECT 
-                s.SampleID,
-                s.Description,
-                cs.Amount,
-                sl.LocationName,
-                ss.ExpireDate
-            FROM ContainerSample cs
-            JOIN SampleStorage ss ON cs.SampleStorageID = ss.StorageID
-            JOIN Sample s ON ss.SampleID = s.SampleID
-            JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
-            WHERE cs.ContainerID = %s
-        """, (container_id,))
-        
-        columns = [col[0] for col in cursor.description]
-        samples = []
-        
-        for row in cursor.fetchall():
-            sample_dict = dict(zip(columns, row))
-            if isinstance(sample_dict['ExpireDate'], datetime):
-                sample_dict['ExpireDate'] = sample_dict['ExpireDate'].strftime('%Y-%m-%d')
-            samples.append(sample_dict)
-        
-        cursor.close()
-        
-        return jsonify({'samples': samples})
-    except Exception as e:
-        print(f"API error: {e}")
-        return jsonify({'error': 'Database fejl'}), 500
-
-
-@app.route('/api/containers/add-sample', methods=['POST'])
-def add_sample_to_container():
-    try:
-        data = request.json
-        cursor = mysql.connection.cursor()
-        
-        # Get the container
-        cursor.execute("""
-            SELECT IsMixed, ContainerCapacity FROM Container
-            WHERE ContainerID = %s
-        """, (data.get('containerId'),))
-        
-        container = cursor.fetchone()
-        if not container:
-            return jsonify({'success': False, 'error': 'Container findes ikke'}), 404
-        
-        is_mixed = container[0]
-        container_capacity = container[1]
-        
-        # Check if container allows mixed contents
-        if not is_mixed:
-            # Check if container already has samples of a different type
-            cursor.execute("""
-                SELECT DISTINCT s.Type 
-                FROM ContainerSample cs
-                JOIN SampleStorage ss ON cs.SampleStorageID = ss.StorageID
-                JOIN Sample s ON ss.SampleID = s.SampleID
-                WHERE cs.ContainerID = %s
-            """, (data.get('containerId'),))
-            
-            existing_types = cursor.fetchall()
-            if existing_types:
-                # Check if new sample matches existing type
-                cursor.execute("""
-                    SELECT Type FROM Sample WHERE SampleID = %s
-                """, (data.get('sampleId'),))
-                
-                new_sample_type = cursor.fetchone()
-                if new_sample_type and new_sample_type[0] != existing_types[0][0]:
-                    return jsonify({
-                        'success': False, 
-                        'error': 'Containeren tillader ikke blandet indhold. Alle prøver skal være af samme type.'
-                    }), 400
-        
-        # Check container capacity
-        if container_capacity:
-            cursor.execute("""
-                SELECT SUM(Amount) FROM ContainerSample WHERE ContainerID = %s
-            """, (data.get('containerId'),))
-            
-            current_amount = cursor.fetchone()[0] or 0
-            if current_amount + data.get('amount', 1) > container_capacity:
-                return jsonify({
-                    'success': False, 
-                    'error': f'Container kapacitet overskredet. Maksimal kapacitet: {container_capacity}, nuværende: {current_amount}'
-                }), 400
-        
-        # Find sample storage ID
-        cursor.execute("""
-            SELECT StorageID FROM SampleStorage
-            WHERE SampleID = %s AND AmountRemaining >= %s
-            LIMIT 1
-        """, (data.get('sampleId'), data.get('amount', 1)))
-        
-        storage = cursor.fetchone()
-        if not storage:
-            return jsonify({'success': False, 'error': 'Utilstrækkelig mængde på lager'}), 400
-        
-        storage_id = storage[0]
-        
-        # Add sample to container
-        cursor.execute("""
-            INSERT INTO ContainerSample (SampleStorageID, ContainerID, Amount)
-            VALUES (%s, %s, %s)
-        """, (
-            storage_id,
-            data.get('containerId'),
-            data.get('amount', 1)
-        ))
-        
-        # Log the action
-        cursor.execute("""
-            INSERT INTO History (Timestamp, ActionType, UserID, SampleID, Notes)
-            VALUES (NOW(), %s, %s, %s, %s)
-        """, (
-            'Tilføjet til container',
-            1,  # Default user ID
-            data.get('sampleId'),
-            f"Prøve tilføjet til Container {data.get('containerId')}"
-        ))
-        
-        mysql.connection.commit()
-        cursor.close()
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"API error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/containers/remove-sample', methods=['POST'])
-def remove_sample_from_container():
-    try:
-        data = request.json
-        cursor = mysql.connection.cursor()
-        
-        # Find the container sample
-        cursor.execute("""
-            SELECT cs.ContainerSampleID, cs.Amount, s.SampleID
-            FROM ContainerSample cs
-            JOIN SampleStorage ss ON cs.SampleStorageID = ss.StorageID
-            JOIN Sample s ON ss.SampleID = s.SampleID
-            WHERE cs.ContainerID = %s AND s.SampleID = %s
-            LIMIT 1
-        """, (data.get('containerId'), data.get('sampleId')))
-        
-        container_sample = cursor.fetchone()
-        if not container_sample:
-            return jsonify({'success': False, 'error': 'Prøve ikke fundet i container'}), 404
-        
-        container_sample_id = container_sample[0]
-        current_amount = container_sample[1]
-        sample_id = container_sample[2]
-        
-        # Check amount
-        if data.get('amount', 1) > current_amount:
-            return jsonify({'success': False, 'error': 'Kan ikke fjerne flere enheder end der er i containeren'}), 400
-        
-        if data.get('amount', 1) == current_amount:
-            # Remove entire record
-            cursor.execute("""
-                DELETE FROM ContainerSample
-                WHERE ContainerSampleID = %s
-            """, (container_sample_id,))
-        else:
-            # Update amount
-            cursor.execute("""
-                UPDATE ContainerSample
-                SET Amount = Amount - %s
-                WHERE ContainerSampleID = %s
-            """, (data.get('amount', 1), container_sample_id))
-        
-        # Log the action
-        cursor.execute("""
-            INSERT INTO History (Timestamp, ActionType, UserID, SampleID, Notes)
-            VALUES (NOW(), %s, %s, %s, %s)
-        """, (
-            'Fjernet fra container',
-            1,  # Default user ID
-            sample_id,
-            f"Prøve fjernet fra Container {data.get('containerId')}"
-        ))
-        
-        mysql.connection.commit()
-        cursor.close()
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"API error: {e}")
-        return jsonify({'error': str(e)}), 500
 
 # Error handlers
 @app.errorhandler(404)
