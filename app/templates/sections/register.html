@@ -60,7 +60,7 @@
                 </div>
             </div>
             <!-- Step 2: Grundlæggende Information -->
-            <div class="form-step active" id="step2">
+            <div class="form-step" id="step2">
                 <div class="copy-buttons">
                     <button class="btn-copy">
                         <i class="fas fa-clone"></i>
@@ -84,13 +84,34 @@
 
                     <!-- Pakke Type sektionen -->
                     <div class="form-group">
-                        <label>Prøve Type</label>
-                        <select class="form-control" name="sampleType" required>
-                            <option value="discrete">Individuelle prøver (stk)</option>
-                            <option value="bulk">Løs mængde (væske/meter)</option>
-                            <option value="multipack">Multiple pakker med samme type</option>
-                        </select>
-                        <small class="text-muted">Vælg hvordan prøverne skal håndteres</small>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="isBulkSample" name="isBulkSample">
+                            <label for="isBulkSample">Løs mængde (væske/meter)</label>
+                        </div>
+                        
+                        <div class="checkbox-group mt-2">
+                            <input type="checkbox" id="isMultiPackage" name="isMultiPackage">
+                            <label for="isMultiPackage">Multiple pakker med samme type</label>
+                        </div>
+                    </div>
+
+                    <!-- Vises kun når "Multiple pakker" er valgt -->
+                    <div id="multiplePackageFields" class="d-none">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Antal pakker</label>
+                                    <input type="number" class="form-control" name="packageCount" min="1" value="1">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Mængde pr. pakke</label>
+                                    <input type="number" class="form-control" name="amountPerPackage" min="1">
+                                    <small class="text-muted">Total mængde vil blive beregnet automatisk</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
             
                     <div class="form-group" id="packageCountContainer" style="display: none;">
@@ -130,7 +151,7 @@
                     </div>
                     <div class="form-group">
                         <label>Udløbsdato</label>
-                        <input type="date" class="form-control" name="expiryDate" required>
+                        <input type="date" class="form-control" name="expiryDate">
                         <small class="text-muted">Standard: 2 måneder fra i dag</small>
                     </div>
                 </div>

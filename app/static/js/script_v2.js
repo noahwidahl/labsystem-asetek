@@ -221,12 +221,16 @@ function nextStep() {
     if (validateCurrentStep()) {
         const hasSerialNumbers = document.getElementById('hasSerialNumbers')?.checked || false;
         
-        // Hvis vi er på step 1 og der ikke er serienumre, spring til step 3
-        if (currentStep === 1 && !hasSerialNumbers) {
-            currentStep = 3;
-        } else {
-            currentStep = Math.min(currentStep + 1, totalSteps);
+        // Inkrementer altid til næste trin først
+        currentStep += 1;
+        
+        // Hvis vi lander på identifikationstrinnet (trin 3) og der ikke er serienumre, spring til trin 4
+        if (currentStep === 3 && !hasSerialNumbers) {
+            currentStep = 4;
         }
+        
+        // Sørg for, at vi ikke går udover det maksimale antal trin
+        currentStep = Math.min(currentStep, totalSteps);
         
         showStep(currentStep);
     }
@@ -235,21 +239,80 @@ function nextStep() {
 function previousStep() {
     const hasSerialNumbers = document.getElementById('hasSerialNumbers')?.checked || false;
     
+    // Dekrementer altid til forrige trin først
+    currentStep -= 1;
+    
+    // Hvis vi lander på identifikationstrinnet (trin 3) og der ikke er serienumre, spring til trin 2
     if (currentStep === 3 && !hasSerialNumbers) {
-        currentStep = 1;
-    } else {
-        currentStep = Math.max(currentStep - 1, 1);
+        currentStep = 2;
     }
+    
+    // Sørg for, at vi ikke går under det første trin
+    currentStep = Math.max(currentStep, 1);
     
     showStep(currentStep);
 }
 
 // Form Validation and Submission
-// Opdaterer handleFormSubmission funktionen
 async function handleFormSubmission() {
     if (!validateCurrentStep()) return;
     
-    // Samme kode som før til at indsamle data...
+    // Saml container data baseret på valg
+    let containerData = {};
+    const containerOption = document.querySelector('input[name="containerOption"]:checked')?.value || 'none';
+    
+    if (containerOption === 'new') {
+        containerData = {
+            createContainer: true,
+            containerType: document.querySelector('[name="containerType"]')?.value || '',
+            containerDescription: document.querySelector('[name="containerDescription"]')?.value || '',
+            containerMixed: document.getElementById('containerMixed')?.checked || false
+        };
+    } else if (containerOption === 'existing') {
+        containerData = {
+            useExistingContainer: true,
+            existingContainerId: document.querySelector('[name="existingContainerId"]')?.value || ''
+        };
+    }
+    
+    // Saml pakke data
+    const isMultiPackage = document.getElementById('isMultiPackage')?.checked || false;
+    const packageCount = isMultiPackage ? parseInt(document.querySelector('[name="packageCount"]')?.value) || 1 : 1;
+    const amountPerPackage = isMultiPackage ? parseInt(document.querySelector('[name="amountPerPackage"]')?.value) || 0 : 0;
+    
+    const formData = {
+        // Modtagelsesoplysninger
+        supplier: document.querySelector('[name="supplier"]')?.value || '',
+        trackingNumber: document.querySelector('[name="trackingNumber"]')?.value || '',
+        custodian: document.querySelector('[name="custodian"]')?.value || '',
+        receptionDate: document.querySelector('[name="receptionDate"]')?.value || '',
+        
+        // Prøve information
+        partNumber: document.querySelector('[name="partNumber"]')?.value || '',
+        description: document.querySelector('[name="description"]')?.value || '',
+        isBulkSample: document.getElementById('isBulkSample')?.checked || false,
+        isMultiPackage: isMultiPackage,
+        packageCount: packageCount,
+        amountPerPackage: amountPerPackage,
+        totalAmount: parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0,
+        unit: document.querySelector('[name="unit"]')?.value || '',
+        owner: document.querySelector('[name="owner"]')?.value || '',
+        expiryDate: document.querySelector('[name="expiryDate"]')?.value || '',
+        hasSerialNumbers: document.getElementById('hasSerialNumbers')?.checked || false,
+        other: document.querySelector('[name="other"]')?.value || '',
+        
+        // Identifikation
+        serialNumbers: scannedItems || [],
+        
+        // Placering
+        storageLocation: document.querySelector('[name="storageLocation"]')?.value || selectedLocation || '',
+        
+        // Container information
+        containerOption: containerOption,
+        ...containerData
+    };
+    
+    console.log("Sending form data:", formData);
     
     try {
         const response = await fetch('/api/samples', {
@@ -265,7 +328,7 @@ async function handleFormSubmission() {
         if (result.success) {
             showSuccessMessage(`Prøve ${result.sample_id} er blevet registreret succesfuldt!`);
             
-            // Ny kode: Reset form og gå tilbage til step 1 efter kort pause
+            // Nulstil formularen og gå tilbage til step 1 efter kort pause
             setTimeout(() => {
                 resetForm();
                 currentStep = 1;
@@ -280,9 +343,11 @@ async function handleFormSubmission() {
     }
 }
 
-// Forbedret resetForm funktion
 function resetForm() {
-    // Reset alle form felter
+    currentStep = 1;
+    scannedItems = [];
+    selectedLocation = null;
+
     document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"])').forEach(input => {
         input.value = '';
         input.classList.remove('invalid');
@@ -293,55 +358,75 @@ function resetForm() {
         select.classList.remove('invalid');
     });
     
-    document.querySelectorAll('textarea').forEach(textarea => {
-        textarea.value = '';
-    });
-    
-    // Reset checkbox
+    // Reset checkboxes
     if (document.getElementById('hasSerialNumbers')) {
         document.getElementById('hasSerialNumbers').checked = false;
     }
     
-    // Reset scannede items
-    scannedItems = [];
+    if (document.getElementById('isBulkSample')) {
+        document.getElementById('isBulkSample').checked = false;
+    }
     
-    // Opdater UI for scannede items hvis relevant
+    if (document.getElementById('isMultiPackage')) {
+        document.getElementById('isMultiPackage').checked = false;
+    }
+    
+    // Sæt standard container option
+    const noContainerRadio = document.getElementById('noContainer');
+    if (noContainerRadio) {
+        noContainerRadio.checked = true;
+    }
+    
+    // Skjul multiple package felter
+    const multiplePackageFields = document.getElementById('multiplePackageFields');
+    if (multiplePackageFields) {
+        multiplePackageFields.classList.add('d-none');
+    }
+    
+    // Clear scanned items container
     const scannedItemsContainer = document.querySelector('.scanned-items');
     if (scannedItemsContainer) {
         scannedItemsContainer.innerHTML = '';
     }
-    
-    // Reset valgt lagerplacering
-    selectedLocation = null;
-    
-    // Sæt standard udløbsdato
+
     setDefaultExpiryDate();
+    showStep(1);
 }
     
 function validateCurrentStep() {
     switch (currentStep) {
         case 1:
-            // Valider modtagelsesinfo
-            return validateRequiredFields(['receptionDate', 'supplier', 'custodian']);
+            // Modtagelsesinfo
+            return validateRequiredFields(['custodian']); // supplier er valgfri
             
         case 2:
-            // Valider prøveinfo
-            return validateRequiredFields(['description', 'totalAmount', 'unit', 'owner']);
+            // Prøveinfo
+            return validateRequiredFields(['description', 'totalAmount', 'unit', 'owner', 'expiryDate']);
             
         case 3:
-            // Validering af serienumre
-            const hasSerialNumbers = document.getElementById('hasSerialNumbers').checked;
-            const totalAmount = parseInt(document.querySelector('[name="totalAmount"]').value) || 0;
+            // Identifikation (serienumre) - kun relevant hvis hasSerialNumbers er true
+            const hasSerialNumbers = document.getElementById('hasSerialNumbers')?.checked || false;
             
-            if (hasSerialNumbers && scannedItems.length < totalAmount) {
-                showErrorMessage(`Der mangler at blive scannet ${totalAmount - scannedItems.length} prøver`);
-                return false;
+            if (hasSerialNumbers) {
+                const totalAmount = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
+                
+                if (scannedItems.length < totalAmount) {
+                    showErrorMessage(`Der mangler at blive scannet ${totalAmount - scannedItems.length} prøver`);
+                    return false;
+                }
             }
             return true;
             
         case 4:
-            // Validering af lagerplacering
-            return validateStorageLocation();
+            // Placering
+            const locationSelect = document.querySelector('[name="storageLocation"]');
+            
+            if ((!locationSelect || !locationSelect.value) && !selectedLocation) {
+                showErrorMessage('Vælg venligst en lagerplacering');
+                return false;
+            }
+            
+            return true;
             
         default:
             return true;
@@ -371,7 +456,11 @@ function validateRequiredFields(fieldNames) {
     fieldNames.forEach(field => {
         const input = document.querySelector(`[name="${field}"]`);
         if (!input || !input.value.trim()) {
-            markInvalid(input);
+            if (input) {
+                markInvalid(input);
+            } else {
+                console.warn(`Feltet "${field}" blev ikke fundet i DOM`);
+            }
             isValid = false;
         } else {
             markValid(input);
@@ -519,6 +608,47 @@ function setupRegistrationSteps() {
     
     // Initialiser første step
     showStep(1);
+}
+
+// Håndtering af multi-pakke-funktionalitet
+function setupMultiPackageHandling() {
+    document.addEventListener('DOMContentLoaded', function() {
+        const isMultiPackageCheckbox = document.getElementById('isMultiPackage');
+        const multiplePackageFields = document.getElementById('multiplePackageFields');
+        const packageCountInput = document.querySelector('[name="packageCount"]');
+        const amountPerPackageInput = document.querySelector('[name="amountPerPackage"]');
+        const totalAmountInput = document.querySelector('[name="totalAmount"]');
+        
+        // Vis/skjul felter for multiple pakker
+        if (isMultiPackageCheckbox && multiplePackageFields) {
+            isMultiPackageCheckbox.addEventListener('change', function() {
+                multiplePackageFields.classList.toggle('d-none', !this.checked);
+                
+                // Opdater total mængde når checkbox ændres
+                updateTotalAmount();
+            });
+        }
+        
+        // Beregn total mængde baseret på antal pakker og mængde pr. pakke
+        function updateTotalAmount() {
+            if (isMultiPackageCheckbox && isMultiPackageCheckbox.checked && packageCountInput && amountPerPackageInput && totalAmountInput) {
+                const packageCount = parseInt(packageCountInput.value) || 0;
+                const amountPerPackage = parseInt(amountPerPackageInput.value) || 0;
+                const total = packageCount * amountPerPackage;
+                
+                totalAmountInput.value = total;
+                totalAmountInput.readOnly = isMultiPackageCheckbox.checked;
+            } else if (totalAmountInput) {
+                totalAmountInput.readOnly = false;
+            }
+        }
+        
+        // Lyt efter ændringer i pakke-felterne
+        if (packageCountInput && amountPerPackageInput) {
+            packageCountInput.addEventListener('input', updateTotalAmount);
+            amountPerPackageInput.addEventListener('input', updateTotalAmount);
+        }
+    });
 }
     
 // Test Creation Functions
@@ -955,11 +1085,17 @@ function validateField(input) {
 }
     
 function markInvalid(element) {
-    element.classList.add('invalid');
+    if (element) {
+        element.classList.add('invalid');
+    } else {
+        console.warn('Forsøger at markere ikke-eksisterende element som invalid');
+    }
 }
-    
+
 function markValid(element) {
-    element.classList.remove('invalid');
+    if (element) {
+        element.classList.remove('invalid');
+    }
 }
     
 function setDefaultExpiryDate() {
