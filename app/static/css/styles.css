@@ -976,18 +976,13 @@ body {
 
 /* Step visualization */
 .registration-steps {
-    margin-bottom: 2rem;
     position: relative;
 }
 
-.step-progress {
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: var(--border-color);
-    z-index: 0;
+.progress {
+    position: relative;
+    height: 4px;
+    overflow: visible;
 }
 
 .steps-container {
@@ -997,14 +992,12 @@ body {
     z-index: 1;
 }
 
+.progress-bar {
+    transition: width 0.3s ease;
+}
+
 .step {
-    background: white;
-    padding: 1rem 2rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
+    position: relative;
 }
 
 .step i {
@@ -1017,6 +1010,20 @@ body {
     border-color: var(--secondary-color);
     color: var(--secondary-color);
     background-color: rgba(52, 152, 219, 0.1);
+}
+
+.step.active::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -15px;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-left: 8px solid var(--secondary-color);
+    z-index: 5;
 }
 
 .step.active i {
@@ -1033,12 +1040,28 @@ body {
     color: white;
 }
 
+.step.completed::after {
+    content: '✓';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #fff;
+    font-weight: bold;
+}
+
+/* Pakke Type sektion layout */
+#step2 .form-group:nth-child(3) {
+    grid-column: 1 / -1;
+    margin-bottom: 2rem;
+}
+
 /* Storage Grid Visualization */
 .storage-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 0.5rem;
-    margin-top: 1rem;
+    margin-top: 0.5rem;
     max-height: 300px;
     overflow-y: auto;
 }
@@ -1099,6 +1122,10 @@ body {
     box-shadow: none;
 }
 
+.storage-selector .form-group {
+    margin-bottom: 2rem;
+}
+
 /* Pakke håndtering styles */
 .package-container {
     border-bottom: 1px solid var(--border-color);
@@ -1128,6 +1155,26 @@ body {
     color: var(--danger-color);
     font-size: 0.875rem;
     margin-top: 0.25rem;
+}
+
+.bulk-unit {
+    font-weight: bold;
+    color: #0066cc;
+}
+
+.countable-unit {
+    font-weight: bold;
+    color: #28a745;
+}
+
+/* Når løs mængde er valgt */
+.form-control option.bulk-unit {
+    background-color: rgba(0, 102, 204, 0.1);
+}
+
+/* Når almindelige enheder er valgt */
+.form-control option.countable-unit {
+    background-color: rgba(40, 167, 69, 0.1);
 }
 
 /* Responsive Adjustments */

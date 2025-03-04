@@ -44,45 +44,48 @@
                     </div>
                     <small class="text-muted">Valgfrit - vælg kun hvis prøven kommer fra ekstern leverandør</small>
                 </div>
-                    <div class="form-group">
-                        <label>Tracking-nummer</label>
-                        <input type="text" class="form-control" name="trackingNumber" placeholder="F.eks. DHL tracking nummer">
-                    </div>
-                    <div class="form-group">
-                        <label>Modtaget af</label>
-                        <select class="form-control" name="custodian" required>
-                            <option value="">Vælg medarbejder</option>
-                            {% for user in users %}
-                            <option value="{{ user.UserID }}">{{ user.Name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+                <div class="form-group">
+                    <label>Tracking-nummer</label>
+                    <input type="text" class="form-control" name="trackingNumber" placeholder="F.eks. DHL tracking nummer">
+                </div>
+                <div class="form-group">
+                    <label>Registreret af</label>
+                    <select class="form-control" name="custodian" required>
+                        <option value="{{ current_user.UserID }}" selected>{{ current_user.Name }} (dig)</option>
+                        {% for user in users %}
+                        {% if user.UserID != current_user.UserID %}
+                        <option value="{{ user.UserID }}">{{ user.Name }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Person der registrerer denne prøve i systemet</small>
                 </div>
             </div>
+
             <!-- Step 2: Grundlæggende Information -->
             <div class="form-step" id="step2">
                 <div class="copy-buttons">
-                    <button class="btn-copy">
+                    <button type="button" class="btn-copy" id="copyLastButton">
                         <i class="fas fa-clone"></i>
-                        Kopier Sidste
+                        Brug senest registrerede prøve
                     </button>
                     <button class="btn-copy" data-bs-toggle="modal" data-bs-target="#copyRegistrationModal">
                         <i class="fas fa-copy"></i>
-                        Kopier Eksisterende
+                        Brug tidligere registreret prøve
                     </button>
                 </div>
                 <h3>Prøve Information</h3>
                 <div class="form-grid">
                     <div class="form-group">
                         <label>Varenummer</label>
-                        <input type="text" class="form-control" name="partNumber" required>
+                        <input type="text" class="form-control" name="partNumber">
                     </div>
                     <div class="form-group">
                         <label>Beskrivelse</label>
                         <input type="text" class="form-control" name="description" required>
                     </div>
 
-                    <!-- Pakke Type sektionen -->
+                    <!-- Pakke Type sektionen - omstruktureret -->
                     <div class="form-group">
                         <div class="checkbox-group">
                             <input type="checkbox" id="isBulkSample" name="isBulkSample">
@@ -95,40 +98,43 @@
                         </div>
                     </div>
 
-                    <!-- Vises kun når "Multiple pakker" er valgt -->
+                    <!-- Multi-pakke felter - redesignet for klarhed -->
                     <div id="multiplePackageFields" class="d-none">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Antal pakker</label>
-                                    <input type="number" class="form-control" name="packageCount" min="1" value="1">
+                        <div class="package-container p-3 bg-light rounded">
+                            <h5>Multi-pakke information</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Antal pakker</label>
+                                        <input type="number" class="form-control" name="packageCount" min="1" value="1">
+                                        <small class="text-muted">Hvor mange separate pakker/æsker har du modtaget?</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Mængde pr. pakke</label>
+                                        <input type="number" class="form-control" name="amountPerPackage" min="1">
+                                        <small class="text-muted">Hvor mange enheder er der i hver pakke?</small>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Mængde pr. pakke</label>
-                                    <input type="number" class="form-control" name="amountPerPackage" min="1">
-                                    <small class="text-muted">Total mængde vil blive beregnet automatisk</small>
+                            <div class="total-calculation mt-3 p-2 bg-white rounded">
+                                <div class="d-flex justify-content-between">
+                                    <span>Total mængde (automatisk beregnet):</span>
+                                    <span id="calculatedTotal" class="font-weight-bold">0</span>
                                 </div>
                             </div>
                         </div>
                     </div>
-            
-                    <div class="form-group" id="packageCountContainer" style="display: none;">
-                        <label>Antal Pakker</label>
-                        <input type="number" class="form-control" name="packageCount" min="1">
-                    </div>
-            
-                    <div class="form-group" id="itemsPerPackageContainer" style="display: none;">
-                        <label>Antal per Pakke</label>
-                        <input type="number" class="form-control" name="itemsPerPackage" min="1">
-                    </div>
-            
+                    
+                    <!-- Total mængde felt - nu med bedre forklaring -->
                     <div class="form-group">
                         <label>Total Mængde</label>
                         <input type="number" class="form-control" name="totalAmount" required min="1">
+                        <small class="text-muted" id="totalAmountHelper">Samlet antal enheder der modtages</small>
                     </div>
 
+                    <!-- Resten af formularen fortsætter som før -->
                     <div class="form-group">
                         <label>Enhed</label>
                         <select class="form-control" name="unit" required>
@@ -138,8 +144,9 @@
                             {% endfor %}
                         </select>
                     </div>
+                    
                     <div class="form-group">
-                        <label>Ejer</label>
+                        <label>Ansvarlig for prøven</label>
                         <select class="form-control" name="owner" required>
                             <option value="{{ current_user.UserID }}" selected>{{ current_user.Name }} (dig)</option>
                             {% for user in users %}
@@ -148,20 +155,24 @@
                             {% endif %}
                             {% endfor %}
                         </select>
+                        <small class="text-muted">Vælg den person, der er ansvarlig for denne prøve</small>
                     </div>
+                    
                     <div class="form-group">
                         <label>Udløbsdato</label>
                         <input type="date" class="form-control" name="expiryDate">
                         <small class="text-muted">Standard: 2 måneder fra i dag</small>
                     </div>
                 </div>
+                
                 <div class="form-group mt-4">
                     <div class="checkbox-group">
                         <input type="checkbox" id="hasSerialNumbers" name="hasSerialNumbers">
                         <label for="hasSerialNumbers">Prøverne har individuelle serienumre</label>
+                        <small class="text-muted d-block mt-1">Vælg dette hvis hver prøve har et unikt serienummer eller stregkode</small>
                     </div>
                 </div>
-            
+
                 <div class="form-group">
                     <label>Andet</label>
                     <textarea class="form-control" name="other" rows="3" placeholder="Indtast eventuelle bemærkninger eller andre detaljer"></textarea>
@@ -171,19 +182,57 @@
             <!-- Step 3: Identifikation -->
             <div class="form-step" id="step3">
                 <h3>Prøve Identifikation</h3>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> 
+                    Her kan du scanne eller indtaste serienumre for dine prøver. Hver unik prøve skal have sit eget serienummer.
+                </div>
+                
                 <div class="scanner-section">
                     <div class="scanner-header">
                         <div class="counter">Scannede prøver: <span id="scannedCount">0</span> af <span id="totalCount">0</span></div>
-                        <button class="btn btn-outline-primary" id="scanButton">
-                            <i class="fas fa-barcode"></i> Start Scanning
-                        </button>
+                        <div class="btn-group">
+                            <button class="btn btn-outline-primary" id="scanButton">
+                                <i class="fas fa-barcode"></i> Start Scanning
+                            </button>
+                            <button class="btn btn-outline-secondary" id="bulkEntryButton">
+                                <i class="fas fa-list"></i> Masse-indtastning
+                            </button>
+                        </div>
                     </div>
+                    
                     <div class="scan-input-group">
-                        <input type="text" class="form-control" id="barcodeInput" placeholder="Scan eller indtast serienummer" disabled>
-                        <button class="btn btn-secondary" id="manualInputBtn">Manuel Indtastning</button>
+                        <input type="text" class="form-control" id="barcodeInput" placeholder="Scan eller indtast serienummer" autofocus>
+                        <button class="btn btn-secondary" id="addManualBtn">Tilføj</button>
                     </div>
-                    <div class="scanned-items">
+                    
+                    <!-- Ny masse-indtastningssektion -->
+                    <div class="bulk-entry d-none mt-3 mb-3">
+                        <div class="form-group">
+                            <label>Indtast flere serienumre (ét pr. linje)</label>
+                            <textarea class="form-control" id="bulkBarcodes" rows="5" placeholder="Indtast serienumre her, ét pr. linje"></textarea>
+                        </div>
+                        <button class="btn btn-primary mt-2" id="addBulkBtn">Tilføj alle</button>
+                    </div>
+                    
+                    <!-- Ny organiseret liste over scannede items -->
+                    <div class="scanned-items-header mt-4 d-flex justify-content-between">
+                        <h5>Scannede prøver</h5>
+                        <button class="btn btn-sm btn-outline-danger" id="clearAllScannedBtn">Ryd alle</button>
+                    </div>
+                    
+                    <div class="scanned-items mt-2">
                         <!-- Scannede items vises her via JavaScript -->
+                        <div class="empty-scanned-message text-center p-3 text-muted">
+                            Ingen prøver scannet endnu. Brug scanneren eller indtast serienumre manuelt ovenfor.
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Preview af etiketter (kan tilføjes hvis nødvendigt) -->
+                <div class="label-preview mt-4 d-none">
+                    <h5>Prøve-etiketter preview</h5>
+                    <div class="preview-container p-3 border rounded">
+                        <!-- Preview af etiketter genereres her via JavaScript -->
                     </div>
                 </div>
             </div>
@@ -192,7 +241,7 @@
             <div class="form-step" id="step4">
                 <h3>Vælg Placering</h3>
                 <div class="storage-selector">
-                    <div class="form-group mb-4">
+                    <div class="form-group">
                         <label>Lagerplads</label>
                         <select class="form-control" name="storageLocation" required>
                             <option value="">Vælg lagerplads</option>
@@ -201,10 +250,19 @@
                             {% endfor %}
                         </select>
                     </div>
+
+                    <div class="storage-grid">
+                        <!-- Dynamisk genereret grid af ledige pladser via JavaScript -->
+                    </div>
                     
                     <!-- Container Section -->
                     <div id="containerSelectionSection" class="mt-4">
                         <h4>Container Håndtering</h4>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> 
+                            Containere hjælper med at holde styr på prøver. Vælg om prøverne skal placeres direkte på hylden eller i en container.
+                        </div>
+                        
                         <div class="form-group mb-3">
                             <label>Vælg Container Mulighed</label>
                             <div class="container-options">
@@ -229,8 +287,8 @@
                             </div>
                         </div>
                         
-                        <!-- New Container Fields -->
-                        <div id="newContainerFields" class="container-option-fields d-none">
+                        <!-- New Container Fields - forbedret struktur -->
+                        <div id="newContainerFields" class="container-option-fields d-none border p-3 rounded bg-light">
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
@@ -241,23 +299,26 @@
                                             <option value="{{ type.ContainerTypeID }}">{{ type.TypeName }}</option>
                                             {% endfor %}
                                         </select>
+                                        <small class="text-muted">F.eks. kasse, pose, æske, etc.</small>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label>Beskrivelse</label>
                                         <input type="text" class="form-control" name="containerDescription" placeholder="f.eks. 'Rød kasse med O-ringe'">
+                                        <small class="text-muted">En beskrivelse der gør det nemt at identificere containeren</small>
                                     </div>
                                 </div>
                             </div>
                             <div class="form-check mt-2">
                                 <input type="checkbox" class="form-check-input" name="containerMixed" id="containerMixed">
                                 <label class="form-check-label" for="containerMixed">Tillad blandet indhold</label>
+                                <small class="text-muted d-block">Vælg dette hvis containeren kan indeholde forskellige typer prøver</small>
                             </div>
                         </div>
                         
-                        <!-- Existing Container Fields -->
-                        <div id="existingContainerFields" class="container-option-fields d-none">
+                        <!-- Existing Container Fields - forbedret struktur -->
+                        <div id="existingContainerFields" class="container-option-fields d-none border p-3 rounded bg-light">
                             <div class="form-group">
                                 <label>Vælg Eksisterende Container</label>
                                 <select class="form-control" name="existingContainerId">
@@ -266,13 +327,11 @@
                                     <option value="{{ container.ContainerID }}">{{ container.ContainerID }} - {{ container.Description }} ({{ container.sample_count or 0 }}/{{ container.ContainerCapacity or '∞' }})</option>
                                     {% endfor %}
                                 </select>
+                                <small class="text-muted">Vælg en eksisterende container som prøverne skal placeres i</small>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="storage-grid">
-                        <!-- Dynamisk genereret grid af ledige pladser via JavaScript -->
-                    </div>
+
                 </div>
             </div>
 
@@ -288,47 +347,4 @@
         </div>
     </div>
 </section>
-{% endblock %}
-
-{% block scripts %}
-<script>
-// Container option radio buttons handling
-document.addEventListener('DOMContentLoaded', function() {
-    // Find container option radio buttons
-    const containerRadios = document.querySelectorAll('input[name="containerOption"]');
-    if (containerRadios.length) {
-        // Add change event listeners
-        containerRadios.forEach(radio => {
-            radio.addEventListener('change', function() {
-                toggleContainerFields(this.value);
-            });
-        });
-    }
-    
-    // Initialize container fields visibility
-    const selectedOption = document.querySelector('input[name="containerOption"]:checked');
-    if (selectedOption) {
-        toggleContainerFields(selectedOption.value);
-    }
-});
-
-// Toggle container fields based on selected option
-function toggleContainerFields(option) {
-    const newContainerFields = document.getElementById('newContainerFields');
-    const existingContainerFields = document.getElementById('existingContainerFields');
-    
-    if (!newContainerFields || !existingContainerFields) return;
-    
-    // Hide all first
-    newContainerFields.classList.add('d-none');
-    existingContainerFields.classList.add('d-none');
-    
-    // Show relevant fields
-    if (option === 'new') {
-        newContainerFields.classList.remove('d-none');
-    } else if (option === 'existing') {
-        existingContainerFields.classList.remove('d-none');
-    }
-}
-</script>
 {% endblock %}

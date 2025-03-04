@@ -2,24 +2,24 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Kopier Registrering</h5>
+                <h5 class="modal-title">Brug tidligere registrering</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    Vælg en tidligere registrering for at genbruge information såsom varenummer, beskrivelse og enhed. Du skal stadig angive antal og placering.
+                </div>
                 <div class="form-group">
                     <label>Vælg eksisterende registrering</label>
                     <select class="form-control" id="existingRegistrations">
                         <!-- Populated dynamically -->
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>Antal kopier</label>
-                    <input type="number" class="form-control" id="copyCount" min="1" value="1">
-                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuller</button>
-                <button type="button" class="btn btn-primary" onclick="copyRegistration()">Kopier</button>
+                <button type="button" class="btn btn-primary" onclick="copyRegistration()">Anvend valgte prøve</button>
             </div>
         </div>
     </div>

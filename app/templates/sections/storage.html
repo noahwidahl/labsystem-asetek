@@ -35,11 +35,12 @@
                 {% if samples %}
                     {% for sample in samples %}
                     <tr>
-                        <td>{{ sample.SampleID }}</td>
-                        <td>{{ sample.Description }}</td>
-                        <td>{{ sample.Amount }}</td>
-                        <td>{{ sample.LocationID }}</td>
-                        <td>{{ sample.registered }}</td>
+                        <td>{{ sample.ID }}</td>
+                        <td>{{ sample.Beskrivelse }}</td>
+                        <td>{{ sample.Modtagelse }}</td>
+                        <td>{{ sample.Antal }}</td>
+                        <td>{{ sample.Placering }}</td>
+                        <td>{{ sample.Registreret }}</td>
                         <td><span class="status-badge status-{{ sample.Status|lower }}">{{ sample.Status }}</span></td>
                         <td>
                             <button class="btn btn-sm btn-secondary">Detaljer</button>
@@ -49,7 +50,7 @@
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="7" class="text-center">Ingen prøver fundet</td>
+                        <td colspan="8" class="text-center">Ingen prøver fundet</td>
                     </tr>
                 {% endif %}
             </tbody>

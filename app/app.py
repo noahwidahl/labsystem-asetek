@@ -120,19 +120,16 @@ def storage():
             SELECT 
                 s.SampleID, 
                 s.Description, 
-                r.ReceptionID,
-                ss.AmountRemaining, 
-                u.UnitName, 
-                sl.LocationName, 
-                r.ReceivedDate, 
-                s.Status,
-                l.LabName
+                r.ReceivedDate as ModtagelseDato,
+                ss.AmountRemaining as Antal, 
+                sl.LocationName as Placering, 
+                DATE_FORMAT(r.ReceivedDate, '%Y-%m-%d %H:%i') as Registreret,
+                s.Status
             FROM Sample s
             JOIN SampleStorage ss ON s.SampleID = ss.SampleID
             JOIN Unit u ON s.UnitID = u.UnitID
             JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
             JOIN Reception r ON s.ReceptionID = r.ReceptionID
-            JOIN Lab l ON sl.LabID = l.LabID
             WHERE ss.AmountRemaining > 0
             ORDER BY s.SampleID DESC
         """)
@@ -143,20 +140,44 @@ def storage():
         samples = []
         for sample in samples_data:
             samples.append({
-                "SampleID": f"PRV-{sample[0]}",
-                "Description": sample[1],
-                "ReceptionID": sample[2],
-                "Amount": f"{sample[3]} {sample[4]}",
-                "LocationID": sample[5],
-                "registered": sample[6].strftime('%Y-%m-%d %H:%M') if sample[6] else "Ukendt",
-                "Status": sample[7] if sample[7] else "På lager",
-                "LabName": sample[8]
+                "ID": f"PRV-{sample[0]}",
+                "Beskrivelse": sample[1],
+                "Modtagelse": sample[2].strftime('%Y-%m-%d') if sample[2] else "Ukendt",
+                "Antal": f"{sample[3]} stk",
+                "Placering": sample[4],
+                "Registreret": sample[5] if sample[5] else "Ukendt",
+                "Status": sample[6] if sample[6] else "På lager"
             })
         
         return render_template('sections/storage.html', samples=samples)
     except Exception as e:
         print(f"Error loading storage: {e}")
         return render_template('sections/storage.html', error="Fejl ved indlæsning af lager")
+
+@app.route('/api/previous-registrations')
+def get_previous_registrations():
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute("""
+            SELECT 
+                s.SampleID as id,
+                s.Description as description,
+                DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y') as date
+            FROM Sample s
+            JOIN Reception r ON s.ReceptionID = r.ReceptionID
+            ORDER BY r.ReceivedDate DESC
+            LIMIT 10
+        """)
+        
+        columns = [col[0] for col in cursor.description]
+        registrations = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        cursor.close()
+        
+        return jsonify({'registrations': registrations})
+    except Exception as e:
+        print(f"API error: {e}")
+        return jsonify({'error': 'Database fejl'}), 500
 
 @app.route('/register')
 def register():
@@ -825,6 +846,86 @@ def create_sample():
     except Exception as e:
         print(f"API error: {e}")
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/last-sample')
+def get_last_sample():
+    try:
+        cursor = mysql.connection.cursor()
+        
+        # Hent den seneste registrerede prøve for den aktuelle bruger
+        current_user = get_current_user()
+        
+        cursor.execute("""
+            SELECT 
+                s.SampleID,
+                s.Description,
+                s.UnitID,
+                s.OwnerID,
+                s.IsUnique as hasSerialNumbers,
+                r.ReceptionID
+            FROM Sample s
+            JOIN Reception r ON s.ReceptionID = r.ReceptionID
+            WHERE r.UserID = %s
+            ORDER BY s.SampleID DESC
+            LIMIT 1
+        """, (current_user['UserID'],))
+        
+        sample_data = cursor.fetchone()
+        
+        if not sample_data:
+            return jsonify({'success': False, 'error': 'Ingen tidligere registreringer fundet'})
+        
+        # Hent yderligere data hvis nødvendigt
+        cursor.execute("""
+            SELECT Description FROM Sample WHERE SampleID = %s
+        """, (sample_data[0],))
+        
+        part_data = cursor.fetchone()
+        part_number = part_data[0].split(' ')[0] if part_data and part_data[0] else ""
+        
+        cursor.close()
+        
+        sample = {
+            'partNumber': part_number,
+            'description': sample_data[1],
+            'unit': sample_data[2],
+            'owner': sample_data[3],
+            'hasSerialNumbers': bool(sample_data[4]),
+            'receptionId': sample_data[5]
+        }
+        
+        return jsonify({'success': True, 'sample': sample})
+    except Exception as e:
+        print(f"API error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/recent-samples')
+def get_recent_samples():
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute("""
+            SELECT 
+                CONCAT('PRV-', s.SampleID) AS SampleID, 
+                s.Description, 
+                sl.LocationName AS Location, 
+                s.Status
+            FROM Sample s
+            JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+            JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+            WHERE ss.AmountRemaining > 0
+            ORDER BY s.SampleID DESC
+            LIMIT 10
+        """)
+        
+        columns = [col[0] for col in cursor.description]
+        samples = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        cursor.close()
+        
+        return jsonify({'samples': samples})
+    except Exception as e:
+        print(f"API error: {e}")
+        return jsonify({'error': 'Database fejl'}), 500
 
 @app.route('/api/createTest', methods=['POST'])
 def api_create_test():
