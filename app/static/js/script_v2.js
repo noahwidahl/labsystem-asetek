@@ -183,11 +183,14 @@ function updateUIWithDomainUser(userInfo) {
 // Registration Steps Functions
 function updateProgress(step) {
     const progress = ((step - 1) / (totalSteps - 1)) * 100;
-    const progressBar = document.querySelector('.progress-bar');
-    if (progressBar) {
-        progressBar.style.width = `${progress}%`;
-        console.log(`Progress: ${progress}%`); // Debug output
-    }
+    
+    // Opdater alle progress-bars på siden
+    const progressBars = document.querySelectorAll('.progress-bar');
+    progressBars.forEach(bar => {
+        bar.style.width = `${progress}%`;
+    });
+    
+    console.log(`Progress: ${progress}%`); // Debug output
 
     // Opdater steps visning
     const steps = document.querySelectorAll('.step');
@@ -937,6 +940,14 @@ function createTest() {
     // Valider inputs
     const testType = document.querySelector('[name="testType"]');
     const testOwner = document.querySelector('[name="testOwner"]');
+
+    // Hvis testOwner er et skjult felt med current_user, skal vi ikke validere det
+    if (testOwner.type === 'hidden') {
+        // Værdien er allerede sat fra server-side
+    } else if (!testOwner.value) {
+        testOwner.classList.add('invalid');
+        return;
+    }
     
     if (!testType.value) {
         testType.classList.add('invalid');

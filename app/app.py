@@ -31,14 +31,14 @@ def get_current_user():
     # I et reelt system ville dette komme fra session eller autentifikation
     # For nu bruger vi en dummy-implementering der antager, at brugeren er "Admin Bruger"
     cursor = mysql.connection.cursor()
-    cursor.execute("SELECT UserID, Name FROM User WHERE Name = 'Admin Bruger' LIMIT 1")
+    cursor.execute("SELECT UserID, Name FROM User WHERE Name = 'BWM' LIMIT 1")
     user = cursor.fetchone()
     cursor.close()
     
     if user:
         return {"UserID": user[0], "Name": user[1]}
     else:
-        return {"UserID": 1, "Name": "Admin Bruger"}  # Fallback
+        return {"UserID": 1, "Name": "BWM"}  # Fallback
 
 @app.route('/')
 @app.route('/dashboard')
@@ -933,6 +933,10 @@ def api_create_test():
         data = request.json
         cursor = mysql.connection.cursor()
         
+        # Få den aktuelle bruger i stedet for at bruge bruger-ID fra anmodningen
+        current_user = get_current_user()
+        user_id = current_user['UserID']
+        
         # Opret testen
         cursor.execute("""
             INSERT INTO Test (TestNo, TestName, Description, CreatedDate, UserID)
@@ -941,7 +945,7 @@ def api_create_test():
             f"T{data.get('type')}-{datetime.now().strftime('%Y%m%d')}",
             data.get('testName', 'Ny test'),
             data.get('description', ''),
-            data.get('owner')
+            user_id  # Bruger den aktuelle brugers ID
         ))
         
         test_id = cursor.lastrowid
@@ -980,9 +984,9 @@ def api_create_test():
             VALUES (NOW(), %s, %s, %s, %s)
         """, (
             'Test oprettet',
-            data.get('owner'),
+            user_id,  # Bruger den aktuelle brugers ID
             test_id,
-            f"Test T{test_id} oprettet af bruger ID {data.get('owner')}"
+            f"Test T{test_id} oprettet af {current_user['Name']}"  # Tilføj brugernavnet i beskrivelsen
         ))
         
         mysql.connection.commit()

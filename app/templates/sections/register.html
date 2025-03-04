@@ -50,17 +50,10 @@
                 </div>
                 <div class="form-group">
                     <label>Registreret af</label>
-                    <select class="form-control" name="custodian" required>
-                        <option value="{{ current_user.UserID }}" selected>{{ current_user.Name }} (dig)</option>
-                        {% for user in users %}
-                        {% if user.UserID != current_user.UserID %}
-                        <option value="{{ user.UserID }}">{{ user.Name }}</option>
-                        {% endif %}
-                        {% endfor %}
-                    </select>
+                    <input type="text" class="form-control" name="custodian" value="1" readonly value="BWM">
+                    <input type="hidden" name="custodian" value="1">
                     <small class="text-muted">Person der registrerer denne prøve i systemet</small>
                 </div>
-            </div>
 
             <!-- Step 2: Grundlæggende Information -->
             <div class="form-step" id="step2">
