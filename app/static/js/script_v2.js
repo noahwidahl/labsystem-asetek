@@ -16,32 +16,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Initialization
 function initializeApplication() {
-    // Generelle initialiseringer
-    initializeUserProfile();
-    setupFormListeners();
-    setupScannerListeners();
-    setupStorageGridListeners();
-    
-    // Initialiser funktioner baseret på den aktuelle sti
-    const currentPath = window.location.pathname;
-    
-    if (currentPath === '/' || currentPath.includes('/dashboard')) {
-        loadDashboardData();
-    } else if (currentPath.includes('/register')) {
-        setDefaultExpiryDate();
-        setupRegistrationSteps();
-        setupSerialNumberToggle();
-        setupMultiPackageHandling();
-        setupBulkSampleHandling(); // Tilføj denne linje
-        showStep(1);
-    } else if (currentPath.includes('/storage')) {
-        // Lager-specifikke initialiseringer
-    } else if (currentPath.includes('/testing')) {
-        // Test-specifikke initialiseringer
+    try {
+        // Generelle initialiseringer
+        initializeUserProfile();
+        setupFormListeners();
+        setupScannerListeners();
+        setupStorageGridListeners();
+        
+        // Initialiser funktioner baseret på den aktuelle sti
+        const currentPath = window.location.pathname;
+        
+        if (currentPath === '/' || currentPath.includes('/dashboard')) {
+            loadDashboardData();
+        } else if (currentPath.includes('/register')) {
+            setDefaultExpiryDate();
+            setupRegistrationSteps();
+            setupSerialNumberToggle();
+            setupMultiPackageHandling();
+            setupBulkSampleHandling();
+            showStep(1);
+        }
+        
+        // Kald med dummy data for at undgå fejl
+        try {
+            updateUIWithDomainUser({});
+        } catch (err) {
+            console.warn("Kunne ikke opdatere UI med brugerdata:", err);
+        }
+    } catch (err) {
+        console.error("Fejl ved initialisering af applikation:", err);
     }
-    
-    // Kald med dummy data for at undgå fejl
-    updateUIWithDomainUser({});
 }
 
 // Opdateret updateUIWithDomainUser funktion
@@ -1351,7 +1355,7 @@ function resetForm() {
     scannedItems = [];
     selectedLocation = null;
 
-    document.querySelectorySelectorAll('input:not([type="radio"]):not([type="checkbox"])').forEach(input => {
+    document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"])').forEach(input => {
         input.value = '';
         input.classList.remove('invalid');
     });

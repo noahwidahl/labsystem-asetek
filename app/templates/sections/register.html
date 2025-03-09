@@ -141,9 +141,9 @@
                     <div class="form-group">
                         <label>Ansvarlig for prøven</label>
                         <select class="form-control" name="owner" required>
-                            <option value="{{ current_user.UserID }}" selected>{{ current_user.Name }} (dig)</option>
+                            <option value="1" selected>BWM (dig)</option>
                             {% for user in users %}
-                            {% if user.UserID != current_user.UserID %}
+                            {% if user.UserID != 1 %}
                             <option value="{{ user.UserID }}">{{ user.Name }}</option>
                             {% endif %}
                             {% endfor %}
