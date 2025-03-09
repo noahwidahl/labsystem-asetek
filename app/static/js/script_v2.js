@@ -16,50 +16,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Initialization
 function initializeApplication() {
-    try {
-        // Generelle initialiseringer
-        initializeUserProfile();
-        setupFormListeners();
-        setupScannerListeners();
-        setupStorageGridListeners();
-        
-        // Initialiser funktioner baseret på den aktuelle sti
-        const currentPath = window.location.pathname;
-        
-        if (currentPath === '/' || currentPath.includes('/dashboard')) {
-            loadDashboardData();
-        } else if (currentPath.includes('/register')) {
-            setDefaultExpiryDate();
-            setupRegistrationSteps();
-            setupSerialNumberToggle();
-            setupMultiPackageHandling();
-            setupBulkSampleHandling();
-            showStep(1);
-        }
-        
-        // Kald med dummy data for at undgå fejl
-        try {
-            updateUIWithDomainUser({});
-        } catch (err) {
-            console.warn("Kunne ikke opdatere UI med brugerdata:", err);
-        }
-    } catch (err) {
-        console.error("Fejl ved initialisering af applikation:", err);
-    }
-}
-
-// Opdateret updateUIWithDomainUser funktion
-function updateUIWithDomainUser(userInfo) {
-    // Hardcoded dummy data - virker altid
-    const usernameElement = document.querySelector('.user-name');
-    if (usernameElement) {
-        usernameElement.textContent = "BWM";
+    // Generelle initialiseringer
+    initializeUserProfile();
+    setupFormListeners();
+    setupScannerListeners();
+    setupStorageGridListeners();
+    
+    // Initialiser funktioner baseret på den aktuelle sti
+    const currentPath = window.location.pathname;
+    
+    if (currentPath === '/' || currentPath.includes('/dashboard')) {
+        loadDashboardData();
+    } else if (currentPath.includes('/register')) {
+        setDefaultExpiryDate();
+        setupRegistrationSteps();
+        setupSerialNumberToggle();
+        setupMultiPackageHandling();
+        setupBulkSampleHandling(); // Tilføj denne linje
+        showStep(1);
+    } else if (currentPath.includes('/storage')) {
+        // Lager-specifikke initialiseringer
+    } else if (currentPath.includes('/testing')) {
+        // Test-specifikke initialiseringer
     }
     
-    const userRolesElement = document.querySelector('.user-roles');
-    if (userRolesElement) {
-        userRolesElement.innerHTML = '<span class="role-badge admin">Admin</span>';
-    }
+    // Mock domain user info (hvis nødvendigt)
+    updateUIWithDomainUser();
 }
 
 // Setup Event Listeners
@@ -188,12 +170,33 @@ function updateUIForProfiles(profiles) {
 }
 
 function updateUIWithDomainUser(userInfo) {
-    // Hardcoded dummy data - virker altid
-    document.querySelector('.user-name').textContent = "BWM";
+    // Hvis userInfo ikke er angivet, brug standardværdier
+    if (!userInfo) {
+        userInfo = {
+            username: 'BWM',
+            roles: ['Admin']
+        };
+    }
+
+    // Sikkerhedstjek på username
+    const username = userInfo.username || 'BWM';
     
-    const userRolesElement = document.querySelector('.user-roles');
-    if (userRolesElement) {
-        userRolesElement.innerHTML = '<span class="role-badge admin">Admin</span>';
+    // Find brugernavnelementet og opdater det
+    const usernameElement = document.querySelector('.user-name');
+    if (usernameElement) {
+        usernameElement.textContent = username;
+    }
+
+    // Find rolleelementet og opdater det
+    const userRoles = document.querySelector('.user-roles');
+    if (userRoles) {
+        userRoles.innerHTML = '';
+
+        // Sikkerhedstjek på roles
+        const roles = userInfo.roles || ['Admin'];
+        roles.forEach(role => {
+            userRoles.innerHTML += `<span class="role-badge ${role.toLowerCase()}">${role}</span>`;
+        });
     }
 }
 
@@ -1355,7 +1358,7 @@ function resetForm() {
     scannedItems = [];
     selectedLocation = null;
 
-    document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"])').forEach(input => {
+    document.querySelectorySelectorAll('input:not([type="radio"]):not([type="checkbox"])').forEach(input => {
         input.value = '';
         input.classList.remove('invalid');
     });

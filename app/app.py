@@ -1414,7 +1414,41 @@ def add_sample_to_container():
     except Exception as e:
         print(f"API error: {e}")
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/test-db')
+def test_db():
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT 1")
+        result = cursor.fetchone()
+        cursor.close()
+        return f"Database connection working: {result}"
+    except Exception as e:
+        return f"Database error: {str(e)}"    
 
+
+@app.route('/admin/db-tables')
+def db_tables():
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute("SHOW TABLES")
+        tables = cursor.fetchall()
+        
+        table_contents = {}
+        for table in tables:
+            table_name = table[0]
+            cursor.execute(f"SELECT * FROM {table_name} LIMIT 5")
+            rows = cursor.fetchall()
+            columns = [col[0] for col in cursor.description]
+            table_contents[table_name] = {
+                'columns': columns,
+                'rows': rows
+            }
+        
+        cursor.close()
+        return render_template('admin/db_tables.html', tables=tables, table_contents=table_contents)
+    except Exception as e:
+        return f"Error accessing database: {str(e)}"
 
 @app.route('/api/containers/remove-sample', methods=['POST'])
 def remove_sample_from_container():
