@@ -4,288 +4,259 @@
 
 {% block content %}
 <section id="register" class="content-section">
-    <div class="container">
-        <div class="row">
-            <div class="col-12">
-                <h2>Registrer Prøver</h2>
-                <hr>
+    <div class="registration-container">
+        <div class="registration-steps">
+            <div class="steps-container">
+                <div class="step active">
+                    <span>Modtagelse</span>
+                </div>
+                <div class="step">
+                    <span>Prøve Information</span>
+                </div>
+                <div class="step">
+                    <span>Identifikation</span>
+                </div>
+                <div class="step">
+                    <span>Placering</span>
+                </div>
+            </div>
+            <div class="progress mt-3">
+                <div class="progress-bar" role="progressbar" style="width: 25%"></div>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <ul class="nav nav-tabs card-header-tabs">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="#step1" data-bs-toggle="tab">Modtagelse</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#step2" data-bs-toggle="tab">Prøve Information</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#step3" data-bs-toggle="tab">Identifikation</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#step4" data-bs-toggle="tab">Placering</a>
-                    </li>
-                </ul>
+        <div class="registration-form">
+            <div class="form-step active" id="step1">
+                <h3>Modtagelsesoplysninger</h3>
+                <div class="form-group">
+                    <label>Leverandør</label>
+                    <div class="input-group">
+                        <select class="form-control" name="supplier" id="supplierSelect">
+                            <option value="">Ingen leverandør (intern afsender)</option>
+                            {% for supplier in suppliers %}
+                            <option value="{{ supplier.SupplierID }}">{{ supplier.SupplierName }}</option>
+                            {% endfor %}
+                            <option value="new">+ Opret ny leverandør</option>
+                        </select>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#newSupplierModal">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <small class="text-muted">Valgfrit - vælg kun hvis prøven kommer fra ekstern leverandør</small>
+                </div>
+                <div class="form-group">
+                    <label>Tracking-nummer</label>
+                    <input type="text" class="form-control" name="trackingNumber" placeholder="F.eks. DHL tracking nummer">
+                </div>
+                <div class="form-group">
+                    <label>Registreret af</label>
+                    <input type="text" class="form-control" name="custodian" readonly value="{{ current_user.Name }}">
+                    <input type="hidden" name="custodian" value="{{ current_user.UserID }}">
+                    <small class="text-muted">Person der registrerer denne prøve i systemet</small>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="tab-content">
-                    <!-- Step 1: Modtagelse -->
-                    <div class="tab-pane fade show active" id="step1">
-                        <h4>Modtagelsesoplysninger</h4>
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Leverandør</label>
-                                    <select class="form-control" name="supplier" id="supplierSelect">
-                                        <option value="">Ingen leverandør (intern afsender)</option>
-                                        {% for supplier in suppliers %}
-                                        <option value="{{ supplier.SupplierID }}">{{ supplier.SupplierName }}</option>
-                                        {% endfor %}
-                                        <option value="new">+ Opret ny leverandør</option>
-                                    </select>
+
+            <!-- Step 2: Grundlæggende Information -->
+            <div class="form-step" id="step2">
+                <div class="copy-buttons">
+                    <button type="button" class="btn-copy" id="copyLastButton">
+                        <i class="fas fa-clone"></i>
+                        Brug senest registrerede prøve
+                    </button>
+                    <button class="btn-copy" data-bs-toggle="modal" data-bs-target="#copyRegistrationModal">
+                        <i class="fas fa-copy"></i>
+                        Brug tidligere registreret prøve
+                    </button>
+                </div>
+                <h3>Prøve Information</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Varenummer</label>
+                        <input type="text" class="form-control" name="partNumber">
+                    </div>
+                    <div class="form-group">
+                        <label>Beskrivelse</label>
+                        <input type="text" class="form-control" name="description" required>
+                    </div>
+
+                    <!-- Pakke Type sektionen - omstruktureret -->
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="isBulkSample" name="isBulkSample">
+                            <label for="isBulkSample">Løs mængde (væske/meter)</label>
+                        </div>
+                        
+                        <div class="checkbox-group mt-2">
+                            <input type="checkbox" id="isMultiPackage" name="isMultiPackage">
+                            <label for="isMultiPackage">Multiple pakker med samme type</label>
+                        </div>
+                    </div>
+
+                    <!-- Multi-pakke felter - redesignet for klarhed -->
+                    <div id="multiplePackageFields" class="d-none">
+                        <div class="package-container p-3 bg-light rounded">
+                            <h5>Multi-pakke information</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Antal pakker</label>
+                                        <input type="number" class="form-control" name="packageCount" min="1" value="1">
+                                        <small class="text-muted">Hvor mange separate pakker/æsker har du modtaget?</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Mængde pr. pakke</label>
+                                        <input type="number" class="form-control" name="amountPerPackage" min="1">
+                                        <small class="text-muted">Hvor mange enheder er der i hver pakke?</small>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Tracking-nummer</label>
-                                    <input type="text" class="form-control" name="trackingNumber" placeholder="F.eks. DHL tracking nummer">
+                            <div class="total-calculation mt-3 p-2 bg-white rounded">
+                                <div class="d-flex justify-content-between">
+                                    <span>Total mængde (automatisk beregnet):</span>
+                                    <span id="calculatedTotal" class="font-weight-bold">0</span>
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    
+                    <!-- Total mængde felt - nu med bedre forklaring -->
+                    <div class="form-group">
+                        <label>Total Mængde</label>
+                        <input type="number" class="form-control" name="totalAmount" required min="1">
+                        <small class="text-muted" id="totalAmountHelper">Samlet antal enheder der modtages</small>
+                    </div>
+
+                    <!-- Resten af formularen fortsætter som før -->
+                    <div class="form-group">
+                        <label>Enhed</label>
+                        <select class="form-control" name="unit" required>
+                            <option value="">Vælg enhed</option>
+                            {% for unit in units %}
+                            <option value="{{ unit.UnitID }}">{{ unit.UnitName }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Ansvarlig for prøven</label>
+                        <select class="form-control" name="owner" required>
+                            <option value="{{ current_user.UserID }}" selected>{{ current_user.Name }} (dig)</option>
+                            {% for user in users %}
+                            {% if user.UserID != current_user.UserID %}
+                            <option value="{{ user.UserID }}">{{ user.Name }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Vælg den person, der er ansvarlig for denne prøve</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Udløbsdato</label>
+                        <input type="date" class="form-control" name="expiryDate">
+                        <small class="text-muted">Standard: 2 måneder fra i dag</small>
+                    </div>
+                </div>
+                
+                <div class="form-group mt-4">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="hasSerialNumbers" name="hasSerialNumbers">
+                        <label for="hasSerialNumbers">Prøverne har individuelle serienumre</label>
+                        <small class="text-muted d-block mt-1">Vælg dette hvis hver prøve har et unikt serienummer eller stregkode</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Andet</label>
+                    <textarea class="form-control" name="other" rows="3" placeholder="Indtast eventuelle bemærkninger eller andre detaljer"></textarea>
+                </div>
+            </div>
+
+            <!-- Step 3: Identifikation -->
+            <div class="form-step" id="step3">
+                <h3>Prøve Identifikation</h3>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> 
+                    Her kan du scanne eller indtaste serienumre for dine prøver. Hver unik prøve skal have sit eget serienummer.
+                </div>
+                
+                <div class="scanner-section">
+                    <div class="scanner-header">
+                        <div class="counter">Scannede prøver: <span id="scannedCount">0</span> af <span id="totalCount">0</span></div>
+                        <div class="btn-group">
+                            <button class="btn btn-outline-primary" id="scanButton">
+                                <i class="fas fa-barcode"></i> Start Scanning
+                            </button>
+                            <button class="btn btn-outline-secondary" id="bulkEntryButton">
+                                <i class="fas fa-list"></i> Masse-indtastning
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="scan-input-group">
+                        <input type="text" class="form-control" id="barcodeInput" placeholder="Scan eller indtast serienummer" autofocus>
+                        <button class="btn btn-secondary" id="addManualBtn">Tilføj</button>
+                    </div>
+                    
+                    <!-- Ny masse-indtastningssektion -->
+                    <div class="bulk-entry d-none mt-3 mb-3">
                         <div class="form-group">
-                            <label>Registreret af</label>
-                            <input type="text" class="form-control" name="custodian" readonly value="{{ current_user.Name }}">
-                            <input type="hidden" name="custodianId" value="{{ current_user.UserID }}">
+                            <label>Indtast flere serienumre (ét pr. linje)</label>
+                            <textarea class="form-control" id="bulkBarcodes" rows="5" placeholder="Indtast serienumre her, ét pr. linje"></textarea>
                         </div>
+                        <button class="btn btn-primary mt-2" id="addBulkBtn">Tilføj alle</button>
                     </div>
-
-                    <!-- Step 2: Prøve Information -->
-                    <div class="tab-pane fade" id="step2">
-                        <h4>Prøve Information</h4>
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Beskrivelse</label>
-                                    <input type="text" class="form-control" name="description" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Antal</label>
-                                    <input type="number" class="form-control" name="totalAmount" required min="1">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Enhed</label>
-                                    <select class="form-control" name="unit" required>
-                                        <option value="">Vælg enhed</option>
-                                        {% for unit in units %}
-                                        <option value="{{ unit.UnitID }}">{{ unit.UnitName }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Ansvarlig</label>
-                                    <select class="form-control" name="owner" required>
-                                        <option value="{{ current_user.UserID }}" selected>{{ current_user.Name }} (dig)</option>
-                                        {% for user in users %}
-                                        {% if user.UserID != current_user.UserID %}
-                                        <option value="{{ user.UserID }}">{{ user.Name }}</option>
-                                        {% endif %}
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="hasSerialNumbers" name="hasSerialNumbers">
-                            <label class="form-check-label" for="hasSerialNumbers">
-                                Prøverne har individuelle serienumre
-                            </label>
-                        </div>
+                    
+                    <!-- Ny organiseret liste over scannede items -->
+                    <div class="scanned-items-header mt-4 d-flex justify-content-between">
+                        <h5>Scannede prøver</h5>
+                        <button class="btn btn-sm btn-outline-danger" id="clearAllScannedBtn">Ryd alle</button>
                     </div>
-
-                    <!-- Step 3: Identifikation -->
-                    <div class="tab-pane fade" id="step3">
-                        <h4>Prøve Identifikation</h4>
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle"></i>
-                            Scan eller indtast serienumre for hver prøve her.
-                        </div>
-                        <div class="input-group mb-3">
-                            <input type="text" class="form-control" id="barcodeInput" placeholder="Scan eller indtast serienummer">
-                            <button class="btn btn-primary" type="button" id="addBarcode">Tilføj</button>
-                        </div>
-                        <div class="card mb-3">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <span>Scannede prøver: <span id="scannedCount">0</span></span>
-                                <button class="btn btn-sm btn-outline-danger" id="clearScanned">Ryd alle</button>
-                            </div>
-                            <div class="card-body p-0">
-                                <ul class="list-group list-group-flush" id="scannedList">
-                                    <li class="list-group-item text-center text-muted">Ingen prøver scannet endnu</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Step 4: Placering -->
-                    <div class="tab-pane fade" id="step4">
-                        <h4>Placering</h4>
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Vælg lagerplads</label>
-                                    <select class="form-control" name="storageLocation" required>
-                                        <option value="">Vælg plads</option>
-                                        {% for location in locations %}
-                                        <option value="{{ location.LocationID }}">{{ location.LocationName }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card mb-3">
-                            <div class="card-header">
-                                <h5 class="mb-0">Lageroversigt</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="storage-grid">
-                                    <!-- Dynamisk udfyldt via JavaScript -->
-                                </div>
-                            </div>
+                    
+                    <div class="scanned-items mt-2">
+                        <!-- Scannede items vises her via JavaScript -->
+                        <div class="empty-scanned-message text-center p-3 text-muted">
+                            Ingen prøver scannet endnu. Brug scanneren eller indtast serienumre manuelt ovenfor.
                         </div>
                     </div>
                 </div>
-                <div class="mt-4 pt-3 border-top">
-                    <div class="d-flex justify-content-between">
-                        <button class="btn btn-secondary" id="prevBtn">Tilbage</button>
-                        <button class="btn btn-primary" id="nextBtn">Næste</button>
+            </div>
+
+            <!-- Step 4: Placering -->
+            <div class="form-step" id="step4">
+                <h3>Vælg Placering</h3>
+                <div class="storage-selector">
+                    <div class="form-group">
+                        <label>Lagerplads</label>
+                        <select class="form-control" name="storageLocation" required>
+                            <option value="">Vælg lagerplads</option>
+                            {% for location in locations %}
+                            <option value="{{ location.LocationID }}">{{ location.LocationName }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
+
+                    <div class="storage-grid">
+                        <!-- Dynamisk genereret grid af ledige pladser via JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-navigation">
+                <div class="form-nav-buttons">
+                    <button id="prevButton" class="btn btn-secondary" style="display: none;">Tilbage</button>
+                    <button id="nextButton" class="btn btn-primary">Næste</button>
+                </div>
+                <div class="progress mt-3">
+                    <div class="progress-bar" role="progressbar" style="width: 25%"></div>
                 </div>
             </div>
         </div>
     </div>
 </section>
+{% endblock %}
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Simpel step-navigation til test
-    const tabs = document.querySelectorAll('.nav-link');
-    const tabPanes = document.querySelectorAll('.tab-pane');
-    const prevBtn = document.getElementById('prevBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    let currentStep = 0;
-    
-    // Initial state
-    prevBtn.style.visibility = 'hidden';
-    
-    function showStep(step) {
-        // Hide all tabs and panes
-        tabs.forEach(tab => tab.classList.remove('active'));
-        tabPanes.forEach(pane => {
-            pane.classList.remove('show', 'active');
-        });
-        
-        // Show current tab and pane
-        tabs[step].classList.add('active');
-        tabPanes[step].classList.add('show', 'active');
-        
-        // Update buttons
-        prevBtn.style.visibility = step === 0 ? 'hidden' : 'visible';
-        nextBtn.textContent = step === tabs.length - 1 ? 'Gem' : 'Næste';
-    }
-    
-    prevBtn.addEventListener('click', () => {
-        if (currentStep > 0) {
-            currentStep--;
-            showStep(currentStep);
-        }
-    });
-    
-    nextBtn.addEventListener('click', () => {
-        if (currentStep < tabs.length - 1) {
-            currentStep++;
-            showStep(currentStep);
-        } else {
-            // Submit form logic would go here
-            alert('Form would be submitted here');
-        }
-    });
-    
-    // Scanner simulation
-    const barcodeInput = document.getElementById('barcodeInput');
-    const addBtn = document.getElementById('addBarcode');
-    const clearBtn = document.getElementById('clearScanned');
-    const scannedList = document.getElementById('scannedList');
-    const scannedCount = document.getElementById('scannedCount');
-    let scannedItems = [];
-    
-    function updateScannedUI() {
-        scannedCount.textContent = scannedItems.length;
-        
-        if (scannedItems.length === 0) {
-            scannedList.innerHTML = '<li class="list-group-item text-center text-muted">Ingen prøver scannet endnu</li>';
-            return;
-        }
-        
-        scannedList.innerHTML = '';
-        scannedItems.forEach((item, index) => {
-            const li = document.createElement('li');
-            li.className = 'list-group-item d-flex justify-content-between align-items-center';
-            li.innerHTML = `
-                <span>${index + 1}. ${item}</span>
-                <button class="btn btn-sm btn-outline-danger remove-item" data-index="${index}">
-                    <i class="fas fa-times"></i>
-                </button>
-            `;
-            scannedList.appendChild(li);
-        });
-        
-        // Attach remove handlers
-        document.querySelectorAll('.remove-item').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const index = parseInt(this.dataset.index);
-                scannedItems.splice(index, 1);
-                updateScannedUI();
-            });
-        });
-    }
-    
-    addBtn.addEventListener('click', () => {
-        const barcode = barcodeInput.value.trim();
-        if (barcode) {
-            if (!scannedItems.includes(barcode)) {
-                scannedItems.push(barcode);
-                updateScannedUI();
-                barcodeInput.value = '';
-            } else {
-                alert('Denne stregkode er allerede scannet');
-            }
-        }
-        barcodeInput.focus();
-    });
-    
-    barcodeInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            addBtn.click();
-        }
-    });
-    
-    clearBtn.addEventListener('click', () => {
-        if (confirm('Er du sikker på, at du vil fjerne alle scannede prøver?')) {
-            scannedItems = [];
-            updateScannedUI();
-        }
-    });
-});
-</script>
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/register.js') }}"></script>
 {% endblock %}

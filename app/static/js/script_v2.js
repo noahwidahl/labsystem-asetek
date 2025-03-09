@@ -1,6 +1,3 @@
-// Constants
-const DEFAULT_EXPIRY_MONTHS = 2;
-
 // Initialize when document loads
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Script initialized');
@@ -11,8 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentPath = window.location.pathname;
     if (currentPath === '/' || currentPath.includes('/dashboard')) {
         loadStorageLocations();
-    } else if (currentPath.includes('/register')) {
-        setupRegistrationForm();
     }
 });
 
@@ -127,10 +122,4 @@ function showExpiringDetails() {
     // This could fetch data from the API in a more complete implementation
     const expiringModal = new bootstrap.Modal(document.getElementById('expiringDetailsModal'));
     expiringModal.show();
-}
-
-// Setup for registration form
-function setupRegistrationForm() {
-    console.log('Setting up registration form');
-    // The basic functionality is already implemented in the HTML
 }

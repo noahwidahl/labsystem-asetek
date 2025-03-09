@@ -658,26 +658,27 @@ def create_sample():
         data = request.json
         cursor = mysql.connection.cursor()
         
-        # Ny kode til håndtering af supplier
-        supplier_id = None  # Default værdi
+        # Få bruger-ID'et fra den aktuelle bruger
+        current_user = get_current_user()
+        user_id = current_user['UserID']  # Dette burde være et heltal
+        
+        # Håndtering af supplier
+        supplier_id = None
         if data.get('supplier') and data.get('supplier').strip():
             try:
                 supplier_id = int(data.get('supplier'))
             except (ValueError, TypeError):
-                # Hvis konvertering fejler, forbliver supplier_id None
                 supplier_id = None
         
         # Sikre korrekt dato-formattering
         reception_date = datetime.now()
         if data.get('receptionDate'):
             try:
-                # Forsøg at konvertere den modtagne dato til et datetime-objekt
                 reception_date = datetime.strptime(data.get('receptionDate'), '%Y-%m-%d')
             except (ValueError, TypeError):
-                # Hvis konverteringen fejler, brug den nuværende dato
                 reception_date = datetime.now()
         
-        # Indsæt reception post med den nye supplier_id
+        # Indsæt reception post med bruger-ID'et fra current_user
         cursor.execute("""
             INSERT INTO Reception (
                 SupplierID, 
@@ -688,15 +689,16 @@ def create_sample():
             )
             VALUES (%s, %s, %s, %s, %s)
         """, (
-            supplier_id,  # Nu bruges den nye supplier_id
+            supplier_id,
             reception_date,
-            data.get('custodian', data.get('owner')),
+            user_id,  # Brug bruger-ID'et fra current_user, ikke fra data
             data.get('trackingNumber', ''),
             data.get('notes', 'Registreret via lab system')
         ))
         
         reception_id = cursor.lastrowid
         
+        # Resten af funktionen fortsætter som før...
         # Bestem om det er en multi-pakke eller enkelt prøve
         is_multi_package = data.get('isMultiPackage', False)
         package_count = data.get('packageCount', 1) if is_multi_package else 1
@@ -742,7 +744,7 @@ def create_sample():
                 "På lager",
                 amount_per_package,
                 data.get('unit'),
-                data.get('owner'),
+                data.get('owner'),  # Dette burde også være et heltal
                 reception_id
             ))
             
@@ -811,7 +813,7 @@ def create_sample():
             VALUES (NOW(), %s, %s, %s, %s)
         """, (
             'Modtaget',
-            data.get('custodian', data.get('owner')),
+            user_id,  # Brug bruger-ID'et fra current_user, ikke fra data
             first_sample_id,
             f"Prøve(r) registreret: {package_count} pakke(r) - total mængde: {data.get('totalAmount')}"
         ))
