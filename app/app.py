@@ -51,33 +51,65 @@ def dashboard():
     try:
         # Hent antal prøver på lager
         cursor = mysql.connection.cursor()
-        cursor.execute("SELECT COUNT(*) FROM Sample")
+        cursor.execute("SELECT COUNT(*) FROM Sample WHERE Status = 'På lager'")
         sample_count = cursor.fetchone()[0] or 0
         
         # Hent prøver der udløber snart (indenfor 14 dage)
-        cursor.execute("SELECT COUNT(*) FROM SampleStorage")
+        cursor.execute("""
+            SELECT COUNT(*) FROM SampleStorage ss
+            JOIN Sample s ON ss.SampleID = s.SampleID
+            WHERE ss.ExpireDate <= DATE_ADD(CURRENT_DATE(), INTERVAL 14 DAY)
+            AND s.Status = 'På lager'
+            AND ss.AmountRemaining > 0
+        """)
         expiring_count = cursor.fetchone()[0] or 0
         
         # Hent nye prøver i dag
-        cursor.execute("SELECT COUNT(*) FROM Reception")
+        cursor.execute("""
+            SELECT COUNT(*) FROM Reception
+            WHERE DATE(ReceivedDate) = CURRENT_DATE()
+        """)
         new_today = cursor.fetchone()[0] or 0
         
         # Hent antal aktive tests
-        cursor.execute("SELECT COUNT(*) FROM Test")
+        cursor.execute("SELECT COUNT(*) FROM Test WHERE Status IS NULL OR Status != 'Afsluttet'")
         active_tests_count = cursor.fetchone()[0] or 0
         
-        # Hent seneste historik - forenklet version
-        cursor.execute("SELECT LogID, ActionType, Notes FROM History LIMIT 5")
-        history_items = []
-        for item in cursor.fetchall():
-            history_items.append({
-                "LogID": item[0],
-                "ActionType": item[1],
-                "Notes": item[2],
-                "SampleDesc": "N/A",
-                "UserName": "System",
-                "Timestamp": "Nu"
-            })
+        # Hent seneste historik med mere detaljeret information
+        cursor.execute("""
+            SELECT 
+                h.LogID, 
+                h.ActionType, 
+                h.Notes,
+                IFNULL(s.Description, 'N/A') as SampleDesc,
+                u.Name as UserName,
+                DATE_FORMAT(h.Timestamp, '%d-%m-%Y %H:%i') as Timestamp
+            FROM History h
+            LEFT JOIN Sample s ON h.SampleID = s.SampleID
+            LEFT JOIN User u ON h.UserID = u.UserID
+            ORDER BY h.Timestamp DESC
+            LIMIT 5
+        """)
+        
+        columns = [col[0] for col in cursor.description]
+        history_items = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        # Initialiser storage locations
+        cursor.execute("""
+            SELECT 
+                sl.LocationName,
+                COUNT(ss.StorageID) as count,
+                CASE WHEN COUNT(ss.StorageID) > 0 THEN 'occupied' ELSE 'available' END as status,
+                l.LabName
+            FROM StorageLocation sl
+            JOIN Lab l ON sl.LabID = l.LabID
+            LEFT JOIN SampleStorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
+            GROUP BY sl.LocationID
+            LIMIT 12
+        """)
+        
+        columns = [col[0] for col in cursor.description]
+        locations = [dict(zip(columns, row)) for row in cursor.fetchall()]
         
         cursor.close()
         
@@ -86,7 +118,8 @@ def dashboard():
                             expiring_count=expiring_count,
                             new_today=new_today,
                             active_tests_count=active_tests_count,
-                            history_items=history_items)
+                            history_items=history_items,
+                            locations=locations)
     except Exception as e:
         import traceback
         error_message = f"Fejl: {str(e)}\n{traceback.format_exc()}"
@@ -97,8 +130,9 @@ def dashboard():
                             expiring_count=0,
                             new_today=0,
                             active_tests_count=0,
-                            history_items=[])
-
+                            history_items=[],
+                            locations=[])
+    
 @app.route('/storage')
 def storage():
     try:
