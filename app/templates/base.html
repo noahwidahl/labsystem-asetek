@@ -4,43 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Laboratorie Prøvesystem{% endblock %}</title>
-    <!-- 
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
-        -->
+    <!-- Behold den rækkefølge der virker -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <!-- Basis favicon for de fleste browsere -->
-    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon/favicon.ico') }}">
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon/favicon-32x32.png') }}">
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon/favicon-96x96.png') }}">
-    <!-- For Apple enheder -->
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon/apple-touch-icon.png') }}">
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        h1, h2, h3 { margin: 15px 0; }
-        .stats-grid { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 30px; }
-        .stat-card { padding: 15px; background-color: #f5f5f5; border-radius: 5px; width: 200px; }
-    </style>
 </head>
 <body class="lab-system">
-    <!-- Profile Selection Modal -->
-    {% include 'modals/profile_modal.html' %}
-
-    <!-- Copy Registration Modal -->
-    {% include 'modals/copy_registration_modal.html' %}
-
-    <!-- MNew_supplier_modal.html -->
-    {% include 'modals/new_supplier_modal.html' %}
-
-    <!-- Expiring Samples Detail Modal -->
-    {% include 'modals/expiring_details_modal.html' %}
-
-    <!-- Test Creation Modal -->
-    {% include 'modals/create_test_modal.html' %}
-    
-    <!-- Disposal Registration Modal -->
-    {% include 'modals/disposal_modal.html' %}
-
+    <!-- Simplificeret header -->
     <header class="main-header">
         <div class="header-brand">
             <h1>Asetek Lab System</h1>
@@ -56,20 +26,15 @@
         <div class="header-controls">
             <div class="lab-badge">DK-Lab</div>
             <div class="user-info">
-                <div class="domain-info">
-                    <span class="domain-name">ASETEK\</span>
-                    <span class="user-name">BWM</span>
-                </div>
+                <div class="user-name">BWM</div>
                 <div class="user-roles">
                     <span class="role-badge admin">Admin</span>
                 </div>
-                <button class="btn btn-sm btn-outline-secondary" onclick="showProfileModal()">
-                    <i class="fas fa-user-cog"></i>
-                </button>
             </div>
         </div>
     </header>
 
+    <!-- Simplificeret navigation -->
     <nav class="side-nav">
         <div class="nav-section">
             <a href="{{ url_for('dashboard') }}" class="nav-item {% if request.path == url_for('dashboard') or request.path == '/' %}active{% endif %}">
@@ -96,7 +61,7 @@
         
         <div class="nav-section mt-4">
             <div class="nav-header px-3 text-muted small">VÆRKTØJER</div>
-            <a href="#" class="nav-item" onclick="showDisposalModal(event)">
+            <a href="#" class="nav-item">
                 <i class="fas fa-trash-alt"></i>
                 <span>Kassering</span>
             </a>
@@ -108,7 +73,7 @@
         {% block content %}{% endblock %}
     </main>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/script_v2.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>

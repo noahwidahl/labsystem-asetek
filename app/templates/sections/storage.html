@@ -4,62 +4,69 @@
 
 {% block content %}
 <section id="storage" class="content-section">
-    <div class="section-header">
-        <h2>Prøveoversigt</h2>
-        <div class="actions">
-            <button class="btn btn-outline-primary">
-                <i class="fas fa-filter"></i> Filter
-            </button>
-            <button class="btn btn-outline-primary">
-                <i class="fas fa-download"></i> Eksporter
-            </button>
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Prøveoversigt</h2>
+                    <div>
+                        <button class="btn btn-outline-primary me-2">
+                            <i class="fas fa-filter"></i> Filter
+                        </button>
+                        <button class="btn btn-outline-primary">
+                            <i class="fas fa-download"></i> Eksporter
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
-    
-    <!-- Lager tabel -->
-    <div class="storage-table mb-6">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Beskrivelse</th>
-                    <th>Modtagelse</th>
-                    <th>Antal</th>
-                    <th>Placering</th>
-                    <th>Registreret</th>
-                    <th>Status</th>
-                    <th>Handling</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% if samples %}
-                    {% for sample in samples %}
-                    <tr>
-                        <td>{{ sample.ID }}</td>
-                        <td>{{ sample.Beskrivelse }}</td>
-                        <td>{{ sample.Modtagelse }}</td>
-                        <td>{{ sample.Antal }}</td>
-                        <td>{{ sample.Placering }}</td>
-                        <td>{{ sample.Registreret }}</td>
-                        <td><span class="status-badge status-{{ sample.Status|lower }}">{{ sample.Status }}</span></td>
-                        <td>
-                            <button class="btn btn-sm btn-secondary">Detaljer</button>
-                            <button class="btn btn-sm btn-outline">Flyt</button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                {% else %}
-                    <tr>
-                        <td colspan="8" class="text-center">Ingen prøver fundet</td>
-                    </tr>
-                {% endif %}
-            </tbody>
-        </table>
-    </div>
-    
-    <!-- Storage Grid Visualization -->
-    <div class="storage-grid">
-        <!-- Denne vil blive udfyldt dynamisk af JavaScript -->
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Prøver på lager</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Beskrivelse</th>
+                                <th>Modtagelse</th>
+                                <th>Antal</th>
+                                <th>Placering</th>
+                                <th>Registreret</th>
+                                <th>Status</th>
+                                <th>Handling</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if samples %}
+                                {% for sample in samples %}
+                                <tr>
+                                    <td>{{ sample.ID }}</td>
+                                    <td>{{ sample.Beskrivelse }}</td>
+                                    <td>{{ sample.Modtagelse }}</td>
+                                    <td>{{ sample.Antal }}</td>
+                                    <td>{{ sample.Placering }}</td>
+                                    <td>{{ sample.Registreret }}</td>
+                                    <td><span class="badge bg-primary">{{ sample.Status }}</span></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-secondary">Detaljer</button>
+                                        <button class="btn btn-sm btn-outline-primary">Flyt</button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center">Ingen prøver fundet</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 {% endblock %}

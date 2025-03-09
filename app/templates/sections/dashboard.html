@@ -3,99 +3,121 @@
 {% block title %}Dashboard - Laboratorie Prøvesystem{% endblock %}
 
 {% block content %}
-<section id="dashboard" class="content-section">
-    <div class="section-header">
-        <h2>Dashboard</h2>
-    </div>
-    
+<section id="dashboard" class="content-section active">
     <div class="dashboard-container">
-        <!-- Statistik kort sektion -->
-        <div class="stats-section">
-            <div class="stats-grid">
-                <!-- Warning card for expiring samples -->
-                <div class="stat-card warning">
-                    <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
-                    <div class="stat-info">
-                        <h4>Udløber Snart</h4>
-                        <p class="stat-value">{{ expiring_count|default(0) }}</p>
-                        <p class="stat-trend negative">Inden for 14 dage</p>
-                        <button class="btn btn-sm btn-warning mt-2" onclick="showExpiringDetails()">
-                            Se detaljer
-                        </button>
+        <!-- Stats Grid -->
+        <div class="row">
+            <div class="col-12">
+                <h2>Dashboard</h2>
+            </div>
+        </div>
+        
+        <div class="row mb-4">
+            <!-- Warning card for expiring samples -->
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                            <h5 class="card-title mb-0">Udløber Snart</h5>
+                        </div>
+                        <p class="card-text display-4">{{ expiring_count|default(0) }}</p>
+                        <p class="card-text text-danger">Inden for 14 dage</p>
                     </div>
                 </div>
-                
-                <!-- Sample count card -->
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="fas fa-box"></i></div>
-                    <div class="stat-info">
-                        <h4>På Lager</h4>
-                        <p class="stat-value">{{ sample_count|default(0) }}</p>
-                        <p class="stat-trend positive">+{{ new_today|default(0) }} i dag</p>
+            </div>
+            
+            <!-- Sample count card -->
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="fas fa-box text-primary me-2"></i>
+                            <h5 class="card-title mb-0">På Lager</h5>
+                        </div>
+                        <p class="card-text display-4">{{ sample_count|default(0) }}</p>
+                        <p class="card-text text-success">+{{ new_today|default(0) }} i dag</p>
                     </div>
                 </div>
-                
-                <!-- Active tests card -->
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="fas fa-flask"></i></div>
-                    <div class="stat-info">
-                        <h4>I Test</h4>
-                        <p class="stat-value">{{ active_tests_count|default(0) }}</p>
-                        <p class="stat-trend">{{ active_tests_count|default(0) }} tests aktive</p>
+            </div>
+            
+            <!-- Active tests card -->
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="fas fa-flask text-primary me-2"></i>
+                            <h5 class="card-title mb-0">I Test</h5>
+                        </div>
+                        <p class="card-text display-4">{{ active_tests_count|default(0) }}</p>
+                        <p class="card-text">{{ active_tests_count|default(0) }} tests aktive</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="dashboard-content">
-            <!-- Lageroversigt -->
-            <div class="storage-map">
-                <h3>Lageroversigt</h3>
-                <div class="storage-grid">
-                    <!-- Dynamisk genererede celler via JavaScript -->
-                    {% if locations %}
-                        {% for location in locations %}
-                        <div class="storage-cell {% if location.status == 'occupied' %}occupied{% endif %}">
-                            <div class="location">{{ location.LocationName }}</div>
-                            <div class="capacity">
-                                {% if location.status == 'occupied' %}
-                                {{ location.count }}
-                                {% else %}
-                                Ledig
-                                {% endif %}
-                            </div>
+        <div class="row">
+            <!-- Storage Map -->
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Lageroversigt</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="storage-grid">
+                            {% if locations %}
+                                {% for location in locations %}
+                                <div class="storage-cell {% if location.status == 'occupied' %}bg-light border-primary{% endif %}">
+                                    <div class="fw-bold">{{ location.LocationName }}</div>
+                                    <div class="small">
+                                        {% if location.status == 'occupied' %}
+                                        {{ location.count }}
+                                        {% else %}
+                                        Ledig
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <!-- Fallback til dummy-data hvis ingen locations -->
+                                {% for i in range(1, 13) %}
+                                <div class="storage-cell {% if i % 3 == 0 %}bg-light border-primary{% endif %}">
+                                    <div class="fw-bold">A{{ (i // 4) + 1 }}.B{{ i % 4 if i % 4 != 0 else 4 }}</div>
+                                    <div class="small">{% if i % 3 == 0 %}Optaget{% else %}Ledig{% endif %}</div>
+                                </div>
+                                {% endfor %}
+                            {% endif %}
                         </div>
-                        {% endfor %}
-                    {% else %}
-                        <!-- Fallback til dummy-data hvis ingen locations -->
-                        {% for i in range(1, 13) %}
-                        <div class="storage-cell {% if i % 3 == 0 %}occupied{% endif %}">
-                            <div class="location">A{{ (i // 4) + 1 }}.B{{ i % 4 if i % 4 != 0 else 4 }}</div>
-                            <div class="capacity">{% if i % 3 == 0 %}Optaget{% else %}Ledig{% endif %}</div>
-                        </div>
-                        {% endfor %}
-                    {% endif %}
+                    </div>
                 </div>
             </div>
             
-            <!-- Aktivitetsfeed -->
-            <div class="activity-feed">
-                <h3>Seneste Aktivitet</h3>
-                <div class="activity-list">
-                    {% if history_items %}
-                        {% for item in history_items %}
-                        <div class="activity-item">
-                            <span class="activity-time">{{ item.Timestamp|default('Nu') }}</span>
-                            <span class="activity-type {{ item.ActionType|lower }}">{{ item.ActionType }}</span>
-                            <span class="activity-desc">{{ item.Notes }}</span>
-                            <span class="activity-user">{{ item.UserName }}</span>
+            <!-- Activity Feed -->
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Seneste Aktivitet</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="list-group">
+                            {% if history_items %}
+                                {% for item in history_items %}
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="badge bg-primary rounded-pill">{{ item.ActionType }}</span>
+                                        <small>{{ item.Timestamp|default('Nu') }}</small>
+                                    </div>
+                                    <p class="mb-1 mt-2">{{ item.Notes }}</p>
+                                    <small class="text-muted">{{ item.UserName }}</small>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="list-group-item">
+                                    <p class="mb-0">Ingen nylig aktivitet</p>
+                                </div>
+                            {% endif %}
                         </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="activity-item">
-                            <span class="activity-desc">Ingen nylig aktivitet</span>
-                        </div>
-                    {% endif %}
+                    </div>
                 </div>
             </div>
         </div>

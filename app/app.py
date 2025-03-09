@@ -71,8 +71,8 @@ def dashboard():
         """)
         new_today = cursor.fetchone()[0] or 0
         
-        # Hent antal aktive tests
-        cursor.execute("SELECT COUNT(*) FROM Test WHERE Status IS NULL OR Status != 'Afsluttet'")
+        # Hent antal aktive tests - ændret for at undgå brug af Status-kolonnen
+        cursor.execute("SELECT COUNT(*) FROM Test")
         active_tests_count = cursor.fetchone()[0] or 0
         
         # Hent seneste historik med mere detaljeret information
@@ -132,6 +132,10 @@ def dashboard():
                             active_tests_count=0,
                             history_items=[],
                             locations=[])
+    
+@app.route('/test')
+def test():
+    return render_template('test.html')
     
 @app.route('/storage')
 def storage():
@@ -203,7 +207,6 @@ def get_previous_registrations():
 @app.route('/register')
 def register():
     try:
-
         cursor = mysql.connection.cursor()
         
         # Hent leverandører
@@ -214,13 +217,9 @@ def register():
         cursor.execute("SELECT UserID, Name FROM User")
         users = [dict(UserID=row[0], Name=row[1]) for row in cursor.fetchall()]
         
-        # Hent enheder (med DISTINCT for at undgå duplikater)
-        cursor.execute("SELECT DISTINCT UnitID, UnitName FROM Unit ORDER BY UnitName")
+        # Hent enheder
+        cursor.execute("SELECT UnitID, UnitName FROM Unit ORDER BY UnitName")
         units = [dict(UnitID=row[0], UnitName=row[1]) for row in cursor.fetchall()]
-        
-        # Hent labs
-        cursor.execute("SELECT LabID, LabName FROM Lab")
-        labs = [dict(LabID=row[0], LabName=row[1]) for row in cursor.fetchall()]
         
         # Hent lokationer
         cursor.execute("""
@@ -236,48 +235,15 @@ def register():
                 'LabName': row[2]
             })
         
-        # Hent container typer
-        cursor.execute("SELECT ContainerTypeID, TypeName FROM ContainerType ORDER BY TypeName")
-        container_types = [dict(ContainerTypeID=row[0], TypeName=row[1]) for row in cursor.fetchall()]
-        
-        # Hent tilgængelige containere
-        cursor.execute("""
-            SELECT 
-                c.ContainerID,
-                c.Description,
-                c.ContainerCapacity,
-                COUNT(cs.ContainerSampleID) as sample_count,
-                c.IsMixed
-            FROM Container c
-            LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
-            WHERE c.ContainerStatus = 'Aktiv' OR c.ContainerStatus IS NULL
-            GROUP BY c.ContainerID
-            HAVING c.ContainerCapacity IS NULL OR sample_count < c.ContainerCapacity OR TRUE
-        """)
-        
-        available_containers = []
-        for row in cursor.fetchall():
-            available_containers.append({
-                'ContainerID': row[0],
-                'Description': row[1],
-                'ContainerCapacity': row[2] or float('inf'),
-                'sample_count': row[3] or 0,
-                'IsMixed': row[4]
-            })
-        
         cursor.close()
         
-        # Vigtigt: Inkluder current_user i templaten
         return render_template('sections/register.html', 
                              suppliers=suppliers,
                              users=users,
                              units=units,
-                             locations=locations,
-                             labs=labs,
-                             container_types=container_types,
-                             available_containers=available_containers)
+                             locations=locations)
     except Exception as e:
-        print(f"Error loading register: {e}")
+        print(f"Error loading register page: {e}")
         return render_template('sections/register.html', 
                               error="Fejl ved indlæsning af registreringsform")
 
@@ -1545,6 +1511,31 @@ def remove_sample_from_container():
         print(f"API error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/debug-output')
+def debug_output():
+    # Test simpel direkte HTML
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Debug Output</title>
+        <style>
+            body { background-color: yellow; padding: 30px; }
+        </style>
+    </head>
+    <body>
+        <h1>Direkte HTML Output Test</h1>
+        <p>Hvis du kan se denne tekst med gul baggrund, virker direkte HTML-output.</p>
+    </body>
+    </html>
+    """
+@app.route('/test-subdir')
+def test_subdir():
+    try:
+        return render_template('debug/simple.html')
+    except Exception as e:
+        return f"Fejl ved indlæsning af simple.html fra undermappe: {str(e)}", 500
+    
 # Error handlers
 @app.errorhandler(404)
 def page_not_found(e):
