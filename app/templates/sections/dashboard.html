@@ -3,68 +3,73 @@
 {% block title %}Dashboard - Laboratorie Prøvesystem{% endblock %}
 
 {% block content %}
-<section id="dashboard" class="content-section active">
-    <div class="dashboard-container">
-        <div class="stats-section">
-            <div class="stats-grid">
-                <!-- Warning card for expiring samples -->
-                <div class="stat-card warning">
-                    <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
-                    <div class="stat-info">
-                        <h4>Udløber Snart</h4>
-                        <p class="stat-value">{{ expiring_count|default(0) }}</p>
-                        <p class="stat-trend negative">Inden for 14 dage</p>
-                        <button class="btn btn-sm btn-warning mt-2" onclick="showExpiringDetails()">
-                            Se detaljer
-                        </button>
+<section id="dashboard" class="content-section">
+    <h2>Dashboard</h2>
+    
+    <!-- Statistik-kort -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-vial"></i>
+            </div>
+            <div class="stat-label">Prøver på lager</div>
+            <div class="stat-value">{{ sample_count|default('0') }}</div>
+        </div>
+        
+        <div class="stat-card warning">
+            <div class="stat-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="stat-label">Udløber snart</div>
+            <div class="stat-value">{{ expiring_count|default('0') }}</div>
+            <button class="btn btn-outline-warning mt-2 btn-sm" onclick="showExpiringDetails()">Se detaljer</button>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-flask"></i>
+            </div>
+            <div class="stat-label">Aktive Tests</div>
+            <div class="stat-value">{{ active_tests_count|default('0') }}</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-calendar-day"></i>
+            </div>
+            <div class="stat-label">Nye i dag</div>
+            <div class="stat-value">{{ new_today|default('0') }}</div>
+        </div>
+    </div>
+    
+    <!-- Seneste aktivitet -->
+    <div class="dashboard-content">
+        <div class="storage-history">
+            <h3>Seneste aktivitet</h3>
+            <div class="activity-feed">
+                {% if history_items %}
+                    {% for item in history_items %}
+                    <div class="activity-item">
+                        <div class="activity-time">{{ item.Timestamp }}</div>
+                        <div class="activity-type {{ item.ActionType|lower }}">{{ item.ActionType }}</div>
+                        <div class="activity-desc">{{ item.Notes }}</div>
+                        <div class="activity-user">{{ item.UserName }}</div>
                     </div>
-                </div>
-                <!-- Sample count card -->
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="fas fa-box"></i></div>
-                    <div class="stat-info">
-                        <h4>På Lager</h4>
-                        <p class="stat-value">{{ sample_count|default(0) }}</p>
-                        <p class="stat-trend positive">+{{ new_today|default(0) }} i dag</p>
+                    {% endfor %}
+                {% else %}
+                    <div class="alert alert-info">
+                        Ingen nylig aktivitet at vise
                     </div>
-                </div>
-                <!-- Active tests card -->
-                <div class="stat-card">
-                    <div class="stat-icon"><i class="fas fa-flask"></i></div>
-                    <div class="stat-info">
-                        <h4>I Test</h4>
-                        <p class="stat-value">{{ active_tests_count|default(0) }}</p>
-                        <p class="stat-trend">{{ active_tests_count|default(0) }} tests aktive</p>
-                    </div>
-                </div>
+                {% endif %}
             </div>
         </div>
-
-        <div class="dashboard-content">
-            <div class="storage-map">
-                <h3>Lageroversigt</h3>
-                <div class="storage-grid">
-                    <!-- Dynamisk genererede celler via JavaScript -->
-                </div>
-            </div>
-            
-            <div class="activity-feed">
-                <h3>Seneste Aktivitet</h3>
-                <div class="activity-list">
-                    {% if history_items %}
-                        {% for item in history_items[:5] %}
-                        <div class="activity-item">
-                            <span class="activity-time">{{ item.Timestamp|default('Nu') }}</span>
-                            <span class="activity-type {{ item.ActionType|lower }}">{{ item.ActionType }}</span>
-                            <span class="activity-desc">{{ item.Notes }}</span>
-                            <span class="activity-user">{{ item.UserName }}</span>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="activity-item">
-                            <span class="activity-desc">Ingen nylig aktivitet</span>
-                        </div>
-                    {% endif %}
+        
+        <div class="storage-overview">
+            <h3>Lagerstatus</h3>
+            <div class="storage-grid">
+                <!-- Denne sektion udfyldes via JavaScript -->
+                <div class="alert alert-info">
+                    Indlæser lager information...
                 </div>
             </div>
         </div>
