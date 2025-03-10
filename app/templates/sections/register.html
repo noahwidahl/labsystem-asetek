@@ -92,11 +92,11 @@
                         </div>
                     </div>
 
-                    <!-- Multi-pakke felter - redesignet for klarhed -->
+                    <!-- Multi-pakke felter - kompakt version -->
                     <div id="multiplePackageFields" class="d-none">
                         <div class="package-container p-3 bg-light rounded">
                             <h5>Multi-pakke information</h5>
-                            <div class="row">
+                            <div class="row mb-3">
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label>Antal pakker</label>
@@ -112,14 +112,43 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="total-calculation mt-3 p-2 bg-white rounded">
+                            
+                            <div class="total-calculation p-2 bg-white rounded mb-3">
                                 <div class="d-flex justify-content-between">
                                     <span>Total mængde (automatisk beregnet):</span>
                                     <span id="calculatedTotal" class="font-weight-bold">0</span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
+                            
+                            <!-- Container til placeringsinformation -->
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="differentLocations" name="differentLocations">
+                                <label class="form-check-label" for="differentLocations">
+                                    Placér pakker på forskellige lokationer
+                                </label>
+                            </div>
+
+                            <!-- Pakkeplaceringsopsummering -->
+                            <div id="packageLocationsSummary" class="d-none p-2 border rounded mb-3">
+                                <div class="package-locations-list">
+                                    <!-- Her kommer en liste over konfigurerede pakkeloktioner -->
+                                </div>
+                            </div>
+
+                            <!-- Vis/skjul område til konfiguration af placeringer -->
+                            <div id="packageLocationsConfig" class="d-none">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0">Konfigurer pakkeplaceringer</h6>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="collapseLocationsBtn">
+                                            <i class="fas fa-chevron-up"></i>
+                                        </button>
+                                    </div>
+                                    <div class="card-body" id="packageLocationsContainer">
+                                        <!-- Her tilføjes pakkeplaceringsindhold dynamisk via JS -->
+                                    </div>
+                                </div>
+                            </div>
                     
                     <!-- Total mængde felt - nu med bedre forklaring -->
                     <div class="form-group">
@@ -258,5 +287,14 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- Inkluder vores separate registrerings-script -->
 <script src="{{ url_for('static', filename='js/register.js') }}"></script>
+<script src="{{ url_for('static', filename='js/package-locations.js') }}"></script>
+<script src="{{ url_for('static', filename='js/container.js') }}"></script>
+<script>
+    // Initialiser container-modulet når dokumentet er indlæst
+    document.addEventListener('DOMContentLoaded', function() {
+        ContainerModule.init();
+    });
+</script>
 {% endblock %}

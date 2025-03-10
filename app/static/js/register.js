@@ -1,9 +1,9 @@
-// Globale variabler
+// Basisvariabler til multistep
 let currentStep = 1;
 const totalSteps = 4;
 let scannedItems = [];
 let selectedLocation = null;
-const DEFAULT_EXPIRY_MONTHS = 2;
+const REGISTRATION_EXPIRY_MONTHS = 2;
 
 // Initialiser når dokumentet er indlæst
 document.addEventListener('DOMContentLoaded', function() {
@@ -31,13 +31,12 @@ function setDefaultExpiryDate() {
     const expiryInput = document.querySelector('input[name="expiryDate"]');
     if (expiryInput) {
         const defaultDate = new Date();
-        defaultDate.setMonth(defaultDate.getMonth() + DEFAULT_EXPIRY_MONTHS); // 2 måneder frem
+        defaultDate.setMonth(defaultDate.getMonth() + REGISTRATION_EXPIRY_MONTHS);
         const dateString = defaultDate.toISOString().split('T')[0];
         expiryInput.value = dateString;
     }
 }
 
-// Vis specifikt step og opdater UI
 function showStep(step) {
     const formSteps = document.querySelectorAll('.form-step');
     formSteps.forEach(el => {
@@ -64,7 +63,6 @@ function showStep(step) {
     }
 }
 
-// Opdater progressbar og steps-visning
 function updateProgress(step) {
     const progress = ((step - 1) / (totalSteps - 1)) * 100;
     
@@ -87,7 +85,6 @@ function updateProgress(step) {
     });
 }
 
-// Opdater naviation knapper baseret på aktuelt step
 function updateNavigationButtons(step) {
     const prevButton = document.getElementById('prevButton');
     const nextButton = document.getElementById('nextButton');
@@ -101,7 +98,6 @@ function updateNavigationButtons(step) {
     }
 }
 
-// Setup registrerings-steps navigation
 function setupRegistrationSteps() {
     const nextButton = document.getElementById('nextButton');
     const prevButton = document.getElementById('prevButton');
@@ -109,7 +105,6 @@ function setupRegistrationSteps() {
     if (nextButton) {
         nextButton.addEventListener('click', function() {
             if (currentStep === totalSteps) {
-                // Sidste trin - her håndterer vi form-submission
                 handleFormSubmission();
             } else {
                 nextStep();
@@ -124,7 +119,6 @@ function setupRegistrationSteps() {
     }
 }
 
-// Gå til næste step (med validering)
 function nextStep() {
     if (validateCurrentStep()) {
         const hasSerialNumbers = document.getElementById('hasSerialNumbers')?.checked || false;
@@ -144,7 +138,6 @@ function nextStep() {
     }
 }
 
-// Gå til forrige step
 function previousStep() {
     const hasSerialNumbers = document.getElementById('hasSerialNumbers')?.checked || false;
     
@@ -162,7 +155,6 @@ function previousStep() {
     showStep(currentStep);
 }
 
-// Validér aktuelt step før vi går videre
 function validateCurrentStep() {
     clearValidationErrors();
     
@@ -207,6 +199,15 @@ function validateCurrentStep() {
             return true;
         case 4:
             // Validering af placering
+            const isMultiPackage = document.getElementById('isMultiPackage')?.checked;
+            const differentLocations = document.getElementById('differentLocations')?.checked;
+            
+            // Hvis multi-pakker med forskellige lokationer og PackageLocations modul findes
+            if (isMultiPackage && differentLocations && typeof PackageLocations !== 'undefined') {
+                return PackageLocations.validate();
+            }
+            
+            // Ellers valider standard lokationsfelt
             const storageLocation = document.querySelector('[name="storageLocation"]');
             if (!storageLocation || !storageLocation.value) {
                 showErrorMessage('Vælg venligst en placering', 'storageLocation');
@@ -218,7 +219,6 @@ function validateCurrentStep() {
     }
 }
 
-// Setup for serialnummer håndtering
 function setupSerialNumberToggle() {
     const checkbox = document.getElementById('hasSerialNumbers');
     if (checkbox) {
@@ -228,7 +228,7 @@ function setupSerialNumberToggle() {
     }
 }
 
-// Multip-pakke håndtering - opdater funktionen
+// Setup multipakke funktionalitet
 function setupMultiPackageHandling() {
     const isMultiPackageCheckbox = document.getElementById('isMultiPackage');
     const multiplePackageFields = document.getElementById('multiplePackageFields');
@@ -250,6 +250,11 @@ function setupMultiPackageHandling() {
             } else {
                 totalAmountHelper.textContent = "Samlet antal enheder der modtages";
                 totalAmountInput.readOnly = false;
+                
+                // Nulstil pakkelokationer når multi-pakke deaktiveres
+                if (typeof PackageLocations !== 'undefined') {
+                    PackageLocations.reset();
+                }
             }
             
             // Opdater total mængde når checkbox ændres
@@ -379,7 +384,7 @@ function setupScannerListeners() {
                 const currentCount = scannedItems.length;
                 
                 if (currentCount + barcodes.length > totalExpected) {
-                    alert(`Kan ikke tilføje ${barcodes.length} stregkoder. Maksimalt antal er ${totalExpected} (${currentCount} allerede scannet)`);
+                    showErrorMessage(`Kan ikke tilføje ${barcodes.length} stregkoder. Maksimalt antal er ${totalExpected} (${currentCount} allerede scannet)`);
                     return;
                 }
                 
@@ -430,15 +435,13 @@ function processScan(barcode) {
     }
 }
 
-// Opdatér updateScanUI funktionen
+// Opdater UI med scannede items
 function updateScanUI() {
     const counter = document.getElementById('scannedCount');
     const totalCounter = document.getElementById('totalCount');
-    const totalAmountInput = document.querySelector('[name="totalAmount"]');
-    const total = parseInt(totalAmountInput?.value) || 0;
+    const total = document.querySelector('[name="totalAmount"]')?.value || 0;
     const emptyMessage = document.querySelector('.empty-scanned-message');
 
-    // Opdater tællere
     if (counter) counter.textContent = scannedItems.length;
     if (totalCounter) totalCounter.textContent = total;
 
@@ -640,7 +643,6 @@ function handleFormSubmission() {
         // Modtagelsesoplysninger
         supplier: document.querySelector('[name="supplier"]')?.value || '',
         trackingNumber: document.querySelector('[name="trackingNumber"]')?.value || '',
-        // Bemærk vi fjerner custodian her eller sikrer at det er et ID
         
         // Prøve information
         partNumber: document.querySelector('[name="partNumber"]')?.value || '',
@@ -659,9 +661,14 @@ function handleFormSubmission() {
         // Identifikation
         serialNumbers: scannedItems || [],
         
-        // Placering
+        // Standard lokation (bruges hvis ikke differentLocations er markeret)
         storageLocation: document.querySelector('[name="storageLocation"]')?.value || selectedLocation || ''
     };
+    
+    // Hvis PackageLocations modul er tilgængeligt, hent pakkedata
+    if (typeof PackageLocations !== 'undefined') {
+        Object.assign(formData, PackageLocations.getData());
+    }
     
     console.log("Sending form data:", formData);
     
@@ -723,6 +730,11 @@ function resetForm() {
         document.getElementById('isMultiPackage').checked = false;
     }
     
+    // Reset pakkelokationer
+    if (typeof PackageLocations !== 'undefined') {
+        PackageLocations.reset();
+    }
+    
     // Skjul multiple package felter
     const multiplePackageFields = document.getElementById('multiplePackageFields');
     if (multiplePackageFields) {
@@ -742,19 +754,7 @@ function resetForm() {
     showStep(1);
 }
 
-// Hjælpefunktion til at fjerne alle valideringsfejl
-function clearValidationErrors() {
-    // Fjern fejlklasser fra alle felter
-    document.querySelectorAll('.field-error').forEach(field => {
-        field.classList.remove('field-error');
-    });
-    
-    // Fjern alle fejlmeddelelser
-    document.querySelectorAll('.field-error-message').forEach(msg => {
-        msg.remove();
-    });
-}
-
+// UI Besked funktioner
 function showSuccessMessage(message) {
     // Fjern eksisterende fejlmeddelelser
     clearValidationErrors();
@@ -841,7 +841,6 @@ function showErrorMessage(message, field = null) {
     }
 }
 
-
 function showWarningMessage(message) {
     const warningToast = document.createElement('div');
     warningToast.className = 'custom-toast warning-toast';
@@ -869,35 +868,15 @@ function showWarningMessage(message) {
     }, 4000);
 }
 
-// Kopier seneste prøve
-function copyLastSample() {
-    fetch('/api/last-sample')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Fyld form med data fra sidste registrering
-                document.querySelector('[name="partNumber"]').value = data.sample.partNumber || '';
-                document.querySelector('[name="description"]').value = data.sample.description || '';
-                document.querySelector('[name="unit"]').value = data.sample.unit || '';
-                document.querySelector('[name="owner"]').value = data.sample.owner || '';
-                
-                // Behold mængde, serienumre og lokation tomme
-                document.querySelector('[name="totalAmount"]').value = '';
-                if (document.getElementById('hasSerialNumbers')) {
-                    document.getElementById('hasSerialNumbers').checked = data.sample.hasSerialNumbers || false;
-                }
-                
-                // Vis bekræftelsesmeddelelse
-                showSuccessMessage('Information kopieret fra seneste registrering. Opdater venligst mængde og placering.');
-            } else {
-                showErrorMessage('Kunne ikke finde seneste registrering.');
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching last sample:', error);
-            showErrorMessage('Der opstod en fejl ved hentning af seneste registrering.');
-        });
+// Hjælpefunktion til at fjerne alle valideringsfejl
+function clearValidationErrors() {
+    // Fjern fejlklasser fra alle felter
+    document.querySelectorAll('.field-error').forEach(field => {
+        field.classList.remove('field-error');
+    });
+    
+    // Fjern alle fejlmeddelelser
+    document.querySelectorAll('.field-error-message').forEach(msg => {
+        msg.remove();
+    });
 }
-
-// Gør funktioner tilgængelige for HTML-elementer
-window.removeScannedItem = removeScannedItem;

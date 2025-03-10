@@ -693,15 +693,14 @@ def create_sample():
             reception_date,
             user_id,  # Brug bruger-ID'et fra current_user, ikke fra data
             data.get('trackingNumber', ''),
-            data.get('notes', 'Registreret via lab system')
+            data.get('other', 'Registreret via lab system')  # Bruger 'other' som notes fra formen
         ))
         
         reception_id = cursor.lastrowid
         
-        # Resten af funktionen fortsætter som før...
         # Bestem om det er en multi-pakke eller enkelt prøve
         is_multi_package = data.get('isMultiPackage', False)
-        package_count = data.get('packageCount', 1) if is_multi_package else 1
+        package_count = int(data.get('packageCount', 1)) if is_multi_package else 1
         
         # Generer en unik barcode hvis ikke angivet
         base_barcode = data.get('barcode', '')
@@ -713,14 +712,22 @@ def create_sample():
         first_sample_id = None
         first_storage_id = None
         
+        # Bestem om pakkerne har forskellige lokationer
+        different_locations = data.get('differentLocations', False)
+        package_locations = data.get('packageLocations', [])
+        
         # Iterér gennem antal pakker
         for i in range(package_count):
             # Generer barcode for hver pakke
             barcode = f"{base_barcode}-{i+1}" if package_count > 1 else base_barcode
             
             # Beregn mængde per pakke
-            total_amount = data.get('totalAmount', 0)
-            amount_per_package = total_amount // package_count
+            total_amount = int(data.get('totalAmount', 0))
+            amount_per_package = total_amount // package_count if package_count > 0 else total_amount
+            
+            # Juster sidste pakke hvis der er rest ved division
+            if i == package_count - 1 and total_amount % package_count != 0:
+                amount_per_package += total_amount % package_count
             
             # Indsæt prøven
             cursor.execute("""
@@ -754,7 +761,19 @@ def create_sample():
             if first_sample_id is None:
                 first_sample_id = sample_id
             
-            # Indsæt til lager
+            # Bestem lokation for denne pakke
+            location_id = None
+            if different_locations and package_locations:
+                # Find pakkedata for denne pakkenummer
+                package_data = next((p for p in package_locations if int(p.get('packageNumber', 0)) == i+1), None)
+                if package_data:
+                    location_id = package_data.get('locationId')
+            
+            # Brug standard lokation hvis ingen specifik findes
+            if not location_id:
+                location_id = data.get('storageLocation')
+            
+            # Indsæt til lager med den valgte lokation
             cursor.execute("""
                 INSERT INTO SampleStorage (
                     SampleID, 
@@ -765,7 +784,7 @@ def create_sample():
                 VALUES (%s, %s, %s, %s)
             """, (
                 sample_id,
-                data.get('storageLocation'),
+                location_id,
                 amount_per_package,
                 data.get('expiryDate')
             ))
@@ -798,8 +817,19 @@ def create_sample():
         
         # Håndter serienumre hvis relevant
         if data.get('hasSerialNumbers') and data.get('serialNumbers'):
-            # Flere detaljeret håndtering af serienumre kan tilføjes her
-            pass
+            serial_numbers = data.get('serialNumbers')
+            # Tilføj logik for at gemme serienumre
+            for i, serial_number in enumerate(serial_numbers):
+                cursor.execute("""
+                    INSERT INTO SampleSerialNumber (
+                        SampleID, 
+                        SerialNumber
+                    )
+                    VALUES (%s, %s)
+                """, (
+                    first_sample_id,
+                    serial_number
+                ))
         
         # Log aktiviteten
         cursor.execute("""
@@ -829,58 +859,7 @@ def create_sample():
         })
     except Exception as e:
         print(f"API error: {e}")
-        return jsonify({'error': str(e)}), 500
-    
-@app.route('/api/last-sample')
-def get_last_sample():
-    try:
-        cursor = mysql.connection.cursor()
-        
-        # Hent den seneste registrerede prøve for den aktuelle bruger
-        current_user = get_current_user()
-        
-        cursor.execute("""
-            SELECT 
-                s.SampleID,
-                s.Description,
-                s.UnitID,
-                s.OwnerID,
-                s.IsUnique as hasSerialNumbers,
-                r.ReceptionID
-            FROM Sample s
-            JOIN Reception r ON s.ReceptionID = r.ReceptionID
-            WHERE r.UserID = %s
-            ORDER BY s.SampleID DESC
-            LIMIT 1
-        """, (current_user['UserID'],))
-        
-        sample_data = cursor.fetchone()
-        
-        if not sample_data:
-            return jsonify({'success': False, 'error': 'Ingen tidligere registreringer fundet'})
-        
-        # Hent yderligere data hvis nødvendigt
-        cursor.execute("""
-            SELECT Description FROM Sample WHERE SampleID = %s
-        """, (sample_data[0],))
-        
-        part_data = cursor.fetchone()
-        part_number = part_data[0].split(' ')[0] if part_data and part_data[0] else ""
-        
-        cursor.close()
-        
-        sample = {
-            'partNumber': part_number,
-            'description': sample_data[1],
-            'unit': sample_data[2],
-            'owner': sample_data[3],
-            'hasSerialNumbers': bool(sample_data[4]),
-            'receptionId': sample_data[5]
-        }
-        
-        return jsonify({'success': True, 'sample': sample})
-    except Exception as e:
-        print(f"API error: {e}")
+        mysql.connection.rollback()  # Sikrer at alle ændringer rulles tilbage ved fejl
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/recent-samples')
