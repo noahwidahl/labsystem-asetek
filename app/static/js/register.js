@@ -164,6 +164,8 @@ function previousStep() {
 
 // Validér aktuelt step før vi går videre
 function validateCurrentStep() {
+    clearValidationErrors();
+    
     switch(currentStep) {
         case 1:
             // Validering af modtagelsesoplysninger - ingen obligatoriske felter
@@ -177,13 +179,17 @@ function validateCurrentStep() {
             let isValid = true;
             
             if (!description || !description.value.trim()) {
-                alert('Indtast venligst en beskrivelse');
+                showErrorMessage('Indtast venligst en beskrivelse', 'description');
                 isValid = false;
-            } else if (!totalAmount || totalAmount.value <= 0) {
-                alert('Indtast venligst et gyldigt antal');
+            }
+            
+            if (!totalAmount || totalAmount.value <= 0) {
+                showErrorMessage('Indtast venligst et gyldigt antal', 'totalAmount');
                 isValid = false;
-            } else if (!unit || !unit.value) {
-                alert('Vælg venligst en enhed');
+            }
+            
+            if (!unit || !unit.value) {
+                showErrorMessage('Vælg venligst en enhed', 'unit');
                 isValid = false;
             }
             
@@ -194,7 +200,7 @@ function validateCurrentStep() {
             if (hasSerialNumbers) {
                 const expectedCount = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
                 if (scannedItems.length < expectedCount) {
-                    alert(`Der mangler at blive scannet ${expectedCount - scannedItems.length} enheder`);
+                    showErrorMessage(`Der mangler at blive scannet ${expectedCount - scannedItems.length} enheder`);
                     return false;
                 }
             }
@@ -203,7 +209,7 @@ function validateCurrentStep() {
             // Validering af placering
             const storageLocation = document.querySelector('[name="storageLocation"]');
             if (!storageLocation || !storageLocation.value) {
-                alert('Vælg venligst en placering');
+                showErrorMessage('Vælg venligst en placering', 'storageLocation');
                 return false;
             }
             return true;
@@ -711,74 +717,131 @@ function resetForm() {
     showStep(1);
 }
 
-// UI Besked funktioner
+// Hjælpefunktion til at fjerne alle valideringsfejl
+function clearValidationErrors() {
+    // Fjern fejlklasser fra alle felter
+    document.querySelectorAll('.field-error').forEach(field => {
+        field.classList.remove('field-error');
+    });
+    
+    // Fjern alle fejlmeddelelser
+    document.querySelectorAll('.field-error-message').forEach(msg => {
+        msg.remove();
+    });
+}
+
 function showSuccessMessage(message) {
+    // Fjern eksisterende fejlmeddelelser
+    clearValidationErrors();
+    
     const successToast = document.createElement('div');
-    successToast.className = 'toast show';
-    successToast.role = 'alert';
-    successToast.ariaLive = 'assertive';
-    successToast.style.position = 'fixed';
-    successToast.style.top = '20px';
-    successToast.style.right = '20px';
-    successToast.style.zIndex = '1050';
+    successToast.className = 'custom-toast success-toast';
     successToast.innerHTML = `
-        <div class="toast-header bg-success text-white">
-            <strong class="me-auto">Succes</strong>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+        <div class="toast-icon">
+            <i class="fas fa-check-circle"></i>
         </div>
-        <div class="toast-body">${message}</div>
+        <div class="toast-content">
+            <div class="toast-title">Succes</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
     `;
     document.body.appendChild(successToast);
 
+    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    setTimeout(() => successToast.classList.add('show'), 10);
+
+    // Fjern automatisk efter 3 sekunder
     setTimeout(() => {
-        successToast.remove();
+        successToast.classList.remove('show');
+        setTimeout(() => successToast.remove(), 300);
     }, 3000);
 }
 
-function showErrorMessage(message) {
+function showErrorMessage(message, field = null) {
     const errorToast = document.createElement('div');
-    errorToast.className = 'toast show';
-    errorToast.role = 'alert';
-    errorToast.ariaLive = 'assertive';
-    errorToast.style.position = 'fixed';
-    errorToast.style.top = '20px';
-    errorToast.style.right = '20px';
-    errorToast.style.zIndex = '1050';
+    errorToast.className = 'custom-toast error-toast';
     errorToast.innerHTML = `
-        <div class="toast-header bg-danger text-white">
-            <strong class="me-auto">Fejl</strong>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+        <div class="toast-icon">
+            <i class="fas fa-exclamation-circle"></i>
         </div>
-        <div class="toast-body">${message}</div>
+        <div class="toast-content">
+            <div class="toast-title">Fejl</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
     `;
     document.body.appendChild(errorToast);
 
+    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    setTimeout(() => errorToast.classList.add('show'), 10);
+
+    // Fjern automatisk efter 5 sekunder
     setTimeout(() => {
-        errorToast.remove();
-    }, 3000);
+        errorToast.classList.remove('show');
+        setTimeout(() => errorToast.remove(), 300);
+    }, 5000);
+    
+    // Hvis et bestemt felt er angivet, marker det med en fejl
+    if (field) {
+        const fieldElement = document.querySelector(`[name="${field}"]`);
+        if (fieldElement) {
+            fieldElement.classList.add('field-error');
+            
+            // Tilføj fejlmeddelelse under feltet
+            const fieldContainer = fieldElement.closest('.form-group');
+            if (fieldContainer) {
+                // Fjern eventuelle eksisterende fejlmeddelelser
+                const existingError = fieldContainer.querySelector('.field-error-message');
+                if (existingError) existingError.remove();
+                
+                // Tilføj ny fejlmeddelelse
+                const errorMsg = document.createElement('div');
+                errorMsg.className = 'field-error-message';
+                errorMsg.textContent = message;
+                fieldContainer.appendChild(errorMsg);
+                
+                // Tilføj lyttere til at fjerne fejlmarkering ved input
+                fieldElement.addEventListener('input', function() {
+                    this.classList.remove('field-error');
+                    const errorMsg = fieldContainer.querySelector('.field-error-message');
+                    if (errorMsg) errorMsg.remove();
+                });
+            }
+        }
+    }
 }
+
 
 function showWarningMessage(message) {
     const warningToast = document.createElement('div');
-    warningToast.className = 'toast show';
-    warningToast.role = 'alert';
-    warningToast.ariaLive = 'assertive';
-    warningToast.style.position = 'fixed';
-    warningToast.style.top = '20px';
-    warningToast.style.right = '20px';
-    warningToast.style.zIndex = '1050';
+    warningToast.className = 'custom-toast warning-toast';
     warningToast.innerHTML = `
-        <div class="toast-header bg-warning text-dark">
-            <strong class="me-auto">Advarsel</strong>
-            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        <div class="toast-icon">
+            <i class="fas fa-exclamation-triangle"></i>
         </div>
-        <div class="toast-body">${message}</div>
+        <div class="toast-content">
+            <div class="toast-title">Advarsel</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
     `;
     document.body.appendChild(warningToast);
 
+    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    setTimeout(() => warningToast.classList.add('show'), 10);
+
+    // Fjern automatisk efter 4 sekunder
     setTimeout(() => {
-        warningToast.remove();
-    }, 3000);
+        warningToast.classList.remove('show');
+        setTimeout(() => warningToast.remove(), 300);
+    }, 4000);
 }
 
 // Kopier seneste prøve
