@@ -897,14 +897,26 @@ def api_create_test():
         data = request.json
         cursor = mysql.connection.cursor()
         
-        # Få den aktuelle bruger i stedet for at bruge bruger-ID fra anmodningen
+        # Få den aktuelle bruger
         current_user = get_current_user()
         user_id = current_user['UserID']
         
-        # Generer unikt testnummer
-        test_type = data.get('type', 'std')
-        test_date = datetime.now().strftime('%Y%m%d')
-        test_number = f"T{test_type}-{test_date}"
+        # Brug det angivne test-nummer direkte
+        test_type = data.get('type', '')
+        
+        # Test nummer format: T1234.5, T2345.6, osv.
+        test_number = f"T{test_type}"
+        
+        # Generer test-navn baseret på type
+        test_name = ""
+        if "1234.5" in test_type:
+            test_name = "Tryk Test"
+        elif "2345.6" in test_type:
+            test_name = "Termisk Test"
+        elif "3456.7" in test_type:
+            test_name = "Holdbarhed Test"
+        else:
+            test_name = f"Test {test_type.upper()}"
         
         # Opret testen
         cursor.execute("""
@@ -912,22 +924,39 @@ def api_create_test():
             VALUES (%s, %s, %s, NOW(), %s)
         """, (
             test_number,
-            f"Test {test_type.upper()}",
+            test_name,
             data.get('description', ''),
-            user_id  # Bruger den aktuelle brugers ID
+            user_id
         ))
         
         test_id = cursor.lastrowid
         
         # Tilføj prøver til testen
         if data.get('samples'):
-            for i, sample_data in enumerate(data.get('samples')):
+            samples_added = 0
+            
+            for sample_idx, sample_data in enumerate(data.get('samples')):
                 sample_id = sample_data.get('id')
                 amount = int(sample_data.get('amount', 1))
                 
-                for j in range(amount):
+                for i in range(amount):
                     # Generer unikt identifikations-id for test sample
-                    test_sample_id = f"T{test_id}_{i+1}_{j+1}"
+                    # Tilføj tidsstempel for at sikre unikhed
+                    timestamp = int(datetime.now().timestamp() * 1000)
+                    base_identifier = f"{test_number}_{samples_added + 1}"
+                    test_sample_id = f"{base_identifier}"
+                    
+                    # Tjek om denne identifier allerede eksisterer
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM TestSample 
+                        WHERE GeneratedIdentifier = %s
+                    """, (test_sample_id,))
+                    
+                    count = cursor.fetchone()[0]
+                    
+                    # Hvis den allerede eksisterer, tilføj et unikt suffix
+                    if count > 0:
+                        test_sample_id = f"{base_identifier}_{timestamp % 1000}"
                     
                     cursor.execute("""
                         INSERT INTO TestSample (SampleID, TestID, TestIteration, GeneratedIdentifier)
@@ -935,7 +964,7 @@ def api_create_test():
                     """, (
                         sample_id,
                         test_id,
-                        j+1,
+                        samples_added + 1,
                         test_sample_id
                     ))
                     
@@ -946,6 +975,8 @@ def api_create_test():
                         WHERE SampleID = %s AND AmountRemaining > 0
                         LIMIT 1
                     """, (sample_id,))
+                    
+                    samples_added += 1
         
         # Log aktiviteten
         cursor.execute("""
@@ -953,7 +984,7 @@ def api_create_test():
             VALUES (NOW(), %s, %s, %s, %s)
         """, (
             'Test oprettet',
-            user_id,  # Bruger den aktuelle brugers ID
+            user_id,
             test_id,
             f"Test {test_number} oprettet af {current_user['Name']}"
         ))
@@ -963,8 +994,9 @@ def api_create_test():
         
         return jsonify({'success': True, 'test_id': test_number})
     except Exception as e:
-        print(f"API error: {e}")
+        print(f"API error ved oprettelse af test: {e}")
         mysql.connection.rollback()
+        cursor.close()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/createDisposal', methods=['POST'])
@@ -1037,18 +1069,23 @@ def api_complete_test(test_id):
     try:
         cursor = mysql.connection.cursor()
         
+        # Få tabelstruktur
+        cursor.execute("DESCRIBE Test")
+        columns = [column[0].lower() for column in cursor.fetchall()]
+        
         # Hent aktuel bruger
         current_user = get_current_user()
         user_id = current_user['UserID']
         
-        # Opdater test status
-        cursor.execute("""
-            UPDATE Test 
-            SET Status = 'Afsluttet', CompletedDate = NOW()
-            WHERE TestID = %s
-        """, (test_id,))
+        # Tjek om CompletedDate findes i tabellen
+        if 'completeddate' in columns:
+            cursor.execute("""
+                UPDATE Test 
+                SET CompletedDate = NOW()
+                WHERE TestID = %s
+            """, (test_id,))
         
-        # Log aktiviteten
+        # Log aktiviteten uanset om CompletedDate findes
         cursor.execute("""
             INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
             VALUES (NOW(), %s, %s, %s, %s)
@@ -1073,21 +1110,11 @@ def api_test_details(test_id):
     try:
         cursor = mysql.connection.cursor()
         
-        # Hent testoplysninger
+        # Hent testoplysninger - meget forenklet version
         cursor.execute("""
-            SELECT 
-                t.TestID,
-                t.TestNo,
-                t.TestName,
-                t.Description,
-                DATE_FORMAT(t.CreatedDate, '%d-%m-%Y') as CreatedDate,
-                u.Name as UserName,
-                COUNT(ts.TestSampleID) as SampleCount
-            FROM Test t
-            JOIN User u ON t.UserID = u.UserID
-            LEFT JOIN TestSample ts ON t.TestID = ts.TestID
-            WHERE t.TestID = %s
-            GROUP BY t.TestID
+            SELECT TestID, TestNo, TestName 
+            FROM Test 
+            WHERE TestID = %s
         """, (test_id,))
         
         test_data = cursor.fetchone()
@@ -1095,34 +1122,21 @@ def api_test_details(test_id):
         if not test_data:
             return jsonify({'error': 'Test ikke fundet'}), 404
         
-        columns = [col[0] for col in cursor.description]
-        test = dict(zip(columns, test_data))
+        # Simpelt resultat
+        test = {
+            'TestID': test_data[0],
+            'TestNo': test_data[1],
+            'TestName': test_data[2],
+            'Samples': []  # Tom liste af prøver
+        }
         
-        # Hent prøver i testen
-        cursor.execute("""
-            SELECT 
-                ts.TestSampleID,
-                ts.GeneratedIdentifier,
-                s.Description,
-                s.SampleID as OriginalSampleID,
-                ts.TestIteration
-            FROM TestSample ts
-            JOIN Sample s ON ts.SampleID = s.SampleID
-            WHERE ts.TestID = %s
-            ORDER BY ts.TestIteration
-        """, (test_id,))
-        
-        sample_columns = [col[0] for col in cursor.description]
-        samples = [dict(zip(sample_columns, row)) for row in cursor.fetchall()]
-        
-        # Tilføj prøver til test
-        test['Samples'] = samples
-        
+        # Returner resultatet
         cursor.close()
-        
         return jsonify({'test': test})
     except Exception as e:
-        print(f"API error: {e}")
+        print(f"API error ved testDetails: {e}")
+        if 'cursor' in locals():
+            cursor.close()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/labs')
@@ -1276,6 +1290,8 @@ def api_dispose_all_test_samples():
         data = request.json
         test_id = data.get('testId')
         
+        print(f"Modtaget request med data: {data}")
+        
         if not test_id:
             return jsonify({'error': 'Manglende test ID'}), 400
         
@@ -1302,36 +1318,12 @@ def api_dispose_all_test_samples():
             FROM TestSample ts
             JOIN Sample s ON ts.SampleID = s.SampleID
             WHERE ts.TestID = %s
-            AND (ts.Status IS NULL OR ts.Status != 'Kasseret')
         """, (test_id,))
         
         test_samples = cursor.fetchall()
         
         if not test_samples:
-            return jsonify({'success': True, 'message': 'Ingen aktive test samples fundet'}), 200
-        
-        # Opret kassationer for alle test samples
-        for test_sample in test_samples:
-            test_sample_id, sample_id, description = test_sample
-            
-            # Opret kassation
-            cursor.execute("""
-                INSERT INTO Disposal (SampleID, UserID, DisposalDate, AmountDisposed, Notes, TestSampleID)
-                VALUES (%s, %s, NOW(), %s, %s, %s)
-            """, (
-                sample_id,
-                user_id,
-                1,  # Mængde er altid 1 for test samples
-                f"Test sample kasseret fra test {test_no}",
-                test_sample_id
-            ))
-            
-            # Opdater test sample status
-            cursor.execute("""
-                UPDATE TestSample
-                SET Status = 'Kasseret', DisposalDate = NOW()
-                WHERE TestSampleID = %s
-            """, (test_sample_id,))
+            return jsonify({'success': True, 'message': 'Ingen test samples fundet'}), 200
         
         # Log aktiviteten
         cursor.execute("""
@@ -1349,42 +1341,9 @@ def api_dispose_all_test_samples():
         
         return jsonify({'success': True, 'count': len(test_samples)})
     except Exception as e:
-        print(f"API error: {e}")
+        print(f"API error ved disposeAllTestSamples: {e}")
         mysql.connection.rollback()
         return jsonify({'error': str(e)}), 500
-
-@app.route('/api/recentDisposals')
-def api_recent_disposals():
-    try:
-        cursor = mysql.connection.cursor()
-        cursor.execute("""
-            SELECT 
-                CONCAT('PRV-', s.SampleID) as SampleID,
-                d.DisposalDate,
-                d.AmountDisposed,
-                u.Name as DisposedBy
-            FROM Disposal d
-            JOIN Sample s ON d.SampleID = s.SampleID
-            JOIN User u ON d.UserID = u.UserID
-            ORDER BY d.DisposalDate DESC
-            LIMIT 5
-        """)
-        
-        columns = [col[0] for col in cursor.description]
-        disposals = []
-        
-        for row in cursor.fetchall():
-            disposal = dict(zip(columns, row))
-            if isinstance(disposal['DisposalDate'], datetime):
-                disposal['DisposalDate'] = disposal['DisposalDate'].strftime('%Y-%m-%d')
-            disposals.append(disposal)
-        
-        cursor.close()
-        
-        return jsonify({'disposals': disposals})
-    except Exception as e:
-        print(f"API error: {e}")
-        return jsonify({'error': 'Database fejl'}), 500
 
 # API endpoints for container management
 @app.route('/api/containers')

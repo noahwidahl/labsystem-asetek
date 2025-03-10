@@ -4,7 +4,7 @@
 
 {% block content %}
 <section id="testing" class="content-section">
-    <div class="section-header">
+    <div class="section-header mb-4">
         <h2>Test Administration</h2>
         <div class="section-actions">
             <button class="btn btn-primary" onclick="showCreateTestModal()">
@@ -15,59 +15,79 @@
 
     <!-- Aktive Tests -->
     <div class="active-tests">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3>Aktive Tests</h3>
-            <span class="active-tests-count d-none">{{ active_tests|length }}</span>
-        </div>
-        
         <div class="welcome-message mb-4">
-            <!-- Vil blive udfyldt dynamisk via JavaScript -->
+            <h4>Velkommen til Test Administration</h4>
+            <p>Du har <strong>{{ active_tests|length }}</strong> aktive tests i systemet.</p>
         </div>
         
-        <div class="test-grid">
-            {% if active_tests %}
+        <h3 class="mb-3">Aktive Tests</h3>
+        
+        {% if active_tests %}
+            <div class="row">
                 {% for test in active_tests %}
-                <div class="test-card" data-test-id="{{ test.TestID }}">
-                    <div class="test-header">
-                        <span class="test-id">{{ test.TestID }}</span>
-                        <span class="test-status active">Aktiv</span>
-                    </div>
-                    <div class="test-content">
-                        <h4>{{ test.TestName|default('Test') }}</h4>
-                        <div class="test-info">
-                            <div class="info-row">
-                                <span class="label">Antal Prøver:</span>
-                                <span class="value">{{ test.sample_count }}</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="label">Start Dato:</span>
-                                <span class="value">{{ test.CreatedDate }}</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="label">Ejer:</span>
-                                <span class="value">{{ test.UserName }}</span>
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card test-card h-100 shadow-sm">
+                        <div class="card-header d-flex justify-content-between align-items-center bg-light py-2">
+                            <span class="text-muted small">#{{ loop.index }} Aktiv</span>
+                            <span class="badge rounded-pill bg-primary">{{ test.TestID }}</span>
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">
+                                {% if 'PRESSURE' in test.TestName %}
+                                <i class="fas fa-tachometer-alt me-2 text-primary"></i>
+                                {% elif 'THERMAL' in test.TestName %}
+                                <i class="fas fa-temperature-high me-2 text-danger"></i>
+                                {% else %}
+                                <i class="fas fa-flask me-2 text-info"></i>
+                                {% endif %}
+                                {{ test.TestName }}
+                            </h5>
+                            
+                            <ul class="list-unstyled mb-3">
+                                <li class="mb-2">
+                                    <span class="text-muted">Antal Prøver:</span> 
+                                    <strong>{{ test.sample_count }}</strong>
+                                </li>
+                                <li class="mb-2">
+                                    <span class="text-muted">Start Dato:</span> 
+                                    <strong>{{ test.CreatedDate }}</strong>
+                                </li>
+                                <li class="mb-2">
+                                    <span class="text-muted">Ejer:</span> 
+                                    <strong>{{ test.UserName }}</strong>
+                                </li>
+                            </ul>
+                            
+                            <div class="sample-list mb-3 bg-light p-2 rounded">
+                                <div class="d-flex flex-wrap gap-1">
+                                    <div class="sample-item px-2 py-1 bg-white rounded border">{{ test.TestID }}_1</div>
+                                    <div class="sample-item px-2 py-1 bg-white rounded border">{{ test.TestID }}_2</div>
+                                    {% if test.sample_count > 2 %}
+                                    <div class="sample-more px-2 py-1 bg-white rounded border">+{{ test.sample_count - 2 }} mere</div>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
-                        <div class="sample-list">
-                            <div class="sample-item">{{ test.TestID }}_1</div>
-                            <div class="sample-item">{{ test.TestID }}_2</div>
-                            {% if test.sample_count > 2 %}
-                            <div class="sample-more">+{{ test.sample_count - 2 }} mere</div>
-                            {% endif %}
+                        <div class="card-footer bg-white pt-0 border-top-0">
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <button class="btn btn-outline-secondary" onclick="showTestDetails('{{ test.TestID }}')">
+                                    <i class="fas fa-info-circle me-1"></i> Se Detaljer
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="completeTest('{{ test.TestID }}')">
+                                    <i class="fas fa-check-circle me-1"></i> Afslut Test
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="test-actions">
-                        <button class="btn btn-secondary" onclick="showTestDetails('{{ test.TestID }}')">Se Detaljer</button>
-                        <button class="btn btn-outline-danger" onclick="completeTest('{{ test.TestID }}')">Afslut Test</button>
                     </div>
                 </div>
                 {% endfor %}
-            {% else %}
-                <div class="alert alert-info">
-                    Ingen aktive tests fundet. Opret en ny test for at komme i gang.
-                </div>
-            {% endif %}
-        </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                Ingen aktive tests fundet. Opret en ny test for at komme i gang.
+            </div>
+        {% endif %}
     </div>
 </section>
 
@@ -98,14 +118,5 @@
                 showErrorMessage(`Kunne ikke hente testdetaljer: ${error}`);
             });
     }
-    
-    // Initialiser funktioner ved sideindlæsning
-    document.addEventListener('DOMContentLoaded', function() {
-        // Opdater velkomstbesked
-        const activeTestsCount = document.querySelector('.active-tests-count');
-        if (activeTestsCount) {
-            updateWelcomeMessage(parseInt(activeTestsCount.textContent) || 0);
-        }
-    });
 </script>
 {% endblock %}

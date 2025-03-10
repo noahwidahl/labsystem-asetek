@@ -3,28 +3,27 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Registrer Kassation</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="form-group mb-3">
-                    <label>Vælg Prøve</label>
+                    <label for="sampleSelect">Vælg Prøve</label>
                     <select class="form-control" id="sampleSelect" required>
                         <option value="">Vælg prøve</option>
                         <!-- Vil blive udfyldt dynamisk via JavaScript -->
                     </select>
                 </div>
                 <div class="form-group mb-3">
-                    <label>Antal</label>
+                    <label for="disposalAmount">Antal</label>
                     <input type="number" class="form-control" id="disposalAmount" min="1" required>
                 </div>
                 <div class="form-group mb-3">
-                    <label>Kasseret Af</label>
+                    <label for="disposalUser">Kasseret Af</label>
                     <select class="form-control" id="disposalUser" required>
                         <option value="{{ current_user.UserID }}">{{ current_user.Name }}</option>
                     </select>
                 </div>
                 <div class="form-group mb-3">
-                    <label>Noter</label>
+                    <label for="disposalNotes">Noter</label>
                     <textarea class="form-control" id="disposalNotes" rows="3"></textarea>
                 </div>
                 
@@ -48,7 +47,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuller</button>
+                <!-- Annuller-knappen er fjernet -->
                 <button type="button" class="btn btn-danger" onclick="createDisposal()">Registrer Kassation</button>
             </div>
         </div>
