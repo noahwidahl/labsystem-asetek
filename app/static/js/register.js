@@ -228,7 +228,7 @@ function setupSerialNumberToggle() {
     }
 }
 
-// Setup multipakke funktionalitet
+// Multip-pakke håndtering - opdater funktionen
 function setupMultiPackageHandling() {
     const isMultiPackageCheckbox = document.getElementById('isMultiPackage');
     const multiplePackageFields = document.getElementById('multiplePackageFields');
@@ -237,6 +237,7 @@ function setupMultiPackageHandling() {
     const totalAmountInput = document.querySelector('[name="totalAmount"]');
     const calculatedTotal = document.getElementById('calculatedTotal');
     const totalAmountHelper = document.getElementById('totalAmountHelper');
+    const totalCounter = document.getElementById('totalCount');
     
     // Vis/skjul felter for multiple pakker
     if (isMultiPackageCheckbox && multiplePackageFields) {
@@ -268,6 +269,11 @@ function setupMultiPackageHandling() {
             if (calculatedTotal) {
                 calculatedTotal.textContent = total;
             }
+            
+            // Opdater også totalCounter for scanning
+            if (totalCounter) {
+                totalCounter.textContent = total;
+            }
         }
     }
     
@@ -275,6 +281,15 @@ function setupMultiPackageHandling() {
     if (packageCountInput && amountPerPackageInput) {
         packageCountInput.addEventListener('input', updateTotalAmount);
         amountPerPackageInput.addEventListener('input', updateTotalAmount);
+        
+        // Lyt også efter ændringer i totalAmount
+        if (totalAmountInput) {
+            totalAmountInput.addEventListener('input', function() {
+                if (totalCounter) {
+                    totalCounter.textContent = this.value || 0;
+                }
+            });
+        }
     }
 }
 
@@ -415,13 +430,15 @@ function processScan(barcode) {
     }
 }
 
-// Opdater UI med scannede items
+// Opdatér updateScanUI funktionen
 function updateScanUI() {
     const counter = document.getElementById('scannedCount');
     const totalCounter = document.getElementById('totalCount');
-    const total = document.querySelector('[name="totalAmount"]')?.value || 0;
+    const totalAmountInput = document.querySelector('[name="totalAmount"]');
+    const total = parseInt(totalAmountInput?.value) || 0;
     const emptyMessage = document.querySelector('.empty-scanned-message');
 
+    // Opdater tællere
     if (counter) counter.textContent = scannedItems.length;
     if (totalCounter) totalCounter.textContent = total;
 
@@ -450,7 +467,7 @@ function updateScanUI() {
                         <span class="badge bg-primary rounded-pill me-3">${index + 1}</span>
                         <span>${code}</span>
                     </div>
-                    <button onclick="removeScannedItem(${index})" class="btn btn-sm btn-outline-danger">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-item" data-index="${index}">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -459,6 +476,14 @@ function updateScanUI() {
         
         html += '</div>';
         container.innerHTML = html;
+        
+        // Tilføj event listeners til fjern-knapper
+        container.querySelectorAll('.remove-item').forEach(button => {
+            button.addEventListener('click', function() {
+                const index = parseInt(this.getAttribute('data-index'));
+                removeScannedItem(index);
+            });
+        });
     }
 }
 
