@@ -146,7 +146,8 @@ def storage():
                 s.SampleID, 
                 s.Description, 
                 r.ReceivedDate as ModtagelseDato,
-                ss.AmountRemaining as Antal, 
+                ss.AmountRemaining as Antal,
+                u.UnitName as Enhed, 
                 sl.LocationName as Placering, 
                 DATE_FORMAT(r.ReceivedDate, '%Y-%m-%d %H:%i') as Registreret,
                 s.Status
@@ -168,10 +169,10 @@ def storage():
                 "ID": f"PRV-{sample[0]}",
                 "Beskrivelse": sample[1],
                 "Modtagelse": sample[2].strftime('%Y-%m-%d') if sample[2] else "Ukendt",
-                "Antal": f"{sample[3]} stk",
-                "Placering": sample[4],
-                "Registreret": sample[5] if sample[5] else "Ukendt",
-                "Status": sample[6] if sample[6] else "På lager"
+                "Antal": f"{sample[3]} {sample[4]}", # Inkluder enheden her
+                "Placering": sample[5],
+                "Registreret": sample[6] if sample[6] else "Ukendt",
+                "Status": sample[7] if sample[7] else "På lager"
             })
         
         return render_template('sections/storage.html', samples=samples)
