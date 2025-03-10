@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup scanner functionality
     setupScannerListeners();
     
+    // Setup bulk sample handling (for enheder)
+    setupBulkSampleHandling();
+    
     // Initialiser første skridt
     showStep(1);
 });
@@ -214,9 +217,8 @@ function validateCurrentStep() {
                 return true;
             } else {
                 // Standard validering for én lokation
-                const storageLocation = document.querySelector('[name="storageLocation"]');
-                if (!storageLocation || !storageLocation.value) {
-                    showErrorMessage('Vælg venligst en placering', 'storageLocation');
+                if (!selectedLocation) {
+                    showErrorMessage('Vælg venligst en placering ved at klikke på en ledig plads i griddet.');
                     return false;
                 }
                 return true;
@@ -235,6 +237,69 @@ function setupSerialNumberToggle() {
     }
 }
 
+// Funktion til at håndtere løs mængde vs. stk
+function setupBulkSampleHandling() {
+    const isBulkSampleCheckbox = document.getElementById('isBulkSample');
+    const unitSelect = document.querySelector('[name="unit"]');
+    
+    if (isBulkSampleCheckbox && unitSelect) {
+        // Gem alle originale options til senere brug
+        const allOptions = Array.from(unitSelect.options);
+        const stkOption = Array.from(unitSelect.options).find(opt => 
+            opt.textContent.trim().toLowerCase() === 'stk' || 
+            opt.textContent.trim().toLowerCase() === 'pcs');
+        
+        // Standardindstilling: Kun stk er tilgængelig
+        updateUnitOptions(false);
+        
+        // Håndter ændringer i checkboksen
+        isBulkSampleCheckbox.addEventListener('change', function() {
+            updateUnitOptions(this.checked);
+        });
+        
+        // Hjælpefunktion til at opdatere unit-options
+        function updateUnitOptions(isBulk) {
+            // Gem det aktuelle valg
+            const currentValue = unitSelect.value;
+            
+            // Ryd alle options
+            unitSelect.innerHTML = '';
+            
+            // Tilføj tom valgmulighed
+            const emptyOption = document.createElement('option');
+            emptyOption.value = '';
+            emptyOption.textContent = 'Vælg enhed';
+            unitSelect.appendChild(emptyOption);
+            
+            if (isBulk) {
+                // Ved løs mængde: Tilføj alle enheder undtagen stk
+                allOptions.forEach(option => {
+                    if (option.value && option.textContent.trim().toLowerCase() !== 'stk' && 
+                        option.textContent.trim().toLowerCase() !== 'pcs') {
+                        unitSelect.appendChild(option.cloneNode(true));
+                    }
+                });
+                
+                // Nulstil value (tvinger brugeren til at vælge enhed)
+                unitSelect.value = '';
+            } else {
+                // Ved stykgods: Kun stk er tilgængelig
+                if (stkOption) {
+                    unitSelect.appendChild(stkOption.cloneNode(true));
+                    unitSelect.value = stkOption.value;
+                } else {
+                    // Fallback hvis vi ikke fandt stk-option
+                    const newStkOption = document.createElement('option');
+                    newStkOption.value = "1"; // Antager at stk har ID=1
+                    newStkOption.textContent = 'stk';
+                    unitSelect.appendChild(newStkOption);
+                    unitSelect.value = "1";
+                }
+            }
+        }
+    }
+}
+
 // Lyt efter ændringer i checkboxes for multipakker og forskellige lokationer
 function setupMultiPackageHandling() {
     const isMultiPackageCheckbox = document.getElementById('isMultiPackage');
@@ -246,6 +311,7 @@ function setupMultiPackageHandling() {
     const totalAmountHelper = document.getElementById('totalAmountHelper');
     const totalCounter = document.getElementById('totalCount');
     
+    // Fjern den del der viser "forskellige lokationer" i step 2
     // Det skal kun vises i step 4
     const differentLocationsCheckbox = document.getElementById('differentLocations');
     if (differentLocationsCheckbox) {
@@ -313,95 +379,6 @@ function setupMultiPackageHandling() {
             });
         }
     }
-}
-
-// Fjern highlighting fra storage grid
-function resetStorageGridHighlighting() {
-    document.querySelectorAll('.storage-cell').forEach(cell => {
-        cell.classList.remove('multi-package-available', 'multi-package-selected');
-    });
-    
-    // Fjern eventuel info-besked
-    const message = document.querySelector('.multi-package-message');
-    if (message) {
-        message.remove();
-    }
-    
-    // Fjern eventuel pakkeopsummering-besked
-    const packageSummary = document.querySelector('.package-selection-summary');
-    if (packageSummary) {
-        packageSummary.remove();
-    }
-}
-
-// Highlighte et antal celler i storage gridden baseret på pakkeantal
-function storageGridHighlightForPackages(packageCount) {
-    // Denne funktion kaldes i trin 4 når storage grid er indlæst
-    const gridCells = document.querySelectorAll('.storage-cell:not(.occupied)');
-    
-    // Først fjern alle highlights
-    resetStorageGridHighlighting();
-    
-    // Tilføj special-klasse til de første N ledige celler, baseret på pakkeantal
-    let highlightedCount = 0;
-    gridCells.forEach(cell => {
-        if (highlightedCount < packageCount) {
-            cell.classList.add('multi-package-available');
-            highlightedCount++;
-        }
-    });
-    
-    // Tilføj info-besked hvis nødvendigt
-    if (packageCount > 0) {
-        const existingMessage = document.querySelector('.multi-package-message');
-        if (!existingMessage) {
-            const message = document.createElement('div');
-            message.className = 'alert alert-info multi-package-message mt-3';
-            message.innerHTML = `<i class="fas fa-info-circle"></i> Vælg ${packageCount} forskellige placeringer til dine pakker.`;
-            
-            const storageSelector = document.querySelector('.storage-selector');
-            if (storageSelector) {
-                storageSelector.appendChild(message);
-            }
-        }
-    }
-}
-
-// Highlighte et antal celler i storage gridden baseret på pakkeantal
-function storageGridHighlightForPackages(packageCount) {
-    // Reset grid highlighting først
-    resetStorageGridHighlighting();
-    
-    // Markér alle ledige celler som tilgængelige
-    const gridCells = document.querySelectorAll('.storage-cell:not(.occupied)');
-    gridCells.forEach(cell => {
-        cell.classList.add('multi-package-available');
-    });
-    
-    // Tilføj info-besked hvis nødvendigt
-    if (packageCount > 1) {
-        const existingMessage = document.querySelector('.multi-package-message');
-        if (!existingMessage) {
-            const message = document.createElement('div');
-            message.className = 'alert alert-info multi-package-message mt-3';
-            message.innerHTML = `<i class="fas fa-info-circle"></i> Vælg ${packageCount} forskellige placeringer til dine pakker.`;
-            
-            const storageSelector = document.querySelector('.storage-selector');
-            if (storageSelector) {
-                storageSelector.appendChild(message);
-            }
-        }
-    }
-}
-
-// Forbered og highlighte grids til multipakke-lokationer
-function prepareMultiLocationStorage() {
-    // Vil blive kaldt når trin 4 vises
-    const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
-    console.log('Forbereder storage grid til', packageCount, 'pakker med forskellige lokationer');
-    
-    // Denne funktion kan kaldes igen på trin 4 for at sikre at grid'et vises korrekt
-    storageGridHighlightForPackages(packageCount);
 }
 
 // Scanner funktionalitet
@@ -635,162 +612,110 @@ function setupBarcodeInput() {
     }
 }
 
-// Funktion til at skjule/vise dropdown-menuen baseret på om vi har multipakker
-function toggleStorageLocationDropdown(isMultiPackage) {
-    const locationDropdown = document.querySelector('.form-group:has([name="storageLocation"])');
-    const locationSelect = document.querySelector('[name="storageLocation"]');
-    
-    if (!locationDropdown || !locationSelect) return;
-    
-    if (isMultiPackage) {
-        // Skjul dropdown og vis besked i stedet
-        locationDropdown.classList.add('d-none');
-        
-        // Tilføj en besked om at vælge lokationer via grid
-        const message = document.createElement('div');
-        message.className = 'alert alert-info storage-selection-message';
-        message.innerHTML = `<i class="fas fa-info-circle"></i> Vælg lokation(er) ved at klikke på ledige pladser i griddet nedenfor.`;
-        
-        // Indsæt meddelelsen før griddet
-        const storageGrid = document.querySelector('.storage-grid');
-        if (storageGrid && !document.querySelector('.storage-selection-message')) {
-            storageGrid.parentNode.insertBefore(message, storageGrid);
-        }
-    } else {
-        // Vis dropdown igen
-        locationDropdown.classList.remove('d-none');
-        
-        // Fjern eventuel besked
-        const message = document.querySelector('.storage-selection-message');
-        if (message) {
-            message.remove();
-        }
-    }
-}
-
-// Setup lagerplads grid
+// Opdateret setupStorageGrid funktion - uden dropdown-relateret kode
 function setupStorageGrid() {
     const isMultiPackage = document.getElementById('isMultiPackage')?.checked || false;
     const packageCount = isMultiPackage ? (parseInt(document.querySelector('[name="packageCount"]')?.value) || 1) : 1;
     
-    // Hvis vi har multipakker, skjul dropdown-menuen og vis en besked
-    toggleStorageLocationDropdown(isMultiPackage);
+    // Opret grid med specifikke placeringer
+    createSpecificStorageGrid();
     
-    // Hent lagerplaceringer fra API
-    fetch('/api/storage-locations')
-        .then(response => response.json())
-        .then(data => {
-            if (data.locations) {
-                updateStorageGrid(data.locations);
-                
-                // Hvis vi har multipakker, highlighte ledige lokationer
-                if (isMultiPackage && packageCount > 1) {
-                    storageGridHighlightForPackages(packageCount);
-                }
-            }
-        })
-        .catch(error => {
-            console.error('Error loading storage locations:', error);
-            // Fallback til dummy data hvis API-kaldet fejler
-            createDummyStorageGrid();
+    // Hvis vi har multipakker, highlighte ledige lokationer
+    if (isMultiPackage && packageCount > 1) {
+        storageGridHighlightForPackages(packageCount);
+    }
+}
+
+// Vi bibeholder vores grid-skabende funktion
+function createSpecificStorageGrid() {
+    const grid = document.querySelector('.storage-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+    
+    // Opret 12 lagerpladser med format A1.B1 til A3.B4
+    for (let i = 1; i <= 3; i++) {
+        for (let j = 1; j <= 4; j++) {
+            const cell = document.createElement('div');
+            cell.className = 'storage-cell';
             
-            // Også her, hvis vi har multipakker, highlighte ledige lokationer
-            if (isMultiPackage && packageCount > 1) {
-                storageGridHighlightForPackages(packageCount);
+            // Simuler at nogle celler er optaget (for demonstration)
+            // I en faktisk implementering ville denne data komme fra serveren
+            if ((i === 1 && j === 3) || (i === 2 && j === 2)) {
+                cell.classList.add('occupied');
             }
-        });
+
+            const locationEl = document.createElement('div');
+            locationEl.className = 'location';
+            locationEl.textContent = `A${i}.B${j}`;
+
+            const capacity = document.createElement('div');
+            capacity.className = 'capacity';
+            capacity.textContent = cell.classList.contains('occupied') ? 'Optaget' : 'Ledig';
+
+            cell.appendChild(locationEl);
+            cell.appendChild(capacity);
+            grid.appendChild(cell);
+
+            // Vigtig: Kun tilføj event listener til ledige celler
+            if (!cell.classList.contains('occupied')) {
+                cell.addEventListener('click', () => selectStorageCell(cell));
+            }
+        }
+    }
 }
 
-// Opdater storage grid med lokationer
-function updateStorageGrid(locations) {
-    const grid = document.querySelector('.storage-grid');
-    if (!grid) return;
-
-    grid.innerHTML = '';
+// Highlighte et antal celler i storage gridden baseret på pakkeantal
+function storageGridHighlightForPackages(packageCount) {
+    // Reset grid highlighting først
+    resetStorageGridHighlighting();
     
-    // Begræns til 12 lokationer for overskuelighed
-    const limitedLocations = locations.slice(0, 12);
-
-    limitedLocations.forEach(location => {
-        const cell = document.createElement('div');
-        cell.className = 'storage-cell';
-        if(location.status === 'occupied') {
-            cell.classList.add('occupied');
-        }
-
-        const locationEl = document.createElement('div');
-        locationEl.className = 'location';
-        locationEl.textContent = location.LocationName;
-
-        const capacity = document.createElement('div');
-        capacity.className = 'capacity';
-        capacity.textContent = location.status === 'occupied' ? `${location.count} stk` : 'Ledig';
-
-        cell.appendChild(locationEl);
-        cell.appendChild(capacity);
-        grid.appendChild(cell);
-        
-        if (!cell.classList.contains('occupied')) {
-            cell.addEventListener('click', () => selectStorageCell(cell));
-        }
+    // Markér alle LEDIGE celler som tilgængelige
+    const gridCells = document.querySelectorAll('.storage-cell:not(.occupied)');
+    gridCells.forEach(cell => {
+        cell.classList.add('multi-package-available');
     });
-}
-
-// Opret dummy data til lagerplads
-function createDummyStorageGrid() {
-    const grid = document.querySelector('.storage-grid');
-    if (!grid) return;
-
-    grid.innerHTML = '';
-
-    for (let i = 1; i <= 12; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'storage-cell';
-        if (Math.random() > 0.7) cell.classList.add('occupied');
-
-        const location = document.createElement('div');
-        location.className = 'location';
-        location.textContent = `A${Math.ceil(i/4)}.B${i % 4 || 4}`;
-
-        const capacity = document.createElement('div');
-        capacity.className = 'capacity';
-        capacity.textContent = cell.classList.contains('occupied') ? 'Optaget' : 'Ledig';
-
-        cell.appendChild(location);
-        cell.appendChild(capacity);
-        grid.appendChild(cell);
-
-        if (!cell.classList.contains('occupied')) {
-            cell.addEventListener('click', () => selectStorageCell(cell));
+    
+    // Tilføj info-besked hvis nødvendigt
+    if (packageCount > 1) {
+        const existingMessage = document.querySelector('.multi-package-message');
+        if (!existingMessage) {
+            const message = document.createElement('div');
+            message.className = 'alert alert-info multi-package-message mt-3';
+            message.innerHTML = `<i class="fas fa-info-circle"></i> Vælg ${packageCount} forskellige placeringer til dine pakker.`;
+            
+            const storageSelector = document.querySelector('.storage-selector');
+            if (storageSelector) {
+                storageSelector.appendChild(message);
+            }
         }
     }
 }
 
-// Håndterer valg af lokation for enkelte prøver
-function handleSingleLocationSelection(cell) {
-    // Fjern markering fra alle celler
-    document.querySelectorAll('.storage-cell').forEach(c => c.classList.remove('selected'));
+// Fjern highlighting fra storage grid
+function resetStorageGridHighlighting() {
+    document.querySelectorAll('.storage-cell').forEach(cell => {
+        cell.classList.remove('multi-package-available', 'multi-package-selected');
+    });
     
-    // Marker den valgte celle
-    cell.classList.add('selected');
-    const selectedLocation = cell.querySelector('.location').textContent;
+    // Fjern eventuel info-besked
+    const message = document.querySelector('.multi-package-message');
+    if (message) {
+        message.remove();
+    }
     
-    // Find og set select element
-    const locationSelect = document.querySelector('[name="storageLocation"]');
-    if (locationSelect) {
-        // Find option med samme tekst
-        const option = Array.from(locationSelect.options).find(opt => 
-            opt.textContent.includes(selectedLocation));
-        if (option) {
-            locationSelect.value = option.value;
-        }
+    // Fjern eventuel pakkeopsummering-besked
+    const packageSummary = document.querySelector('.package-selection-summary');
+    if (packageSummary) {
+        packageSummary.remove();
     }
 }
 
-// Vælg en lagerplads
+// Opdateret selectStorageCell funktion - med direkte gemning af lokation uden dropdown
 function selectStorageCell(cell) {
     if (cell.classList.contains('occupied')) {
         // Blokér valg af optagne celler
+        showWarningMessage("Denne placering er allerede optaget. Vælg venligst en ledig placering.");
         return;
     }
     
@@ -807,6 +732,83 @@ function selectStorageCell(cell) {
     
     // Opdater visning af valgte pakker
     updatePackageSelectionSummary();
+}
+
+// Håndterer valg af lokation for enkelte prøver
+function handleSingleLocationSelection(cell) {
+    // Fjern markering fra alle celler
+    document.querySelectorAll('.storage-cell').forEach(c => c.classList.remove('selected'));
+    
+    // Marker den valgte celle
+    cell.classList.add('selected');
+    
+    // Gem lokationen direkte i et hidden input field
+    const locationText = cell.querySelector('.location').textContent;
+    
+    // Find eksisterende eller opret nyt hidden input til at gemme lokationen
+    let locationInput = document.getElementById('selectedLocationInput');
+    if (!locationInput) {
+        locationInput = document.createElement('input');
+        locationInput.type = 'hidden';
+        locationInput.name = 'storageLocation';
+        locationInput.id = 'selectedLocationInput';
+        document.querySelector('.storage-selector').appendChild(locationInput);
+    }
+    
+    // Gem lokationsnavnet (vi finder det faktiske ID ved formularindsendelse)
+    locationInput.value = locationText;
+    
+    // Opdater også en synlig indikator
+    let locationIndicator = document.querySelector('.selected-location-indicator');
+    if (!locationIndicator) {
+        locationIndicator = document.createElement('div');
+        locationIndicator.className = 'selected-location-indicator mt-3 p-2 bg-light rounded';
+        document.querySelector('.storage-selector').appendChild(locationIndicator);
+    }
+    
+    locationIndicator.innerHTML = `<strong>Valgt placering:</strong> ${locationText}`;
+    
+    // Gem også som global variabel for kompatibilitet
+    selectedLocation = locationText;
+}
+
+// Håndterer valg af lokation for multipakker
+function handleMultiPackageSelection(cell) {
+    const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
+    const selectedCellsCount = document.querySelectorAll('.storage-cell.multi-package-selected').length;
+    
+    // Tjek om cellen allerede er valgt
+    if (cell.classList.contains('multi-package-selected')) {
+        // Afvælg cellen
+        cell.classList.remove('multi-package-selected');
+        cell.classList.add('multi-package-available');
+        
+        // Find lokationen og fjern den fra pakkelokationer-listen
+        const locationText = cell.querySelector('.location').textContent;
+        
+        // Find pakkenummeret baseret på rækkefølgen af valget
+        if (typeof PackageLocations !== 'undefined') {
+            PackageLocations.removeLocationByName(locationText);
+        }
+    } else {
+        // Tjek om vi allerede har valgt maksimalt antal lokationer
+        if (selectedCellsCount < packageCount) {
+            // Vælg cellen
+            cell.classList.add('multi-package-selected');
+            cell.classList.remove('multi-package-available');
+            
+            // Tilføj til pakkelokationer (med næste ledige pakkenummer)
+            if (typeof PackageLocations !== 'undefined') {
+                const locationText = cell.querySelector('.location').textContent;
+                
+                // Tilføj lokationen til den næste ledige pakke
+                PackageLocations.addLocation(selectedCellsCount + 1, mapLocationNameToId(locationText), locationText);
+            }
+        } else {
+            // Vi har allerede valgt max antal - vis fejl
+            showWarningMessage(`Du kan maksimalt vælge ${packageCount} lokationer. Fjern en lokation før du tilføjer en ny.`);
+        }
+    }
 }
 
 // Opdater visning af valgte pakker og lokationer
@@ -932,59 +934,31 @@ function updatePackageSelectionSummary() {
     }
 }
 
-// Håndterer valg af lokation for multipakker
-function handleMultiPackageSelection(cell) {
-    const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
-    const selectedCellsCount = document.querySelectorAll('.storage-cell.multi-package-selected').length;
-    
-    // Tjek om cellen allerede er valgt
-    if (cell.classList.contains('multi-package-selected')) {
-        // Afvælg cellen
-        cell.classList.remove('multi-package-selected');
-        cell.classList.add('multi-package-available');
-        
-        // Find lokationen og fjern den fra pakkelokationer-listen
-        const locationText = cell.querySelector('.location').textContent;
-        
-        // Find pakkenummeret baseret på rækkefølgen af valget
-        if (typeof PackageLocations !== 'undefined') {
-            PackageLocations.removeLocationByName(locationText);
-        }
-    } else {
-        // Tjek om vi allerede har valgt maksimalt antal lokationer
-        if (selectedCellsCount < packageCount) {
-            // Vælg cellen
-            cell.classList.add('multi-package-selected');
-            cell.classList.remove('multi-package-available');
-            
-            // Tilføj til pakkelokationer (med næste ledige pakkenummer)
-            if (typeof PackageLocations !== 'undefined') {
-                const locationText = cell.querySelector('.location').textContent;
-                const locationSelect = document.querySelector('[name="storageLocation"]');
-                let locationId = null;
-                
-                // Find det korrekte locationId
-                if (locationSelect) {
-                    const option = Array.from(locationSelect.options).find(opt => 
-                        opt.textContent.includes(locationText));
-                    if (option) {
-                        locationId = option.value;
-                        
-                        // Tilføj lokationen til den næste ledige pakke
-                        PackageLocations.addLocation(selectedCellsCount + 1, locationId, locationText);
-                    }
-                }
-            }
-        } else {
-            // Vi har allerede valgt max antal - vis fejl
-            showWarningMessage(`Du kan maksimalt vælge ${packageCount} lokationer. Fjern en lokation før du tilføjer en ny.`);
-        }
-    }
-}
-
 // Initialiser receptionsdato hvis nødvendigt
 function initReceptionDate() {
     // Intet at gøre her i denne implementering
+}
+
+// Hjælpefunktion til at mappe lokationsnavn til ID
+function mapLocationNameToId(locationName) {
+    // Dette er en enkel implementering. I et rigtigt system ville dette
+    // sandsynligvis slå op i en tabel eller API
+    
+    // Format: A{row}.B{column} hvor row=1-3, column=1-4
+    const match = locationName.match(/A(\d+)\.B(\d+)/);
+    if (match) {
+        const row = parseInt(match[1]);
+        const column = parseInt(match[2]);
+        
+        // Beregn et ID baseret på række og kolonne
+        // Antager at ID'er starter fra 1 og går op til 12
+        const id = (row - 1) * 4 + column;
+        
+        return id.toString();
+    }
+    
+    // Fallback
+    return "1";
 }
 
 // Håndter form submission
@@ -1014,13 +988,34 @@ function handleFormSubmission() {
         // Identifikation
         serialNumbers: scannedItems || [],
         
-        // Standard lokation (bruges hvis ikke differentLocations er markeret)
-        storageLocation: document.querySelector('[name="storageLocation"]')?.value || selectedLocation || ''
+        // Lokation - nu fra valgt celle i stedet for dropdown
+        storageLocation: document.getElementById('selectedLocationInput')?.value || selectedLocation || ''
     };
+    
+    // Hvis vi har valgt location ved at klikke på en celle, konverter locationName til et ID
+    if (formData.storageLocation && !formData.storageLocation.match(/^\d+$/)) {
+        formData.storageLocation = mapLocationNameToId(formData.storageLocation);
+    }
     
     // Hvis PackageLocations modul er tilgængeligt, hent pakkedata
     if (typeof PackageLocations !== 'undefined') {
-        Object.assign(formData, PackageLocations.getData());
+        const packageLocationsData = PackageLocations.getData();
+        
+        // For hvert valgt lokationsnavn, omsæt til location ID
+        if (packageLocationsData.packageLocations) {
+            packageLocationsData.packageLocations = packageLocationsData.packageLocations.map(pkg => {
+                if (pkg.locationName && (!pkg.locationId || isNaN(pkg.locationId))) {
+                    // Konverter locationName til locationId
+                    return {
+                        packageNumber: pkg.packageNumber,
+                        locationId: mapLocationNameToId(pkg.locationName)
+                    };
+                }
+                return pkg;
+            });
+        }
+        
+        Object.assign(formData, packageLocationsData);
     }
     
     console.log("Sending form data:", formData);

@@ -159,7 +159,6 @@
                         <small class="text-muted" id="totalAmountHelper">Samlet antal enheder der modtages</small>
                     </div>
 
-                    <!-- Resten af formularen fortsætter som før -->
                     <div class="form-group">
                         <label>Enhed</label>
                         <select class="form-control" name="unit" required>
@@ -168,6 +167,7 @@
                             <option value="{{ unit.UnitID }}">{{ unit.UnitName }}</option>
                             {% endfor %}
                         </select>
+                        <small class="text-muted unit-helper">Ved valg af "Løs mængde" ovenfor kan der vælges andre enheder end stk</small>
                     </div>
                     
                     <div class="form-group">
@@ -258,14 +258,10 @@
             <div class="form-step" id="step4">
                 <h3>Vælg Placering</h3>
                 <div class="storage-selector">
-                    <div class="form-group">
-                        <label>Lagerplads</label>
-                        <select class="form-control" name="storageLocation" required>
-                            <option value="">Vælg lagerplads</option>
-                            {% for location in locations %}
-                            <option value="{{ location.LocationID }}">{{ location.LocationName }}</option>
-                            {% endfor %}
-                        </select>
+                    <!-- Info-boks -->
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        Vælg lagerplads ved at klikke på en ledig plads i griddet nedenfor.
                     </div>
 
                     <div class="storage-grid">

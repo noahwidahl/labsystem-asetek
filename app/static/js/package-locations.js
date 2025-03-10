@@ -86,7 +86,8 @@ const PackageLocations = (function() {
                 differentLocations: true,
                 packageLocations: packageLocations.map(p => ({
                     packageNumber: p.packageNumber,
-                    locationId: p.locationId
+                    locationId: p.locationId,
+                    locationName: p.locationName
                 }))
             };
         }
