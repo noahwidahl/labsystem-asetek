@@ -219,7 +219,10 @@ function createTest() {
 
 // CompleteTest funktion
 function completeTest(testId) {
-    if (confirm(`Er du sikker på at du vil afslutte test ${testId}?`)) {
+    confirmAction(`Er du sikker på at du vil afslutte test ${testId}?`, function() {
+        // Vis indlæsningsindikator
+        showLoadingOverlay();
+        
         fetch(`/api/completeTest/${testId}`, {
             method: 'POST',
             headers: {
@@ -234,42 +237,148 @@ function completeTest(testId) {
             return response.json();
         })
         .then(data => {
+            // Skjul indlæsningsindikator
+            hideLoadingOverlay();
+            
             if (data.success) {
-                alert(`Test ${testId} er blevet afsluttet`);
-                setTimeout(() => {
-                    window.location.reload();
-                }, 500);
+                showSuccessMessage(`Test ${testId} er blevet afsluttet!`);
+                
+                // Luk modal hvis åben
+                const modal = bootstrap.Modal.getInstance(document.getElementById('testDetailsModal'));
+                if (modal) modal.hide();
+                
+                // Fjern test-kortet manuelt (klientsiden)
+                removeTestCardFromDOM(testId);
             } else {
-                alert(`Fejl ved afslutning af test: ${data.error}`);
+                showErrorMessage(`Fejl ved afslutning af test: ${data.error}`);
             }
         })
         .catch(error => {
+            // Skjul indlæsningsindikator
+            hideLoadingOverlay();
+            showErrorMessage(`Der opstod en fejl: ${error}`);
             console.error("Fejl ved afslutning af test:", error);
-            alert(`Der opstod en fejl: ${error}`);
         });
+    });
+}
+
+function removeTestCardFromDOM(testId) {
+    // Find alle test-kort
+    const testCards = document.querySelectorAll('.test-card');
+    let foundCard = false;
+    
+    testCards.forEach(card => {
+        // Tjek først om kortet har et data-attribut
+        let cardTestId = card.getAttribute('data-test-id');
+        
+        // Hvis ikke, prøv at finde badge-elementet
+        if (!cardTestId) {
+            const badge = card.querySelector('.badge');
+            if (badge) {
+                cardTestId = badge.textContent.trim();
+            }
+        }
+        
+        // Hvis stadig ikke, prøv at finde TestNo i et andet element
+        if (!cardTestId) {
+            const cardContent = card.textContent;
+            if (cardContent && cardContent.includes(testId)) {
+                cardTestId = testId;
+            }
+        }
+        
+        if (cardTestId === testId) {
+            foundCard = true;
+            // Få fat i forældreelementet (kolonnen) for at fjerne hele kortet
+            const column = card.closest('.col-md-6, .col-lg-4');
+            if (column) {
+                // Fade-out animation før vi fjerner kortet
+                column.style.transition = 'all 0.5s ease';
+                column.style.opacity = '0';
+                column.style.transform = 'scale(0.8)';
+                
+                setTimeout(() => {
+                    column.remove();
+                    
+                    // Opdater antal aktive tests i velkomstbeskeden
+                    const remainingCards = document.querySelectorAll('.test-card').length;
+                    updateWelcomeMessage(remainingCards);
+                }, 500);
+            }
+        }
+    });
+    
+    if (!foundCard) {
+        console.warn(`Kunne ikke finde test-kort for test ${testId}`);
+    }
+}
+
+function showLoadingOverlay() {
+    // Tjek om overlay allerede eksisterer
+    if (document.getElementById('loadingOverlay')) {
+        return;
+    }
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'loadingOverlay';
+    overlay.className = 'loading-overlay';
+    overlay.innerHTML = `
+        <div class="loading-spinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Indlæser...</span>
+            </div>
+            <div class="loading-text mt-2">Behandler...</div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+}
+
+// Skjul loading overlay
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.classList.add('fade-out');
+        setTimeout(() => {
+            overlay.remove();
+        }, 300);
     }
 }
 
 // ShowTestDetails funktion
 function showTestDetails(testId) {
+    currentTestId = testId;
+    // Vis loading indikator
+    const modal = new bootstrap.Modal(document.getElementById('testDetailsModal'));
+    modal.show();
+    
+    // Vis indlæsningsindikator i modalen
+    document.querySelector('.test-info').innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Indlæser testdetaljer...</p></div>';
+    document.querySelector('.test-samples-table tbody').innerHTML = '<tr><td colspan="4" class="text-center">Indlæser...</td></tr>';
+    
+    // Hent testdetaljer fra serveren
     fetch(`/api/testDetails/${testId}`)
         .then(response => {
+            if (response.status === 404) {
+                // Hvis testen ikke findes (måske er den blevet afsluttet)
+                throw new Error("Testen blev ikke fundet. Den er muligvis blevet afsluttet.");
+            }
             if (!response.ok) {
                 throw new Error(`Server svarede med status: ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
-            if (data && data.test) {
-                alert(`Test detaljer for: ${data.test.TestName}`);
-                // Her kan vi tilføje kode til at vise en modal med detaljer
+            if (data.test) {
+                populateTestDetailsModal(data.test);
             } else {
-                alert("Ingen testdata returneret");
+                throw new Error("Ingen testdata returneret");
             }
         })
         .catch(error => {
+            document.querySelector('.test-info').innerHTML = `<div class="alert alert-danger">Fejl: ${error.message}</div>`;
+            document.querySelector('.test-samples-table tbody').innerHTML = '<tr><td colspan="4" class="text-center">Kunne ikke hente data</td></tr>';
             console.error("Fejl ved hentning af testdetaljer:", error);
-            alert(`Kunne ikke hente testdetaljer: ${error}`);
         });
 }
 
@@ -308,6 +417,54 @@ function disposeAllTestSamples(testId) {
             console.error("Fejl ved kassation:", error);
             alert(`Der opstod en fejl: ${error}`);
         });
+    }
+}
+
+function populateTestDetailsModal(test) {
+    const testInfoEl = document.querySelector('.test-info');
+    const samplesTableEl = document.querySelector('.test-samples-table tbody');
+    
+    // Opdater titel
+    document.querySelector('#testDetailsModal .modal-title').textContent = `Test Detaljer: ${test.TestNo || test.TestID}`;
+    
+    // Opdater test information
+    testInfoEl.innerHTML = `
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <p><strong>Test Navn:</strong> ${test.TestName || 'Ikke angivet'}</p>
+                <p><strong>Test Nummer:</strong> ${test.TestNo || test.TestID}</p>
+                <p><strong>Oprettet:</strong> ${test.CreatedDate || 'Ukendt'}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Ejer:</strong> ${test.UserName || 'Ukendt'}</p>
+                <p><strong>Status:</strong> <span class="badge bg-primary">Aktiv</span></p>
+                <p><strong>Antal Prøver:</strong> ${test.Samples ? test.Samples.length : 0}</p>
+            </div>
+        </div>
+        ${test.Description ? `<p><strong>Beskrivelse:</strong> ${test.Description}</p>` : ''}
+    `;
+    
+    // Opdater prøvetabel
+    if (test.Samples && test.Samples.length > 0) {
+        samplesTableEl.innerHTML = '';
+        
+        test.Samples.forEach((sample, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${sample.GeneratedIdentifier || `${test.TestNo}_${index + 1}`}</td>
+                <td>${sample.Description || 'Ikke angivet'}</td>
+                <td>PRV-${sample.OriginalSampleID || 'N/A'}</td>
+                <td>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-primary">Detaljer</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="disposeSample('${sample.TestSampleID}')">Kassér</button>
+                    </div>
+                </td>
+            `;
+            samplesTableEl.appendChild(row);
+        });
+    } else {
+        samplesTableEl.innerHTML = '<tr><td colspan="4" class="text-center">Ingen prøver i denne test</td></tr>';
     }
 }
 

@@ -253,35 +253,43 @@ def testing():
     try:
         cursor = mysql.connection.cursor()
         
-        # Hent aktive tests med antal prøver
+        # Hent alle tests fra de sidste 30 dage
         cursor.execute("""
             SELECT 
                 t.TestID, 
+                t.TestNo, 
                 t.TestName, 
                 t.Description, 
                 u.Name, 
                 t.CreatedDate, 
-                COUNT(ts.TestSampleID) as sample_count
+                COUNT(ts.TestSampleID) as sample_count,
+                (SELECT COUNT(*) FROM History h 
+                 WHERE h.TestID = t.TestID AND h.ActionType = 'Test afsluttet') as is_completed
             FROM Test t
             JOIN User u ON t.UserID = u.UserID
             LEFT JOIN TestSample ts ON t.TestID = ts.TestID
             WHERE t.CreatedDate > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
             GROUP BY t.TestID
+            ORDER BY t.CreatedDate DESC
         """)
         
         tests_data = cursor.fetchall()
         
-        # Konverter tuple data til dictionary
+        # Filtrer kun aktive tests (som ikke er markeret som afsluttet i History)
         active_tests = []
         for test in tests_data:
-            active_tests.append({
-                "TestID": test[0],
-                "TestName": test[1] if test[1] else f"Test {test[0]}",
-                "Description": test[2] if test[2] else "",
-                "UserName": test[3],
-                "CreatedDate": test[4].strftime('%d. %B %Y') if test[4] else "Ukendt",
-                "sample_count": test[5]
-            })
+            is_completed = test[7] > 0  # Hvis der er mindst én "Test afsluttet" handling i History
+            
+            if not is_completed:  # Vis kun tests, der ikke er afsluttet
+                active_tests.append({
+                    "TestID": test[0],
+                    "TestNo": test[1] if test[1] else f"Test {test[0]}",
+                    "TestName": test[2] if test[2] else f"Test {test[0]}",
+                    "Description": test[3] if test[3] else "",
+                    "UserName": test[4],
+                    "CreatedDate": test[5].strftime('%d. %B %Y') if test[5] else "Ukendt",
+                    "sample_count": test[6]
+                })
         
         # Hent tilgængelige prøver
         cursor.execute("""
@@ -301,10 +309,11 @@ def testing():
         samples = []
         for sample in samples_data:
             samples.append({
-                "SampleID": f"PRV-{sample[0]}",
+                "SampleID": sample[0],
+                "SampleIDFormatted": f"PRV-{sample[0]}",
                 "Description": sample[1],
-                "Amount": sample[2],
-                "LocationID": sample[3]
+                "AmountRemaining": sample[2],
+                "LocationName": sample[3]
             })
         
         # Hent brugere
@@ -320,7 +329,7 @@ def testing():
     except Exception as e:
         print(f"Error loading testing: {e}")
         return render_template('sections/testing.html', error="Fejl ved indlæsning af test administration")
-
+    
 @app.route('/api/suppliers', methods=['POST'])
 def create_supplier():
     try:
@@ -1064,71 +1073,130 @@ def api_create_disposal():
         mysql.connection.rollback()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/completeTest/<int:test_id>', methods=['POST'])
+@app.route('/api/completeTest/<test_id>', methods=['POST'])
 def api_complete_test(test_id):
     try:
         cursor = mysql.connection.cursor()
-        
-        # Få tabelstruktur
-        cursor.execute("DESCRIBE Test")
-        columns = [column[0].lower() for column in cursor.fetchall()]
         
         # Hent aktuel bruger
         current_user = get_current_user()
         user_id = current_user['UserID']
         
-        # Tjek om CompletedDate findes i tabellen
-        if 'completeddate' in columns:
-            cursor.execute("""
-                UPDATE Test 
-                SET CompletedDate = NOW()
-                WHERE TestID = %s
-            """, (test_id,))
-        
-        # Log aktiviteten uanset om CompletedDate findes
-        cursor.execute("""
-            INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
-            VALUES (NOW(), %s, %s, %s, %s)
-        """, (
-            'Test afsluttet',
-            user_id,
-            test_id,
-            f"Test {test_id} afsluttet af {current_user['Name']}"
-        ))
-        
-        mysql.connection.commit()
-        cursor.close()
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        print(f"API error: {e}")
-        mysql.connection.rollback()
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/testDetails/<int:test_id>')
-def api_test_details(test_id):
-    try:
-        cursor = mysql.connection.cursor()
-        
-        # Hent testoplysninger - meget forenklet version
-        cursor.execute("""
-            SELECT TestID, TestNo, TestName 
-            FROM Test 
-            WHERE TestID = %s
-        """, (test_id,))
+        # Prøv at konvertere til heltal hvis det er et tal
+        try:
+            test_id_int = int(test_id)
+            # Hvis det er et heltal, søg på TestID
+            cursor.execute("SELECT TestID, TestNo FROM Test WHERE TestID = %s", (test_id_int,))
+        except ValueError:
+            # Hvis det ikke er et heltal, søg på TestNo
+            cursor.execute("SELECT TestID, TestNo FROM Test WHERE TestNo = %s", (test_id,))
         
         test_data = cursor.fetchone()
         
         if not test_data:
             return jsonify({'error': 'Test ikke fundet'}), 404
         
-        # Simpelt resultat
+        actual_test_id = test_data[0]
+        test_no = test_data[1]
+        
+        # Da vi ikke har Status eller CompletedDate kolonner, kan vi ikke markere testen som afsluttet i databasen
+        # Vi vil blot logge handlingen i History-tabellen
+        
+        # Log aktiviteten
+        cursor.execute("""
+            INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
+            VALUES (NOW(), %s, %s, %s, %s)
+        """, (
+            'Test afsluttet',
+            user_id,
+            actual_test_id,
+            f"Test {test_no} afsluttet af {current_user['Name']}"
+        ))
+        
+        mysql.connection.commit()
+        cursor.close()
+        
+        return jsonify({'success': True, 'test_id': test_no})
+    except Exception as e:
+        print(f"API error: {e}")
+        import traceback
+        traceback.print_exc()
+        mysql.connection.rollback()
+        if 'cursor' in locals():
+            cursor.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/testDetails/<test_id>')
+def api_test_details(test_id):
+    try:
+        cursor = mysql.connection.cursor()
+        
+        # Tjek om test_id er et heltal eller en streng
+        try:
+            test_id_int = int(test_id)
+            # Hvis det er et heltal, søg på TestID
+            cursor.execute("""
+                SELECT t.TestID, t.TestNo, t.TestName, t.Description, t.CreatedDate, u.Name as UserName
+                FROM Test t 
+                JOIN User u ON t.UserID = u.UserID
+                WHERE t.TestID = %s
+            """, (test_id_int,))
+        except ValueError:
+            # Hvis det ikke er et heltal, søg på TestNo
+            cursor.execute("""
+                SELECT t.TestID, t.TestNo, t.TestName, t.Description, t.CreatedDate, u.Name as UserName
+                FROM Test t 
+                JOIN User u ON t.UserID = u.UserID
+                WHERE t.TestNo = %s
+            """, (test_id,))
+        
+        test_data = cursor.fetchone()
+        
+        if not test_data:
+            return jsonify({'error': 'Test ikke fundet'}), 404
+        
+        actual_test_id = test_data[0]
+        
+        # Tjek om testen er afsluttet
+        cursor.execute("""
+            SELECT COUNT(*) FROM History 
+            WHERE TestID = %s AND ActionType = 'Test afsluttet'
+        """, (actual_test_id,))
+        
+        is_completed = cursor.fetchone()[0] > 0
+        
+        if is_completed:
+            return jsonify({'error': 'Testen er afsluttet og ikke længere aktiv'}), 404
+        
+        # Byg testdata
         test = {
             'TestID': test_data[0],
             'TestNo': test_data[1],
             'TestName': test_data[2],
-            'Samples': []  # Tom liste af prøver
+            'Description': test_data[3],
+            'CreatedDate': test_data[4].strftime('%d. %b %Y') if test_data[4] else 'Ukendt',
+            'UserName': test_data[5],
+            'Samples': []
         }
+        
+        # Hent prøver i testen
+        cursor.execute("""
+            SELECT ts.TestSampleID, ts.GeneratedIdentifier, s.Description, s.SampleID, ts.SampleID as OriginalSampleID
+            FROM TestSample ts
+            JOIN Sample s ON ts.SampleID = s.SampleID
+            WHERE ts.TestID = %s
+        """, (actual_test_id,))
+        
+        samples_data = cursor.fetchall()
+        
+        for sample in samples_data:
+            test['Samples'].append({
+                'TestSampleID': sample[0],
+                'GeneratedIdentifier': sample[1],
+                'Description': sample[2],
+                'SampleID': sample[3],
+                'OriginalSampleID': sample[4]
+            })
         
         # Returner resultatet
         cursor.close()
