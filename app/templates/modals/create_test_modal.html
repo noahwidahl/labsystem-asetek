@@ -22,10 +22,11 @@
                     <div class="col-md-6">
                         <div class="form-group">
                             <label>Test Ejer</label>
-                            <input type="text" class="form-control" readonly value="BWM" />
-                            <input type="hidden" name="testOwner" value="1" />
+                            <input type="text" class="form-control" readonly value="{{ current_user.Name }}" />
+                            <input type="hidden" name="testOwner" value="{{ current_user.UserID }}" />
                         </div>
                     </div>
+                </div>
                 
                 <div class="form-group mb-3">
                     <label>Vælg Prøver</label>
@@ -47,25 +48,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% if samples %}
-                                        {% for sample in samples %}
-                                        <tr>
-                                            <td>
-                                                <input type="checkbox" name="selectedSamples" value="{{ sample.SampleID }}">
-                                            </td>
-                                            <td>{{ sample.SampleID }}</td>
-                                            <td>{{ sample.Description }}</td>
-                                            <td>{{ sample.LocationID }}</td>
-                                            <td>
-                                                <input type="number" class="form-control form-control-sm" value="1" min="1" max="{{ sample.Amount }}">
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    {% else %}
-                                        <tr>
-                                            <td colspan="5" class="text-center">Ingen prøver tilgængelige</td>
-                                        </tr>
-                                    {% endif %}
+                                    <!-- Dynamisk indhold via JavaScript -->
                                 </tbody>
                             </table>
                         </div>

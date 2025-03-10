@@ -15,11 +15,19 @@
 
     <!-- Aktive Tests -->
     <div class="active-tests">
-        <h3>Aktive Tests</h3>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>Aktive Tests</h3>
+            <span class="active-tests-count d-none">{{ active_tests|length }}</span>
+        </div>
+        
+        <div class="welcome-message mb-4">
+            <!-- Vil blive udfyldt dynamisk via JavaScript -->
+        </div>
+        
         <div class="test-grid">
             {% if active_tests %}
                 {% for test in active_tests %}
-                <div class="test-card">
+                <div class="test-card" data-test-id="{{ test.TestID }}">
                     <div class="test-header">
                         <span class="test-id">{{ test.TestID }}</span>
                         <span class="test-status active">Aktiv</span>
@@ -49,8 +57,8 @@
                         </div>
                     </div>
                     <div class="test-actions">
-                        <button class="btn btn-secondary">Se Detaljer</button>
-                        <button class="btn btn-outline">Afslut Test</button>
+                        <button class="btn btn-secondary" onclick="showTestDetails('{{ test.TestID }}')">Se Detaljer</button>
+                        <button class="btn btn-outline-danger" onclick="completeTest('{{ test.TestID }}')">Afslut Test</button>
                     </div>
                 </div>
                 {% endfor %}
@@ -62,4 +70,42 @@
         </div>
     </div>
 </section>
+
+<!-- Inkluder modale vinduer -->
+{% include "modals/test_details_modal.html" %}
+{% include "modals/create_test_modal.html" %}
+
+<script>
+    // Variable til at gemme den aktuelle test ID
+    let currentTestId = null;
+    
+    // Opdater showTestDetails funktionen for at sætte currentTestId
+    function showTestDetails(testId) {
+        currentTestId = testId;
+        // Hent testdetaljer fra serveren
+        fetch(`/api/testDetails/${testId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.test) {
+                    populateTestDetailsModal(data.test);
+                    const modal = new bootstrap.Modal(document.getElementById('testDetailsModal'));
+                    modal.show();
+                } else {
+                    throw new Error("Ingen testdata returneret");
+                }
+            })
+            .catch(error => {
+                showErrorMessage(`Kunne ikke hente testdetaljer: ${error}`);
+            });
+    }
+    
+    // Initialiser funktioner ved sideindlæsning
+    document.addEventListener('DOMContentLoaded', function() {
+        // Opdater velkomstbesked
+        const activeTestsCount = document.querySelector('.active-tests-count');
+        if (activeTestsCount) {
+            updateWelcomeMessage(parseInt(activeTestsCount.textContent) || 0);
+        }
+    });
+</script>
 {% endblock %}

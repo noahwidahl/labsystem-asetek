@@ -61,7 +61,7 @@
         
         <div class="nav-section mt-4">
             <div class="nav-header px-3 text-muted small">VÆRKTØJER</div>
-            <a href="#" class="nav-item">
+            <a href="#" class="nav-item" onclick="showDisposalModal(event)">
                 <i class="fas fa-trash-alt"></i>
                 <span>Kassering</span>
             </a>
@@ -73,8 +73,14 @@
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Modale vinduer -->
+    {% include "modals/disposal_modal.html" %}
+
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/script_v2.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/test-functions.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/disposal-functions.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

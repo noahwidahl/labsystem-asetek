@@ -901,13 +901,18 @@ def api_create_test():
         current_user = get_current_user()
         user_id = current_user['UserID']
         
+        # Generer unikt testnummer
+        test_type = data.get('type', 'std')
+        test_date = datetime.now().strftime('%Y%m%d')
+        test_number = f"T{test_type}-{test_date}"
+        
         # Opret testen
         cursor.execute("""
             INSERT INTO Test (TestNo, TestName, Description, CreatedDate, UserID)
             VALUES (%s, %s, %s, NOW(), %s)
         """, (
-            f"T{data.get('type')}-{datetime.now().strftime('%Y%m%d')}",
-            data.get('testName', 'Ny test'),
+            test_number,
+            f"Test {test_type.upper()}",
             data.get('description', ''),
             user_id  # Bruger den aktuelle brugers ID
         ))
@@ -917,7 +922,7 @@ def api_create_test():
         # Tilføj prøver til testen
         if data.get('samples'):
             for i, sample_data in enumerate(data.get('samples')):
-                sample_id = sample_data.get('id').replace('PRV-', '')
+                sample_id = sample_data.get('id')
                 amount = int(sample_data.get('amount', 1))
                 
                 for j in range(amount):
@@ -950,15 +955,16 @@ def api_create_test():
             'Test oprettet',
             user_id,  # Bruger den aktuelle brugers ID
             test_id,
-            f"Test T{test_id} oprettet af {current_user['Name']}"  # Tilføj brugernavnet i beskrivelsen
+            f"Test {test_number} oprettet af {current_user['Name']}"
         ))
         
         mysql.connection.commit()
         cursor.close()
         
-        return jsonify({'success': True, 'test_id': f"T{test_id}"})
+        return jsonify({'success': True, 'test_id': test_number})
     except Exception as e:
         print(f"API error: {e}")
+        mysql.connection.rollback()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/createDisposal', methods=['POST'])
@@ -1021,6 +1027,100 @@ def api_create_disposal():
         cursor.close()
         
         return jsonify({'success': True, 'disposal_id': disposal_id})
+    except Exception as e:
+        print(f"API error: {e}")
+        mysql.connection.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/completeTest/<int:test_id>', methods=['POST'])
+def api_complete_test(test_id):
+    try:
+        cursor = mysql.connection.cursor()
+        
+        # Hent aktuel bruger
+        current_user = get_current_user()
+        user_id = current_user['UserID']
+        
+        # Opdater test status
+        cursor.execute("""
+            UPDATE Test 
+            SET Status = 'Afsluttet', CompletedDate = NOW()
+            WHERE TestID = %s
+        """, (test_id,))
+        
+        # Log aktiviteten
+        cursor.execute("""
+            INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
+            VALUES (NOW(), %s, %s, %s, %s)
+        """, (
+            'Test afsluttet',
+            user_id,
+            test_id,
+            f"Test {test_id} afsluttet af {current_user['Name']}"
+        ))
+        
+        mysql.connection.commit()
+        cursor.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"API error: {e}")
+        mysql.connection.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/testDetails/<int:test_id>')
+def api_test_details(test_id):
+    try:
+        cursor = mysql.connection.cursor()
+        
+        # Hent testoplysninger
+        cursor.execute("""
+            SELECT 
+                t.TestID,
+                t.TestNo,
+                t.TestName,
+                t.Description,
+                DATE_FORMAT(t.CreatedDate, '%d-%m-%Y') as CreatedDate,
+                u.Name as UserName,
+                COUNT(ts.TestSampleID) as SampleCount
+            FROM Test t
+            JOIN User u ON t.UserID = u.UserID
+            LEFT JOIN TestSample ts ON t.TestID = ts.TestID
+            WHERE t.TestID = %s
+            GROUP BY t.TestID
+        """, (test_id,))
+        
+        test_data = cursor.fetchone()
+        
+        if not test_data:
+            return jsonify({'error': 'Test ikke fundet'}), 404
+        
+        columns = [col[0] for col in cursor.description]
+        test = dict(zip(columns, test_data))
+        
+        # Hent prøver i testen
+        cursor.execute("""
+            SELECT 
+                ts.TestSampleID,
+                ts.GeneratedIdentifier,
+                s.Description,
+                s.SampleID as OriginalSampleID,
+                ts.TestIteration
+            FROM TestSample ts
+            JOIN Sample s ON ts.SampleID = s.SampleID
+            WHERE ts.TestID = %s
+            ORDER BY ts.TestIteration
+        """, (test_id,))
+        
+        sample_columns = [col[0] for col in cursor.description]
+        samples = [dict(zip(sample_columns, row)) for row in cursor.fetchall()]
+        
+        # Tilføj prøver til test
+        test['Samples'] = samples
+        
+        cursor.close()
+        
+        return jsonify({'test': test})
     except Exception as e:
         print(f"API error: {e}")
         return jsonify({'error': str(e)}), 500
@@ -1098,6 +1198,160 @@ def api_active_samples():
     except Exception as e:
         print(f"API error: {e}")
         return jsonify({'error': 'Database fejl'}), 500
+
+@app.route('/api/disposeSample', methods=['POST'])
+def api_dispose_sample():
+    try:
+        data = request.json
+        test_sample_id = data.get('testSampleId')
+        
+        if not test_sample_id:
+            return jsonify({'error': 'Manglende test sample ID'}), 400
+        
+        cursor = mysql.connection.cursor()
+        
+        # Hent aktuel bruger
+        current_user = get_current_user()
+        user_id = current_user['UserID']
+        
+        # Hent test sample information
+        cursor.execute("""
+            SELECT ts.SampleID, ts.TestID, t.TestNo, s.Description
+            FROM TestSample ts
+            JOIN Test t ON ts.TestID = t.TestID
+            JOIN Sample s ON ts.SampleID = s.SampleID
+            WHERE ts.TestSampleID = %s
+        """, (test_sample_id,))
+        
+        sample_data = cursor.fetchone()
+        
+        if not sample_data:
+            return jsonify({'error': 'Test sample ikke fundet'}), 404
+        
+        sample_id, test_id, test_no, description = sample_data
+        
+        # Opret kassation for test sample
+        cursor.execute("""
+            INSERT INTO Disposal (SampleID, UserID, DisposalDate, AmountDisposed, Notes, TestSampleID)
+            VALUES (%s, %s, NOW(), %s, %s, %s)
+        """, (
+            sample_id,
+            user_id,
+            1,  # Mængde er altid 1 for test samples
+            f"Test sample {test_sample_id} kasseret",
+            test_sample_id
+        ))
+        
+        # Opdater test sample status
+        cursor.execute("""
+            UPDATE TestSample
+            SET Status = 'Kasseret', DisposalDate = NOW()
+            WHERE TestSampleID = %s
+        """, (test_sample_id,))
+        
+        # Log aktiviteten
+        cursor.execute("""
+            INSERT INTO History (Timestamp, ActionType, UserID, TestID, SampleID, Notes)
+            VALUES (NOW(), %s, %s, %s, %s, %s)
+        """, (
+            'Test sample kasseret',
+            user_id,
+            test_id,
+            sample_id,
+            f"Test sample kasseret: {test_no} - {description}"
+        ))
+        
+        mysql.connection.commit()
+        cursor.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"API error: {e}")
+        mysql.connection.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/disposeAllTestSamples', methods=['POST'])
+def api_dispose_all_test_samples():
+    try:
+        data = request.json
+        test_id = data.get('testId')
+        
+        if not test_id:
+            return jsonify({'error': 'Manglende test ID'}), 400
+        
+        cursor = mysql.connection.cursor()
+        
+        # Hent aktuel bruger
+        current_user = get_current_user()
+        user_id = current_user['UserID']
+        
+        # Hent test information
+        cursor.execute("""
+            SELECT TestNo FROM Test WHERE TestID = %s
+        """, (test_id,))
+        
+        test_data = cursor.fetchone()
+        if not test_data:
+            return jsonify({'error': 'Test ikke fundet'}), 404
+        
+        test_no = test_data[0]
+        
+        # Hent alle aktive test samples
+        cursor.execute("""
+            SELECT ts.TestSampleID, ts.SampleID, s.Description
+            FROM TestSample ts
+            JOIN Sample s ON ts.SampleID = s.SampleID
+            WHERE ts.TestID = %s
+            AND (ts.Status IS NULL OR ts.Status != 'Kasseret')
+        """, (test_id,))
+        
+        test_samples = cursor.fetchall()
+        
+        if not test_samples:
+            return jsonify({'success': True, 'message': 'Ingen aktive test samples fundet'}), 200
+        
+        # Opret kassationer for alle test samples
+        for test_sample in test_samples:
+            test_sample_id, sample_id, description = test_sample
+            
+            # Opret kassation
+            cursor.execute("""
+                INSERT INTO Disposal (SampleID, UserID, DisposalDate, AmountDisposed, Notes, TestSampleID)
+                VALUES (%s, %s, NOW(), %s, %s, %s)
+            """, (
+                sample_id,
+                user_id,
+                1,  # Mængde er altid 1 for test samples
+                f"Test sample kasseret fra test {test_no}",
+                test_sample_id
+            ))
+            
+            # Opdater test sample status
+            cursor.execute("""
+                UPDATE TestSample
+                SET Status = 'Kasseret', DisposalDate = NOW()
+                WHERE TestSampleID = %s
+            """, (test_sample_id,))
+        
+        # Log aktiviteten
+        cursor.execute("""
+            INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
+            VALUES (NOW(), %s, %s, %s, %s)
+        """, (
+            'Alle test samples kasseret',
+            user_id,
+            test_id,
+            f"Alle prøver kasseret fra test {test_no} ({len(test_samples)} prøver)"
+        ))
+        
+        mysql.connection.commit()
+        cursor.close()
+        
+        return jsonify({'success': True, 'count': len(test_samples)})
+    except Exception as e:
+        print(f"API error: {e}")
+        mysql.connection.rollback()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/recentDisposals')
 def api_recent_disposals():
