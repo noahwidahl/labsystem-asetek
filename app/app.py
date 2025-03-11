@@ -604,8 +604,14 @@ def create_sample():
             
             # Opret container hvis create_containers er true
             if create_containers:
-                # Opret container for hver pakke
-                container_description = f"Pakke {i+1} af {package_count}: {data.get('description')}" if package_count > 1 else data.get('description')
+                # Brug container-specifik beskrivelse hvis angivet, ellers brug prøvebeskrivelsen
+                container_description = data.get('containerDescription', '')
+                if not container_description:
+                    container_description = f"Container til: {data.get('description')}"
+                
+                # Hent is_mixed fra container-specifik checkbox
+                is_mixed = data.get('containerIsMixed', False)
+                
                 cursor.execute("""
                     INSERT INTO Container (
                         Description, 
@@ -614,12 +620,12 @@ def create_sample():
                     VALUES (%s, %s)
                 """, (
                     container_description,
-                    0  # Ikke blandet
+                    1 if is_mixed else 0  # 1 for true, 0 for false
                 ))
                 container_id = cursor.lastrowid
                 container_ids.append(container_id)
                 
-                # Kobl container til sample storage via ContainerSample tabellen som i ER-diagrammet
+                # Kobl container til sample storage via ContainerSample tabellen
                 cursor.execute("""
                     INSERT INTO ContainerSample (
                         SampleStorageID, 
@@ -647,7 +653,7 @@ def create_sample():
                     'Container oprettet',
                     user_id,
                     sample_id,
-                    f"Container {container_id} oprettet for prøve: {container_description}"
+                    f"Container {container_id} oprettet med beskrivelse: {container_description}"
                 ))
         
         # Håndter serienumre hvis relevant (for unique samples/hasSerialNumbers)
@@ -700,6 +706,8 @@ def create_sample():
         return jsonify(response_data)
     except Exception as e:
         print(f"API error: {e}")
+        import traceback
+        traceback.print_exc()
         mysql.connection.rollback()  # Sikrer at alle ændringer rulles tilbage ved fejl
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1224,18 +1232,17 @@ def containers():
     try:
         cursor = mysql.connection.cursor()
         
-        # Get containers with type information - forbedret SQL forespørgsel
+        # Simpel forespørgsel for at hente containere
         cursor.execute("""
             SELECT 
                 c.ContainerID,
                 c.Description,
                 c.IsMixed,
-                COALESCE(ct.TypeName, 'Standard') as TypeName,
-                c.ContainerStatus,
-                COUNT(DISTINCT cs.ContainerSampleID) as sample_count,
+                'Standard' as TypeName,  # Default værdi hvis ContainerType ikke findes
+                'Aktiv' as Status,       # Default værdi
+                COUNT(cs.ContainerSampleID) as sample_count,
                 SUM(COALESCE(cs.Amount, 0)) as total_items
             FROM Container c
-            LEFT JOIN ContainerType ct ON c.ContainerTypeID = ct.ContainerTypeID
             LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
             GROUP BY c.ContainerID
             ORDER BY c.ContainerID DESC
@@ -1249,53 +1256,42 @@ def containers():
                 "ContainerID": container[0],
                 "Description": container[1],
                 "IsMixed": "Ja" if container[2] else "Nej",
-                "TypeName": container[3] or "Standard",
-                "Status": container[4] or "Aktiv",
+                "TypeName": container[3],
+                "Status": container[4],
                 "SampleCount": container[5] or 0,
                 "TotalItems": container[6] or 0
             })
         
-        # Get container types
-        cursor.execute("""
-            SELECT 
-                ContainerTypeID, 
-                TypeName,
-                DefaultCapacity,
-                Description
-            FROM ContainerType 
-            ORDER BY TypeName
-        """)
+        # Print containere til debug
+        print(f"Fandt {len(containers)} containere")
         
-        container_types_data = cursor.fetchall()
+        # Hent container typer hvis tabellen eksisterer
         container_types = []
-        
-        for type_data in container_types_data:
-            container_types.append({
-                "ContainerTypeID": type_data[0],
-                "TypeName": type_data[1],
-                "DefaultCapacity": type_data[2],
-                "Description": type_data[3]
-            })
-        
-        # If no container types exist, create default ones
+        try:
+            cursor.execute("SHOW TABLES LIKE 'ContainerType'")
+            if cursor.fetchone():
+                cursor.execute("SELECT ContainerTypeID, TypeName FROM ContainerType ORDER BY TypeName")
+                container_types = [dict(ContainerTypeID=row[0], TypeName=row[1]) for row in cursor.fetchall()]
+        except Exception as e:
+            print(f"Fejl ved hentning af container typer: {e}")
+            
+        # Hvis ingen typer findes, tilføj en standard type
         if not container_types:
             container_types = [
-                {"ContainerTypeID": 0, "TypeName": "Standard", "DefaultCapacity": None, "Description": "Standard container type"}
+                {"ContainerTypeID": 1, "TypeName": "Standard"}
             ]
         
-        # Get available samples for adding to containers
+        # Hent aktive prøver til "Tilføj prøve" funktionen
         cursor.execute("""
             SELECT 
                 s.SampleID,
                 CONCAT('PRV-', s.SampleID) as SampleIDFormatted,
                 s.Description,
                 ss.AmountRemaining,
-                u.UnitName as Unit,
-                sl.LocationName
+                u.UnitName as Unit
             FROM Sample s
             JOIN SampleStorage ss ON s.SampleID = ss.SampleID
             JOIN Unit u ON s.UnitID = u.UnitID
-            JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
             WHERE ss.AmountRemaining > 0
             AND s.Status = 'På lager'
             ORDER BY s.SampleID DESC
@@ -1308,8 +1304,7 @@ def containers():
                 "SampleIDFormatted": sample[1],
                 "Description": sample[2],
                 "AmountRemaining": sample[3],
-                "Unit": sample[4],
-                "LocationName": sample[5]
+                "Unit": sample[4]
             })
         
         cursor.close()
@@ -1320,7 +1315,9 @@ def containers():
                               available_samples=available_samples)
     except Exception as e:
         print(f"Error loading containers: {e}")
-        return render_template('sections/containers.html', error="Fejl ved indlæsning af containere")
+        import traceback
+        traceback.print_exc()
+        return render_template('sections/containers.html', error=f"Fejl ved indlæsning af containere: {str(e)}")
 
 
 @app.route('/api/container-types')

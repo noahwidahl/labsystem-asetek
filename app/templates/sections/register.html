@@ -99,6 +99,21 @@
                         <small class="text-muted d-block mt-1">Vælg dette hvis prøverne skal registreres i fysiske containere på lageret</small>
                     </div>
 
+                    <div id="containerDetailsSection" class="container-related d-none mt-3 p-3 bg-light rounded">
+                        <h5>Container detaljer</h5>
+                        <div class="form-group mb-3">
+                            <label>Container beskrivelse</label>
+                            <input type="text" class="form-control" id="containerDescription" name="containerDescription" placeholder="F.eks. 'Rød plastboks'">
+                            <small class="text-muted">Standard: Samme som prøvebeskrivelsen</small>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="containerIsMixed" name="containerIsMixed">
+                            <label class="form-check-label" for="containerIsMixed">
+                                Kan indeholde blandede prøvetyper
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- Multi-pakke felter - kompakt version -->
                     <div id="multiplePackageFields" class="d-none">
                         <div class="package-container p-3 bg-light rounded">

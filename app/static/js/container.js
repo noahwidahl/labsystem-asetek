@@ -12,11 +12,11 @@ const ContainerModule = (function() {
         
         containersEnabled = createContainersCheckbox.checked;
         
-        // Vis eller skjul container-relaterede felter baseret på valget
-        const containerFields = document.querySelectorAll('.container-related');
-        containerFields.forEach(field => {
-            field.classList.toggle('d-none', !containersEnabled);
-        });
+        // Container-specifik sektion der vises/skjules baseret på checkbox
+        const containerDetailsSection = document.getElementById('containerDetailsSection');
+        if (containerDetailsSection) {
+            containerDetailsSection.classList.toggle('d-none', !containersEnabled);
+        }
         
         console.log('Container creation is now:', containersEnabled ? 'enabled' : 'disabled');
     }
