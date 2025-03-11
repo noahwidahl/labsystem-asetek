@@ -434,12 +434,14 @@ def get_storage_locations():
             SELECT 
                 sl.LocationID,
                 sl.LocationName,
-                COUNT(ss.SampleID) as SampleCount,
-                CASE WHEN COUNT(ss.SampleID) > 0 THEN 'occupied' ELSE 'available' END as Status
+                COUNT(ss.StorageID) as count,
+                CASE WHEN COUNT(ss.StorageID) > 0 THEN 'occupied' ELSE 'available' END as status,
+                l.LabName
             FROM StorageLocation sl
+            JOIN Lab l ON sl.LabID = l.LabID
             LEFT JOIN SampleStorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
-            GROUP BY sl.LocationID, sl.LocationName
-            ORDER BY sl.LocationName
+            GROUP BY sl.LocationID
+            LIMIT 12
         """)
         
         columns = [col[0] for col in cursor.description]
@@ -453,7 +455,7 @@ def get_storage_locations():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/samples', methods=['POST'])
-def create_sample():
+def api_create_sample():
     try:
         data = request.json
         cursor = mysql.connection.cursor()
@@ -528,6 +530,21 @@ def create_sample():
         # Flag for containeroprettelse
         create_containers = data.get('createContainers', False)
         container_ids = []  # Liste til at holde styr på oprettede containere
+        
+        # Debug output for containerdata
+        if create_containers:
+            print("=== CONTAINER DEBUG ===")
+            print(f"createContainers: {create_containers}")
+            print(f"containerDescription: {data.get('containerDescription')}")
+            print(f"containerIsMixed: {data.get('containerIsMixed')}")
+            
+            # Tjek om der allerede findes en container med samme beskrivelse
+            cursor.execute("SELECT ContainerID, Description FROM Container WHERE Description = %s", 
+                        (data.get('containerDescription'),))
+            existing_container = cursor.fetchone()
+            if existing_container:
+                print(f"FANDT EKSISTERENDE CONTAINER: ID={existing_container[0]}, Description={existing_container[1]}")
+            print("=== END CONTAINER DEBUG ===")
         
         # Iterér gennem antal pakker
         for i in range(package_count):
@@ -618,6 +635,8 @@ def create_sample():
             
             # Opret container hvis create_containers er true
             if create_containers:
+                container_id = None  # Default til None
+                
                 # Brug container-specifik beskrivelse hvis angivet, ellers brug prøvebeskrivelsen
                 container_description = data.get('containerDescription', '')
                 if not container_description:
@@ -628,49 +647,84 @@ def create_sample():
                 # Hent is_mixed fra container-specifik checkbox
                 is_mixed = data.get('containerIsMixed', False)
                 
-                cursor.execute("""
-                    INSERT INTO Container (
-                        Description, 
-                        IsMixed
-                    )
-                    VALUES (%s, %s)
-                """, (
-                    container_description,
-                    1 if is_mixed else 0
-                ))
-                container_id = cursor.lastrowid
-                container_ids.append(container_id)
+                # Tjek om der allerede findes en container med samme beskrivelse
+                cursor.execute("SELECT ContainerID FROM Container WHERE Description = %s", 
+                            (container_description,))
+                existing_container = cursor.fetchone()
                 
-                # Kobl container til sample storage
-                cursor.execute("""
-                    INSERT INTO ContainerSample (
-                        SampleStorageID, 
-                        ContainerID, 
-                        Amount
-                    )
-                    VALUES (%s, %s, %s)
-                """, (
-                    storage_id,
-                    container_id,
-                    amount_per_package
-                ))
+                if existing_container:
+                    # Brug den eksisterende container
+                    container_id = existing_container[0]
+                    print(f"Bruger eksisterende container med ID {container_id} for beskrivelsen '{container_description}'")
+                else:
+                    # Opret en ny container
+                    # Find containerTypeID baseret på beskrivelsen, hvis den indeholder ordene "Box", "Kasse", eller "Plastboks"
+                    container_type_id = None
+                    if any(keyword in container_description.lower() for keyword in ["box", "kasse", "plastboks"]):
+                        cursor.execute("SELECT ContainerTypeID FROM ContainerType WHERE TypeName = 'Box'")
+                        type_result = cursor.fetchone()
+                        if type_result:
+                            container_type_id = type_result[0]
+                    
+                    if container_type_id:
+                        cursor.execute("""
+                            INSERT INTO Container (
+                                Description, 
+                                ContainerTypeID,
+                                IsMixed
+                            )
+                            VALUES (%s, %s, %s)
+                        """, (
+                            container_description,
+                            container_type_id,
+                            1 if is_mixed else 0
+                        ))
+                    else:
+                        cursor.execute("""
+                            INSERT INTO Container (
+                                Description, 
+                                IsMixed
+                            )
+                            VALUES (%s, %s)
+                        """, (
+                            container_description,
+                            1 if is_mixed else 0
+                        ))
+                    
+                    container_id = cursor.lastrowid
+                    container_ids.append(container_id)
+                    
+                    # Log oprettelse af container i History
+                    cursor.execute("""
+                        INSERT INTO History (
+                            Timestamp, 
+                            ActionType, 
+                            UserID, 
+                            SampleID, 
+                            Notes
+                        )
+                        VALUES (NOW(), %s, %s, %s, %s)
+                    """, (
+                        'Container oprettet',
+                        user_id,
+                        sample_id,
+                        f"Container {container_id} oprettet med beskrivelse: {container_description}"
+                    ))
                 
-                # Log oprettelse af container i History
-                cursor.execute("""
-                    INSERT INTO History (
-                        Timestamp, 
-                        ActionType, 
-                        UserID, 
-                        SampleID, 
-                        Notes
-                    )
-                    VALUES (NOW(), %s, %s, %s, %s)
-                """, (
-                    'Container oprettet',
-                    user_id,
-                    sample_id,
-                    f"Container {container_id} oprettet med beskrivelse: {container_description}"
-                ))
+                # Kobl container til sample storage (kun hvis container_id findes)
+                if container_id:
+                    cursor.execute("""
+                        INSERT INTO ContainerSample (
+                            SampleStorageID, 
+                            ContainerID, 
+                            Amount
+                        )
+                        VALUES (%s, %s, %s)
+                    """, (
+                        storage_id,
+                        container_id,
+                        amount_per_package
+                    ))
         
         # Håndter serienumre hvis relevant
         if data.get('hasSerialNumbers') and data.get('serialNumbers'):
@@ -725,6 +779,91 @@ def create_sample():
         traceback.print_exc()
         mysql.connection.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/repair-container-relations')
+def repair_container_relations():
+    try:
+        cursor = mysql.connection.cursor()
+        results = []
+        
+        # 1. Find container med beskrivelse "Rød plastboks"
+        cursor.execute("SELECT ContainerID FROM Container WHERE Description = 'Rød plastboks'")
+        red_box_container = cursor.fetchone()
+        
+        if not red_box_container:
+            results.append("Kunne ikke finde 'Rød plastboks' container")
+            return jsonify({"status": "failed", "results": results})
+        
+        red_box_id = red_box_container[0]
+        results.append(f"Fandt 'Rød plastboks' container med ID {red_box_id}")
+        
+        # 2. Find alle prøver markeret som "Produkt" og tilknyt dem til den røde boks
+        cursor.execute("""
+            SELECT ss.StorageID, s.Description 
+            FROM SampleStorage ss
+            JOIN Sample s ON ss.SampleID = s.SampleID
+            WHERE s.Description LIKE '%Produkt%'
+        """)
+        
+        product_samples = cursor.fetchall()
+        
+        if not product_samples:
+            results.append("Ingen 'Produkt' prøver fundet")
+        else:
+            results.append(f"Fandt {len(product_samples)} 'Produkt' prøver")
+            
+            # 3. For hver prøve, tjek om den allerede er i en container
+            for sample in product_samples:
+                storage_id = sample[0]
+                description = sample[1]
+                
+                cursor.execute("""
+                    SELECT ContainerID FROM ContainerSample
+                    WHERE SampleStorageID = %s
+                """, (storage_id,))
+                
+                existing_container = cursor.fetchone()
+                
+                if existing_container:
+                    existing_container_id = existing_container[0]
+                    
+                    # Hvis prøven allerede er i en anden container, opdater den
+                    if existing_container_id != red_box_id:
+                        cursor.execute("""
+                            UPDATE ContainerSample
+                            SET ContainerID = %s
+                            WHERE SampleStorageID = %s
+                        """, (red_box_id, storage_id))
+                        
+                        results.append(f"Opdateret prøve '{description}' fra container {existing_container_id} til container {red_box_id}")
+                else:
+                    # Hvis prøven ikke er i en container, tilføj den
+                    cursor.execute("""
+                        SELECT AmountRemaining FROM SampleStorage
+                        WHERE StorageID = %s
+                    """, (storage_id,))
+                    
+                    amount = cursor.fetchone()[0]
+                    
+                    cursor.execute("""
+                        INSERT INTO ContainerSample (SampleStorageID, ContainerID, Amount)
+                        VALUES (%s, %s, %s)
+                    """, (storage_id, red_box_id, amount))
+                    
+                    results.append(f"Tilføjet prøve '{description}' til container {red_box_id}")
+        
+        mysql.connection.commit()
+        cursor.close()
+        
+        return jsonify({"status": "success", "results": results})
+    except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        return jsonify({
+            "status": "error", 
+            "error": str(e),
+            "traceback": error_traceback
+        }), 500
 
 @app.route('/api/createTest', methods=['POST'])
 def api_create_test():

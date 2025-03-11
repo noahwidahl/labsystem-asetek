@@ -30,6 +30,14 @@ document.addEventListener('DOMContentLoaded', function() {
             deleteContainer(containerId);
         });
     });
+    
+    // Tilføj event listeners til "Tilføj prøve" knapper
+    document.querySelectorAll('.add-sample-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const containerId = this.getAttribute('data-container-id');
+            document.getElementById('targetContainerId').value = containerId;
+        });
+    });
 });
 
 function setupFilterButtons() {
@@ -92,6 +100,59 @@ function filterContainers(filter) {
         } else if (filter === 'full') {
             row.style.display = firstNumber > 0 ? '' : 'none';
         }
+    });
+}
+
+// Funktion til at tilføje prøve til container
+function addSampleToContainer() {
+    const containerId = document.getElementById('targetContainerId').value;
+    const sampleId = document.getElementById('sampleSelect').value;
+    const amount = parseInt(document.getElementById('sampleAmount').value) || 1;
+    
+    // Validering
+    if (!sampleId) {
+        showErrorMessage('Vælg venligst en prøve');
+        return;
+    }
+    
+    if (amount < 1) {
+        showErrorMessage('Antal skal være mindst 1');
+        return;
+    }
+    
+    // Opret data-objekt
+    const data = {
+        containerId: containerId,
+        sampleId: sampleId,
+        amount: amount
+    };
+    
+    // Send til server
+    fetch('/api/containers/add-sample', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessMessage('Prøve tilføjet til container!');
+            
+            // Luk modal og genindlæs siden
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addSampleToContainerModal'));
+            modal.hide();
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showErrorMessage(`Fejl ved tilføjelse af prøve: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        showErrorMessage(`Der opstod en fejl: ${error}`);
     });
 }
 

@@ -25,9 +25,92 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup bulk sample handling (for enheder)
     setupBulkSampleHandling();
     
+    // Setup container options
+    setupContainerOptions();
+    
     // Initialiser første skridt
     showStep(1);
 });
+
+// Funktion til at håndtere container options
+function setupContainerOptions() {
+    const createContainersCheckbox = document.getElementById('createContainers');
+    const existingContainerSection = document.getElementById('existingContainerSection');
+    const newContainerOption = document.getElementById('newContainerOption');
+    const existingContainerOption = document.getElementById('existingContainerOption');
+    const containerDetailsSection = document.getElementById('containerDetailsSection');
+    const existingContainerSelectArea = document.getElementById('existingContainerSelectArea');
+    
+    if (!createContainersCheckbox || !existingContainerSection) return;
+    
+    // Vis/skjul container options baseret på om containere er aktiveret
+    createContainersCheckbox.addEventListener('change', function() {
+        existingContainerSection.classList.toggle('d-none', !this.checked);
+        containerDetailsSection.classList.toggle('d-none', !this.checked || existingContainerOption.checked);
+    });
+    
+    // Håndter radioknap valg
+    newContainerOption.addEventListener('change', function() {
+        if (this.checked) {
+            containerDetailsSection.classList.remove('d-none');
+            existingContainerSelectArea.classList.add('d-none');
+        }
+    });
+    
+    existingContainerOption.addEventListener('change', function() {
+        if (this.checked) {
+            containerDetailsSection.classList.add('d-none');
+            existingContainerSelectArea.classList.remove('d-none');
+            fetchExistingContainers();
+        }
+    });
+}
+
+// Funktion til at hente eksisterende containere
+function fetchExistingContainers() {
+    const existingContainerSelect = document.getElementById('existingContainerSelect');
+    if (!existingContainerSelect) return;
+    
+    // Ryd eksisterende options bortset fra den første
+    while (existingContainerSelect.options.length > 1) {
+        existingContainerSelect.remove(1);
+    }
+    
+    // Tilføj en "indlæser..." option
+    const loadingOption = document.createElement('option');
+    loadingOption.textContent = 'Indlæser containere...';
+    loadingOption.disabled = true;
+    existingContainerSelect.appendChild(loadingOption);
+    
+    // Hent containere fra serveren
+    fetch('/api/containers/available')
+        .then(response => response.json())
+        .then(data => {
+            // Fjern "indlæser..." option
+            existingContainerSelect.remove(existingContainerSelect.options.length - 1);
+            
+            if (data.containers && data.containers.length > 0) {
+                data.containers.forEach(container => {
+                    const option = document.createElement('option');
+                    option.value = container.ContainerID;
+                    option.textContent = `${container.ContainerID}: ${container.Description} (${container.sample_count || 0} prøver)`;
+                    existingContainerSelect.appendChild(option);
+                });
+            } else {
+                const noContainersOption = document.createElement('option');
+                noContainersOption.textContent = 'Ingen tilgængelige containere fundet';
+                noContainersOption.disabled = true;
+                existingContainerSelect.appendChild(noContainersOption);
+            }
+        })
+        .catch(error => {
+            console.error('Fejl ved hentning af containere:', error);
+            const errorOption = document.createElement('option');
+            errorOption.textContent = 'Fejl ved hentning af containere';
+            errorOption.disabled = true;
+            existingContainerSelect.appendChild(errorOption);
+        });
+}
 
 // Sæt default udløbsdato
 function setDefaultExpiryDate() {
