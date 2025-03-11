@@ -458,6 +458,9 @@ def create_sample():
         data = request.json
         cursor = mysql.connection.cursor()
         
+        # Print modtagne data for debugging
+        print(f"Modtaget data: {data}")
+        
         # Få bruger-ID'et fra den aktuelle bruger
         current_user = get_current_user()
         user_id = current_user['UserID']
@@ -518,6 +521,10 @@ def create_sample():
         different_locations = data.get('differentLocations', False)
         package_locations = data.get('packageLocations', [])
         
+        # Print locationdata til debugging
+        print(f"Different locations: {different_locations}")
+        print(f"Package locations: {package_locations}")
+        
         # Flag for containeroprettelse
         create_containers = data.get('createContainers', False)
         container_ids = []  # Liste til at holde styr på oprettede containere
@@ -529,14 +536,13 @@ def create_sample():
             
             # Beregn mængde per pakke
             total_amount = int(data.get('totalAmount', 0))
-            amount_per_package = total_amount // package_count if package_count > 0 else total_amount
+            amount_per_package = int(data.get('amountPerPackage', total_amount // package_count)) if is_multi_package else total_amount
             
             # Juster sidste pakke hvis der er rest ved division
-            if i == package_count - 1 and total_amount % package_count != 0:
+            if i == package_count - 1 and not is_multi_package and total_amount % package_count != 0:
                 amount_per_package += total_amount % package_count
             
             # Indsæt prøven i Sample tabel
-            # Bemærk at isBulkSample (løs mængde) svarer til IsUnique i ER-diagrammet (inverteret)
             cursor.execute("""
                 INSERT INTO Sample (
                     Barcode, 
@@ -554,7 +560,7 @@ def create_sample():
                 barcode,
                 1 if data.get('hasSerialNumbers') else 0,  # IsUnique flagget
                 data.get('sampleType', 'Standard'),
-                data.get('description'),
+                data.get('description') + (f" (Pakke {i+1})" if is_multi_package and package_count > 1 else ""),
                 "På lager",
                 amount_per_package,
                 data.get('unit'),
@@ -572,13 +578,21 @@ def create_sample():
             location_id = None
             if different_locations and package_locations:
                 # Find pakkedata for denne pakkenummer
-                package_data = next((p for p in package_locations if int(p.get('packageNumber', 0)) == i+1), None)
+                package_data = next((p for p in package_locations if str(p.get('packageNumber', '')) == str(i+1)), None)
                 if package_data:
                     location_id = package_data.get('locationId')
+                    print(f"Fandt lokation for pakke {i+1}: {location_id}")
             
             # Brug standard lokation hvis ingen specifik findes
             if not location_id:
                 location_id = data.get('storageLocation')
+                
+            # Sikkerhedstjek - sæt standard lokation hvis stadig ingen
+            if not location_id:
+                print("ADVARSEL: Ingen lokation fundet, bruger standard lokation 1")
+                location_id = "1"
+            
+            print(f"Bruger lokation {location_id} for pakke {i+1}")
             
             # Indsæt til SampleStorage med den valgte lokation
             cursor.execute("""
@@ -607,7 +621,9 @@ def create_sample():
                 # Brug container-specifik beskrivelse hvis angivet, ellers brug prøvebeskrivelsen
                 container_description = data.get('containerDescription', '')
                 if not container_description:
-                    container_description = f"Container til: {data.get('description')}"
+                    container_description = data.get('description')
+                    if is_multi_package and package_count > 1:
+                        container_description += f" (Container {i+1})"
                 
                 # Hent is_mixed fra container-specifik checkbox
                 is_mixed = data.get('containerIsMixed', False)
@@ -620,12 +636,12 @@ def create_sample():
                     VALUES (%s, %s)
                 """, (
                     container_description,
-                    1 if is_mixed else 0  # 1 for true, 0 for false
+                    1 if is_mixed else 0
                 ))
                 container_id = cursor.lastrowid
                 container_ids.append(container_id)
                 
-                # Kobl container til sample storage via ContainerSample tabellen
+                # Kobl container til sample storage
                 cursor.execute("""
                     INSERT INTO ContainerSample (
                         SampleStorageID, 
@@ -639,7 +655,7 @@ def create_sample():
                     amount_per_package
                 ))
                 
-                # Log oprettelse af container i History tabellen
+                # Log oprettelse af container i History
                 cursor.execute("""
                     INSERT INTO History (
                         Timestamp, 
@@ -656,10 +672,9 @@ def create_sample():
                     f"Container {container_id} oprettet med beskrivelse: {container_description}"
                 ))
         
-        # Håndter serienumre hvis relevant (for unique samples/hasSerialNumbers)
+        # Håndter serienumre hvis relevant
         if data.get('hasSerialNumbers') and data.get('serialNumbers'):
             serial_numbers = data.get('serialNumbers')
-            # Tilføj serienumre til SampleSerialNumber tabellen
             for i, serial_number in enumerate(serial_numbers):
                 cursor.execute("""
                     INSERT INTO SampleSerialNumber (
@@ -692,7 +707,7 @@ def create_sample():
         mysql.connection.commit()
         cursor.close()
         
-        # Returner relevant data inklusiv container IDs hvis containere blev oprettet
+        # Returner relevant data
         response_data = {
             'success': True, 
             'sample_id': f"PRV-{first_sample_id}", 
@@ -708,7 +723,7 @@ def create_sample():
         print(f"API error: {e}")
         import traceback
         traceback.print_exc()
-        mysql.connection.rollback()  # Sikrer at alle ændringer rulles tilbage ved fejl
+        mysql.connection.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/createTest', methods=['POST'])
