@@ -612,18 +612,66 @@ function setupBarcodeInput() {
     }
 }
 
-// Opdateret setupStorageGrid funktion - uden dropdown-relateret kode
+function createGridFromLocations(locations) {
+    const grid = document.querySelector('.storage-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+    
+    // Sortér lokationerne for at sikre konsistent visning
+    locations.sort((a, b) => a.LocationName.localeCompare(b.LocationName));
+
+    // Opbyg grid med data fra API
+    locations.forEach(location => {
+        const cell = document.createElement('div');
+        cell.className = 'storage-cell';
+        
+        // Markér cellen som optaget hvis der er prøver på lokationen
+        if (location.Status === 'occupied') {
+            cell.classList.add('occupied');
+        }
+
+        const locationEl = document.createElement('div');
+        locationEl.className = 'location';
+        locationEl.textContent = location.LocationName;
+
+        const capacity = document.createElement('div');
+        capacity.className = 'capacity';
+        capacity.textContent = location.Status === 'occupied' ? 'Optaget' : 'Ledig';
+
+        cell.appendChild(locationEl);
+        cell.appendChild(capacity);
+        grid.appendChild(cell);
+
+        // Kun tilføj event listener til ledige celler
+        if (location.Status !== 'occupied') {
+            cell.addEventListener('click', () => selectStorageCell(cell));
+        }
+    });
+}
+
 function setupStorageGrid() {
-    const isMultiPackage = document.getElementById('isMultiPackage')?.checked || false;
-    const packageCount = isMultiPackage ? (parseInt(document.querySelector('[name="packageCount"]')?.value) || 1) : 1;
-    
-    // Opret grid med specifikke placeringer
-    createSpecificStorageGrid();
-    
-    // Hvis vi har multipakker, highlighte ledige lokationer
-    if (isMultiPackage && packageCount > 1) {
-        storageGridHighlightForPackages(packageCount);
-    }
+    const grid = document.querySelector('.storage-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '<div class="text-center p-3"><div class="spinner-border"></div><p>Indlæser lagerplaceringer...</p></div>';
+
+    // Hent lagerplaceringer fra API
+    fetch('/api/storage-locations')
+        .then(response => response.json())
+        .then(data => {
+            if (data.locations) {
+                createGridFromLocations(data.locations);
+            } else {
+                // Fallback til hardcodede lokationer
+                createSpecificStorageGrid();
+            }
+        })
+        .catch(error => {
+            console.error('Fejl ved hentning af lagerplaceringer:', error);
+            // Fallback til hardcodede lokationer
+            createSpecificStorageGrid();
+        });
 }
 
 // Vi bibeholder vores grid-skabende funktion

@@ -1,4 +1,3 @@
-<!-- app/templates/sections/containers.html -->
 {% extends "base.html" %}
 
 {% block title %}Containere - Laboratorie Prøvesystem{% endblock %}
@@ -15,24 +14,6 @@
                             <i class="fas fa-plus"></i> Opret container
                         </button>
                     </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <div class="input-group">
-                    <span class="input-group-text">
-                        <i class="fas fa-search"></i>
-                    </span>
-                    <input type="text" class="form-control" id="containerSearch" placeholder="Søg efter containere...">
-                </div>
-            </div>
-            <div class="col-md-6 text-end">
-                <div class="btn-group">
-                    <button class="btn btn-outline-secondary" id="filterAll">Alle</button>
-                    <button class="btn btn-outline-secondary" id="filterEmpty">Tomme</button>
-                    <button class="btn btn-outline-secondary" id="filterFull">Fyldte</button>
                 </div>
             </div>
         </div>
@@ -56,17 +37,23 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% if containers %}
+                            {% if containers and containers|length > 0 %}
                                 {% for container in containers %}
                                 <tr data-container-id="{{ container.ContainerID }}">
                                     <td>{{ container.ContainerID }}</td>
                                     <td>{{ container.Description }}</td>
                                     <td>{{ container.TypeName }}</td>
-                                    <td>{{ container.IsMixed }}</td>
-                                    <td>{{ container.SampleCount }} prøver / {{ container.TotalItems }} enheder</td>
-                                    <td><span class="badge bg-primary">{{ container.Status }}</span></td>
                                     <td>
-                                        <a href="{{ url_for('container_details', container_id=container.ContainerID) }}" class="btn btn-sm btn-secondary">Detaljer</a>
+                                    {% if container.IsMixed == 1 or container.IsMixed == True %}
+                                        Ja
+                                    {% else %}
+                                        Nej
+                                    {% endif %}
+                                    </td>
+                                    <td>{{ container.SampleCount|default(0) }} prøver / {{ container.TotalItems|default(0) }} enheder</td>
+                                    <td><span class="badge bg-primary">{{ container.Status|default('Aktiv') }}</span></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-secondary">Detaljer</button>
                                         <button class="btn btn-sm btn-outline-danger delete-container-btn" data-container-id="{{ container.ContainerID }}">Slet</button>
                                     </td>
                                 </tr>
@@ -88,19 +75,25 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    {% for type in container_types %}
-                    <div class="col-md-4 mb-3">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h5 class="card-title">{{ type.TypeName }}</h5>
-                                <p class="card-text">Kapacitet: {{ type.DefaultCapacity|default('Ubegrænset') }}</p>
-                                {% if type.Description %}
-                                <p class="card-text text-muted small">{{ type.Description }}</p>
-                                {% endif %}
+                    {% if container_types and container_types|length > 0 %}
+                        {% for type in container_types %}
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ type.TypeName }}</h5>
+                                    <p class="card-text">Kapacitet: {{ type.DefaultCapacity|default('Ubegrænset') }}</p>
+                                    {% if type.Description %}
+                                    <p class="card-text text-muted small">{{ type.Description }}</p>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    {% endfor %}
+                        {% endfor %}
+                    {% else %}
+                        <div class="col-12">
+                            <p class="text-center text-muted">Ingen container typer defineret</p>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

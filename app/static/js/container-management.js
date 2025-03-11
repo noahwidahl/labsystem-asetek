@@ -2,6 +2,10 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Container management initialized');
     
+    // Debug info
+    const containers = document.querySelectorAll('table tbody tr[data-container-id]');
+    console.log(`Fandt ${containers.length} container rækker i DOM`);
+    
     // Søgefunktionalitet til containertabellen
     const searchInput = document.getElementById('containerSearch');
     if (searchInput) {
@@ -78,7 +82,8 @@ function filterContainers(filter) {
         }
         
         const countText = sampleCount.textContent;
-        const firstNumber = parseInt(countText) || 0;
+        // Find første tal i teksten (prøver X / enheder Y)
+        const firstNumber = parseInt(countText.match(/\d+/) || [0]);
         
         if (filter === 'all') {
             row.style.display = '';
@@ -103,6 +108,14 @@ function createContainer() {
         return;
     }
     
+    // Debug log
+    console.log('Creating container with data:', {
+        description,
+        typeId: typeId || 'null',
+        capacity: capacity || 'null',
+        isMixed
+    });
+    
     // Opret container-objekt
     const containerData = {
         description: description,
@@ -119,14 +132,18 @@ function createContainer() {
         },
         body: JSON.stringify(containerData)
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Server response status:', response.status);
+        return response.json();
+    })
     .then(data => {
+        console.log('Server response data:', data);
         if (data.success) {
             showSuccessMessage('Container oprettet succesfuldt!');
             
             // Luk modal og genindlæs siden
             const modal = bootstrap.Modal.getInstance(document.getElementById('createContainerModal'));
-            modal.hide();
+            if (modal) modal.hide();
             
             setTimeout(() => {
                 window.location.reload();
@@ -136,6 +153,7 @@ function createContainer() {
         }
     })
     .catch(error => {
+        console.error('Error creating container:', error);
         showErrorMessage(`Der opstod en fejl: ${error}`);
     });
 }
@@ -143,6 +161,8 @@ function createContainer() {
 // Slet container
 function deleteContainer(containerId) {
     if (confirm(`Er du sikker på at du vil slette container ${containerId}?`)) {
+        console.log('Deleting container:', containerId);
+        
         fetch(`/api/containers/${containerId}`, {
             method: 'DELETE'
         })
@@ -166,6 +186,7 @@ function deleteContainer(containerId) {
             }
         })
         .catch(error => {
+            console.error('Error deleting container:', error);
             showErrorMessage(`Der opstod en fejl: ${error}`);
         });
     }

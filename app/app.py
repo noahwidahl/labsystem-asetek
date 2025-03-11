@@ -432,14 +432,14 @@ def get_storage_locations():
         cursor = mysql.connection.cursor()
         cursor.execute("""
             SELECT 
+                sl.LocationID,
                 sl.LocationName,
-                COUNT(ss.StorageID) as count,
-                CASE WHEN COUNT(ss.StorageID) > 0 THEN 'occupied' ELSE 'available' END as status,
-                l.LabName
+                COUNT(ss.SampleID) as SampleCount,
+                CASE WHEN COUNT(ss.SampleID) > 0 THEN 'occupied' ELSE 'available' END as Status
             FROM StorageLocation sl
-            JOIN Lab l ON sl.LabID = l.LabID
             LEFT JOIN SampleStorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
-            GROUP BY sl.LocationID
+            GROUP BY sl.LocationID, sl.LocationName
+            ORDER BY sl.LocationName
         """)
         
         columns = [col[0] for col in cursor.description]
@@ -449,8 +449,8 @@ def get_storage_locations():
         
         return jsonify({'locations': locations})
     except Exception as e:
-        print(f"API error: {e}")
-        return jsonify({'error': 'Database fejl'}), 500
+        print(f"API error ved hentning af lagerplaceringer: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/samples', methods=['POST'])
 def create_sample():
@@ -1049,35 +1049,76 @@ def get_labs():
         print(f"API error: {e}")
         return jsonify({'error': 'Database fejl'}), 500
 
-@app.route('/api/containers')
-def api_containers():
+@app.route('/api/containers', methods=['POST'])
+def api_create_container():
     try:
+        data = request.json
+        print(f"Modtager container data: {data}")
+        
         cursor = mysql.connection.cursor()
+        
+        # Hent aktuel bruger
+        current_user = get_current_user()
+        user_id = current_user['UserID']
+        
+        # Udpak data fra request
+        description = data.get('description')
+        container_type_id = data.get('containerTypeId')
+        capacity = data.get('capacity')
+        is_mixed = data.get('isMixed', False)
+        
+        if not description:
+            return jsonify({'success': False, 'error': 'Beskrivelse er påkrævet'}), 400
+        
+        # Indsæt container
+        if container_type_id:
+            cursor.execute("""
+                INSERT INTO Container (Description, ContainerTypeID, IsMixed, ContainerCapacity)
+                VALUES (%s, %s, %s, %s)
+            """, (
+                description,
+                container_type_id,
+                1 if is_mixed else 0,
+                capacity
+            ))
+        else:
+            cursor.execute("""
+                INSERT INTO Container (Description, IsMixed, ContainerCapacity)
+                VALUES (%s, %s, %s)
+            """, (
+                description,
+                1 if is_mixed else 0,
+                capacity
+            ))
+        
+        container_id = cursor.lastrowid
+        print(f"Oprettet container med ID: {container_id}")
+        
+        # Log aktiviteten
         cursor.execute("""
-            SELECT 
-                c.ContainerID,
-                c.Description,
-                c.IsMixed,
-                COALESCE(ct.TypeName, 'Standard') as TypeName,
-                COUNT(cs.ContainerSampleID) as sample_count,
-                SUM(COALESCE(cs.Amount, 0)) as total_items,
-                c.ContainerStatus
-            FROM Container c
-            LEFT JOIN ContainerType ct ON c.ContainerTypeID = ct.ContainerTypeID
-            LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
-            GROUP BY c.ContainerID
-            ORDER BY c.ContainerID DESC
-        """)
+            INSERT INTO History (
+                Timestamp, 
+                ActionType, 
+                UserID, 
+                Notes
+            )
+            VALUES (NOW(), %s, %s, %s)
+        """, (
+            'Container oprettet',
+            user_id,
+            f"Container {container_id} oprettet: {description}"
+        ))
         
-        columns = [col[0] for col in cursor.description]
-        containers = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
+        mysql.connection.commit()
         cursor.close()
         
-        return jsonify({'containers': containers})
+        return jsonify({'success': True, 'container_id': container_id})
     except Exception as e:
-        print(f"API error: {e}")
-        return jsonify({'error': 'Database fejl'}), 500
+        print(f"API error ved containeroprettelse: {e}")
+        import traceback
+        traceback.print_exc()
+        mysql.connection.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/activeSamples')
 def api_active_samples():
@@ -1247,54 +1288,61 @@ def containers():
     try:
         cursor = mysql.connection.cursor()
         
-        # Simpel forespørgsel for at hente containere
-        cursor.execute("""
-            SELECT 
-                c.ContainerID,
-                c.Description,
-                c.IsMixed,
-                'Standard' as TypeName,  # Default værdi hvis ContainerType ikke findes
-                'Aktiv' as Status,       # Default værdi
-                COUNT(cs.ContainerSampleID) as sample_count,
-                SUM(COALESCE(cs.Amount, 0)) as total_items
-            FROM Container c
-            LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
-            GROUP BY c.ContainerID
-            ORDER BY c.ContainerID DESC
-        """)
+        print("=== CONTAINER DEBUGGING INFO ===")
         
-        containers_data = cursor.fetchall()
+        # Direkte select fra Container tabellen uden joins
+        cursor.execute("SELECT * FROM Container")
+        raw_containers = cursor.fetchall()
+        raw_columns = [col[0] for col in cursor.description]
+        
+        print(f"Rå container data fundet: {len(raw_containers)} rækker")
+        for row in raw_containers:
+            print(f"Container rå data: {dict(zip(raw_columns, row))}")
+        
+        # Konstruér container-data manuelt
         containers = []
-        
-        for container in containers_data:
-            containers.append({
-                "ContainerID": container[0],
-                "Description": container[1],
-                "IsMixed": "Ja" if container[2] else "Nej",
-                "TypeName": container[3],
-                "Status": container[4],
-                "SampleCount": container[5] or 0,
-                "TotalItems": container[6] or 0
-            })
-        
-        # Print containere til debug
-        print(f"Fandt {len(containers)} containere")
-        
-        # Hent container typer hvis tabellen eksisterer
-        container_types = []
-        try:
-            cursor.execute("SHOW TABLES LIKE 'ContainerType'")
-            if cursor.fetchone():
-                cursor.execute("SELECT ContainerTypeID, TypeName FROM ContainerType ORDER BY TypeName")
-                container_types = [dict(ContainerTypeID=row[0], TypeName=row[1]) for row in cursor.fetchall()]
-        except Exception as e:
-            print(f"Fejl ved hentning af container typer: {e}")
+        for row in raw_containers:
+            container_data = dict(zip(raw_columns, row))
             
-        # Hvis ingen typer findes, tilføj en standard type
-        if not container_types:
-            container_types = [
-                {"ContainerTypeID": 1, "TypeName": "Standard"}
-            ]
+            # Sæt containerID
+            container_id = container_data.get('ContainerID')
+            
+            # Find relateret containerType (hvis det findes)
+            cursor.execute("SELECT TypeName FROM ContainerType WHERE ContainerTypeID = %s", 
+                           (container_data.get('ContainerTypeID'),))
+            type_result = cursor.fetchone()
+            type_name = type_result[0] if type_result else 'Standard'
+            
+            # Find relaterede samples (hvis de findes)
+            cursor.execute("""
+                SELECT COUNT(ContainerSampleID) as SampleCount, SUM(Amount) as TotalItems 
+                FROM ContainerSample 
+                WHERE ContainerID = %s
+            """, (container_id,))
+            samples_result = cursor.fetchone()
+            sample_count = samples_result[0] if samples_result and samples_result[0] else 0
+            total_items = samples_result[1] if samples_result and samples_result[1] else 0
+            
+            # Byg det endelige container-objekt
+            container = {
+                'ContainerID': container_id,
+                'Description': container_data.get('Description'),
+                'IsMixed': container_data.get('IsMixed'),
+                'TypeName': type_name,
+                'Status': 'Aktiv',
+                'SampleCount': sample_count,
+                'TotalItems': total_items
+            }
+            
+            containers.append(container)
+            print(f"Tilføjet container til visning: {container}")
+        
+        # Hent container typer
+        cursor.execute("SELECT ContainerTypeID, TypeName, Description, DefaultCapacity FROM ContainerType")
+        type_columns = [col[0] for col in cursor.description]
+        container_types = [dict(zip(type_columns, row)) for row in cursor.fetchall()]
+        
+        print(f"Fandt {len(container_types)} containertyper")
         
         # Hent aktive prøver til "Tilføj prøve" funktionen
         cursor.execute("""
@@ -1312,17 +1360,13 @@ def containers():
             ORDER BY s.SampleID DESC
         """)
         
-        available_samples = []
-        for sample in cursor.fetchall():
-            available_samples.append({
-                "SampleID": sample[0],
-                "SampleIDFormatted": sample[1],
-                "Description": sample[2],
-                "AmountRemaining": sample[3],
-                "Unit": sample[4]
-            })
+        columns = [col[0] for col in cursor.description]
+        available_samples = [dict(zip(columns, row)) for row in cursor.fetchall()]
         
         cursor.close()
+        
+        print(f"Returnerer {len(containers)} containere til skabelonen")
+        print("=== END CONTAINER DEBUGGING INFO ===")
         
         return render_template('sections/containers.html', 
                               containers=containers,
@@ -1332,8 +1376,105 @@ def containers():
         print(f"Error loading containers: {e}")
         import traceback
         traceback.print_exc()
-        return render_template('sections/containers.html', error=f"Fejl ved indlæsning af containere: {str(e)}")
+        return render_template('sections/containers.html', 
+                              error=f"Fejl ved indlæsning af containere: {str(e)}",
+                              containers=[],
+                              container_types=[],
+                              available_samples=[])
 
+@app.route('/raw-containers')
+def raw_containers():
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT ContainerID, Description, IsMixed FROM container")
+        container_data = cursor.fetchall()
+        cursor.close()
+        
+        html = """
+        <html>
+        <head>
+            <title>Rå Containerliste</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                table { border-collapse: collapse; width: 100%; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+            </style>
+        </head>
+        <body>
+            <h1>Rå Containerliste</h1>
+            <p>Antal containere: {}</p>
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Beskrivelse</th>
+                    <th>Blandet</th>
+                </tr>
+        """.format(len(container_data))
+        
+        for container in container_data:
+            html += f"""
+                <tr>
+                    <td>{container[0]}</td>
+                    <td>{container[1] or 'Ingen beskrivelse'}</td>
+                    <td>{'Ja' if container[2] else 'Nej'}</td>
+                </tr>
+            """
+        
+        html += """
+            </table>
+            <p><a href="/containers">Tilbage til container-admin</a></p>
+        </body>
+        </html>
+        """
+        
+        return html
+    except Exception as e:
+        return f"Fejl: {str(e)}"
+
+@app.route('/debug/containers')
+def debug_containers():
+    try:
+        cursor = mysql.connection.cursor()
+        
+        # Check if table exists
+        cursor.execute("SHOW TABLES LIKE 'container'")
+        table_exists = cursor.fetchone() is not None
+        
+        if not table_exists:
+            return jsonify({"error": "Container-tabellen findes ikke!"})
+        
+        # Count containers
+        cursor.execute("SELECT COUNT(*) FROM container")
+        container_count = cursor.fetchone()[0]
+        
+        # Get raw container data
+        cursor.execute("SELECT ContainerID, Description, IsMixed FROM container")
+        containers_raw = cursor.fetchall()
+        
+        containers = []
+        for container in containers_raw:
+            containers.append({
+                "ContainerID": container[0],
+                "Description": container[1],
+                "IsMixed": bool(container[2])
+            })
+        
+        cursor.close()
+        
+        return jsonify({
+            "success": True,
+            "container_count": container_count,
+            "containers": containers
+        })
+    except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": error_detail
+        })
 
 @app.route('/api/container-types')
 def get_container_types():
