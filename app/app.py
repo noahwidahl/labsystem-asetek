@@ -485,14 +485,16 @@ def create_sample():
                 ReceivedDate, 
                 UserID, 
                 TrackingNumber,
+                SourceType,
                 Notes
             )
-            VALUES (%s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (
             supplier_id,
             reception_date,
             user_id,
             data.get('trackingNumber', ''),
+            'Ekstern' if supplier_id else 'Intern',
             data.get('other', 'Registreret via lab system')
         ))
         
@@ -516,8 +518,9 @@ def create_sample():
         different_locations = data.get('differentLocations', False)
         package_locations = data.get('packageLocations', [])
         
-        # NY FLAG for containeroprettelse
+        # Flag for containeroprettelse
         create_containers = data.get('createContainers', False)
+        container_ids = []  # Liste til at holde styr på oprettede containere
         
         # Iterér gennem antal pakker
         for i in range(package_count):
@@ -532,7 +535,8 @@ def create_sample():
             if i == package_count - 1 and total_amount % package_count != 0:
                 amount_per_package += total_amount % package_count
             
-            # Indsæt prøven
+            # Indsæt prøven i Sample tabel
+            # Bemærk at isBulkSample (løs mængde) svarer til IsUnique i ER-diagrammet (inverteret)
             cursor.execute("""
                 INSERT INTO Sample (
                     Barcode, 
@@ -548,7 +552,7 @@ def create_sample():
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 barcode,
-                1 if data.get('hasSerialNumbers') else 0,  # IsUnique-feltet sættes korrekt baseret på hasSerialNumbers
+                1 if data.get('hasSerialNumbers') else 0,  # IsUnique flagget
                 data.get('sampleType', 'Standard'),
                 data.get('description'),
                 "På lager",
@@ -576,7 +580,7 @@ def create_sample():
             if not location_id:
                 location_id = data.get('storageLocation')
             
-            # Indsæt til lager med den valgte lokation
+            # Indsæt til SampleStorage med den valgte lokation
             cursor.execute("""
                 INSERT INTO SampleStorage (
                     SampleID, 
@@ -598,32 +602,58 @@ def create_sample():
             if first_storage_id is None:
                 first_storage_id = storage_id
             
-            # KUN opret container hvis create_containers er true
+            # Opret container hvis create_containers er true
             if create_containers:
                 # Opret container for hver pakke
+                container_description = f"Pakke {i+1} af {package_count}: {data.get('description')}" if package_count > 1 else data.get('description')
                 cursor.execute("""
-                    INSERT INTO Container (Description, IsMixed)
+                    INSERT INTO Container (
+                        Description, 
+                        IsMixed
+                    )
                     VALUES (%s, %s)
                 """, (
-                    f"Pakke {i+1} af {package_count}: {data.get('description')}",
+                    container_description,
                     0  # Ikke blandet
                 ))
                 container_id = cursor.lastrowid
+                container_ids.append(container_id)
                 
-                # Kobl container til sample storage
+                # Kobl container til sample storage via ContainerSample tabellen som i ER-diagrammet
                 cursor.execute("""
-                    INSERT INTO ContainerSample (SampleStorageID, ContainerID, Amount)
+                    INSERT INTO ContainerSample (
+                        SampleStorageID, 
+                        ContainerID, 
+                        Amount
+                    )
                     VALUES (%s, %s, %s)
                 """, (
                     storage_id,
                     container_id,
                     amount_per_package
                 ))
+                
+                # Log oprettelse af container i History tabellen
+                cursor.execute("""
+                    INSERT INTO History (
+                        Timestamp, 
+                        ActionType, 
+                        UserID, 
+                        SampleID, 
+                        Notes
+                    )
+                    VALUES (NOW(), %s, %s, %s, %s)
+                """, (
+                    'Container oprettet',
+                    user_id,
+                    sample_id,
+                    f"Container {container_id} oprettet for prøve: {container_description}"
+                ))
         
-        # Håndter serienumre hvis relevant
+        # Håndter serienumre hvis relevant (for unique samples/hasSerialNumbers)
         if data.get('hasSerialNumbers') and data.get('serialNumbers'):
             serial_numbers = data.get('serialNumbers')
-            # Tilføj logik for at gemme serienumre
+            # Tilføj serienumre til SampleSerialNumber tabellen
             for i, serial_number in enumerate(serial_numbers):
                 cursor.execute("""
                     INSERT INTO SampleSerialNumber (
@@ -636,7 +666,7 @@ def create_sample():
                     serial_number
                 ))
         
-        # Log aktiviteten
+        # Log aktiviteten i History tabellen
         cursor.execute("""
             INSERT INTO History (
                 Timestamp, 
@@ -656,12 +686,18 @@ def create_sample():
         mysql.connection.commit()
         cursor.close()
         
-        return jsonify({
+        # Returner relevant data inklusiv container IDs hvis containere blev oprettet
+        response_data = {
             'success': True, 
             'sample_id': f"PRV-{first_sample_id}", 
             'reception_id': reception_id,
             'package_count': package_count
-        })
+        }
+        
+        if create_containers and container_ids:
+            response_data['container_ids'] = container_ids
+            
+        return jsonify(response_data)
     except Exception as e:
         print(f"API error: {e}")
         mysql.connection.rollback()  # Sikrer at alle ændringer rulles tilbage ved fejl
@@ -999,9 +1035,12 @@ def api_containers():
                 c.ContainerID,
                 c.Description,
                 c.IsMixed,
+                COALESCE(ct.TypeName, 'Standard') as TypeName,
                 COUNT(cs.ContainerSampleID) as sample_count,
-                SUM(cs.Amount) as total_items
+                SUM(COALESCE(cs.Amount, 0)) as total_items,
+                c.ContainerStatus
             FROM Container c
+            LEFT JOIN ContainerType ct ON c.ContainerTypeID = ct.ContainerTypeID
             LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
             GROUP BY c.ContainerID
             ORDER BY c.ContainerID DESC
@@ -1185,16 +1224,16 @@ def containers():
     try:
         cursor = mysql.connection.cursor()
         
-        # Get containers with type information
+        # Get containers with type information - forbedret SQL forespørgsel
         cursor.execute("""
             SELECT 
                 c.ContainerID,
                 c.Description,
                 c.IsMixed,
-                ct.TypeName,
+                COALESCE(ct.TypeName, 'Standard') as TypeName,
                 c.ContainerStatus,
-                COUNT(cs.ContainerSampleID) as sample_count,
-                SUM(cs.Amount) as total_items
+                COUNT(DISTINCT cs.ContainerSampleID) as sample_count,
+                SUM(COALESCE(cs.Amount, 0)) as total_items
             FROM Container c
             LEFT JOIN ContainerType ct ON c.ContainerTypeID = ct.ContainerTypeID
             LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
@@ -1217,23 +1256,60 @@ def containers():
             })
         
         # Get container types
-        cursor.execute("SELECT ContainerTypeID, TypeName FROM ContainerType ORDER BY TypeName")
-        container_types = [dict(ContainerTypeID=row[0], TypeName=row[1]) for row in cursor.fetchall()]
-        
-        # Get locations for placement
         cursor.execute("""
-            SELECT l.LocationID, l.LocationName, lb.LabName
-            FROM StorageLocation l
-            JOIN Lab lb ON l.LabID = lb.LabID
-            ORDER BY l.LocationName
+            SELECT 
+                ContainerTypeID, 
+                TypeName,
+                DefaultCapacity,
+                Description
+            FROM ContainerType 
+            ORDER BY TypeName
         """)
         
-        locations = []
-        for row in cursor.fetchall():
-            locations.append({
-                'LocationID': row[0],
-                'LocationName': row[1],
-                'LabName': row[2]
+        container_types_data = cursor.fetchall()
+        container_types = []
+        
+        for type_data in container_types_data:
+            container_types.append({
+                "ContainerTypeID": type_data[0],
+                "TypeName": type_data[1],
+                "DefaultCapacity": type_data[2],
+                "Description": type_data[3]
+            })
+        
+        # If no container types exist, create default ones
+        if not container_types:
+            container_types = [
+                {"ContainerTypeID": 0, "TypeName": "Standard", "DefaultCapacity": None, "Description": "Standard container type"}
+            ]
+        
+        # Get available samples for adding to containers
+        cursor.execute("""
+            SELECT 
+                s.SampleID,
+                CONCAT('PRV-', s.SampleID) as SampleIDFormatted,
+                s.Description,
+                ss.AmountRemaining,
+                u.UnitName as Unit,
+                sl.LocationName
+            FROM Sample s
+            JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+            JOIN Unit u ON s.UnitID = u.UnitID
+            JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+            WHERE ss.AmountRemaining > 0
+            AND s.Status = 'På lager'
+            ORDER BY s.SampleID DESC
+        """)
+        
+        available_samples = []
+        for sample in cursor.fetchall():
+            available_samples.append({
+                "SampleID": sample[0],
+                "SampleIDFormatted": sample[1],
+                "Description": sample[2],
+                "AmountRemaining": sample[3],
+                "Unit": sample[4],
+                "LocationName": sample[5]
             })
         
         cursor.close()
@@ -1241,7 +1317,7 @@ def containers():
         return render_template('sections/containers.html', 
                               containers=containers,
                               container_types=container_types,
-                              locations=locations)
+                              available_samples=available_samples)
     except Exception as e:
         print(f"Error loading containers: {e}")
         return render_template('sections/containers.html', error="Fejl ved indlæsning af containere")

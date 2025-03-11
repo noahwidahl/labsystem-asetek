@@ -985,6 +985,9 @@ function handleFormSubmission() {
         hasSerialNumbers: document.getElementById('hasSerialNumbers')?.checked || false,
         other: document.querySelector('[name="other"]')?.value || '',
         
+        // Container-funktionalitet
+        createContainers: document.getElementById('createContainers')?.checked || false,
+        
         // Identifikation
         serialNumbers: scannedItems || [],
         
@@ -1018,6 +1021,12 @@ function handleFormSubmission() {
         Object.assign(formData, packageLocationsData);
     }
     
+    // Hvis ContainerModule er tilgængeligt, hent container-data
+    if (typeof ContainerModule !== 'undefined') {
+        formData.createContainers = ContainerModule.isEnabled();
+        ContainerModule.addToFormData(formData);
+    }
+    
     console.log("Sending form data:", formData);
     
     // Send data til server
@@ -1031,7 +1040,14 @@ function handleFormSubmission() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showSuccessMessage(`Prøve ${data.sample_id} er blevet registreret succesfuldt!`);
+            let successMessage = `Prøve ${data.sample_id} er blevet registreret succesfuldt!`;
+            
+            // Tilføj information om containere hvis relevant
+            if (data.container_ids && data.container_ids.length > 0) {
+                successMessage += ` ${data.container_ids.length} containere blev oprettet.`;
+            }
+            
+            showSuccessMessage(successMessage);
             
             // Nulstil formularen og gå tilbage til step 1 efter kort pause
             setTimeout(() => {
