@@ -1,0 +1,75 @@
+<!-- app/templates/sections/containers.html -->
+{% extends "base.html" %}
+
+{% block title %}Containere - Laboratorie Prøvesystem{% endblock %}
+
+{% block content %}
+<section id="containers" class="content-section">
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Container Administration</h2>
+                    <div>
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createContainerModal">
+                            <i class="fas fa-plus"></i> Opret container
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Aktive containere</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Beskrivelse</th>
+                                <th>Type</th>
+                                <th>Indhold</th>
+                                <th>Status</th>
+                                <th>Kapacitet</th>
+                                <th>Handling</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if containers %}
+                                {% for container in containers %}
+                                <tr>
+                                    <td>{{ container.ContainerID }}</td>
+                                    <td>{{ container.Description }}</td>
+                                    <td>{{ container.TypeName }}</td>
+                                    <td>{{ container.SampleCount }} prøver / {{ container.TotalItems }} enheder</td>
+                                    <td><span class="badge bg-primary">{{ container.Status }}</span></td>
+                                    <td>{{ container.TotalItems }}/{{ container.ContainerCapacity|default('∞') }}</td>
+                                    <td>
+                                        <a href="{{ url_for('container_details', container_id=container.ContainerID) }}" class="btn btn-sm btn-secondary">Detaljer</a>
+                                        <button class="btn btn-sm btn-outline-danger delete-container-btn" data-container-id="{{ container.ContainerID }}">Slet</button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center">Ingen containere fundet</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Inkluder modale vinduer -->
+{% include "modals/create_container_modal.html" %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/container-management.js') }}"></script>
+{% endblock %}

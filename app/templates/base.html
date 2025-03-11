@@ -53,6 +53,10 @@
                 <i class="fas fa-flask"></i>
                 <span>Test Administration</span>
             </a>
+            <a href="{{ url_for('containers') }}" class="nav-item {% if request.path == url_for('containers') %}active{% endif %}">
+                <i class="fas fa-box-open"></i>
+                <span>Containere</span>
+            </a>
             <a href="{{ url_for('history') }}" class="nav-item {% if request.path == url_for('history') %}active{% endif %}">
                 <i class="fas fa-history"></i>
                 <span>Historik</span>
