@@ -15,7 +15,80 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+    
+    // Filter knapper
+    setupFilterButtons();
+    
+    // Tilføj event listener til slet-knapper
+    document.querySelectorAll('.delete-container-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const containerId = this.getAttribute('data-container-id');
+            deleteContainer(containerId);
+        });
+    });
 });
+
+function setupFilterButtons() {
+    const filterAll = document.getElementById('filterAll');
+    const filterEmpty = document.getElementById('filterEmpty');
+    const filterFull = document.getElementById('filterFull');
+    
+    if (!filterAll || !filterEmpty || !filterFull) return;
+    
+    // Alle containere
+    filterAll.addEventListener('click', function() {
+        resetButtonStates([filterAll, filterEmpty, filterFull]);
+        this.classList.add('active');
+        filterContainers('all');
+    });
+    
+    // Tomme containere
+    filterEmpty.addEventListener('click', function() {
+        resetButtonStates([filterAll, filterEmpty, filterFull]);
+        this.classList.add('active');
+        filterContainers('empty');
+    });
+    
+    // Fyldte containere
+    filterFull.addEventListener('click', function() {
+        resetButtonStates([filterAll, filterEmpty, filterFull]);
+        this.classList.add('active');
+        filterContainers('full');
+    });
+    
+    // Standard: Vis alle
+    filterAll.classList.add('active');
+}
+
+function resetButtonStates(buttons) {
+    buttons.forEach(button => {
+        button.classList.remove('active');
+    });
+}
+
+function filterContainers(filter) {
+    const rows = document.querySelectorAll('tbody tr');
+    
+    rows.forEach(row => {
+        const sampleCount = row.querySelector('td:nth-child(5)');
+        
+        if (!sampleCount) {
+            row.style.display = '';
+            return;
+        }
+        
+        const countText = sampleCount.textContent;
+        const firstNumber = parseInt(countText) || 0;
+        
+        if (filter === 'all') {
+            row.style.display = '';
+        } else if (filter === 'empty') {
+            row.style.display = firstNumber === 0 ? '' : 'none';
+        } else if (filter === 'full') {
+            row.style.display = firstNumber > 0 ? '' : 'none';
+        }
+    });
+}
 
 // Opret ny container
 function createContainer() {
@@ -100,27 +173,55 @@ function deleteContainer(containerId) {
 
 // Beskedfunktioner
 function showSuccessMessage(message) {
-    // Genbruger eksisterende beskedfunktion fra test-functions.js
-    if (typeof window.showSuccessMessage === 'function') {
-        window.showSuccessMessage(message);
-    } else {
-        alert(message);
-    }
+    const successToast = document.createElement('div');
+    successToast.className = 'custom-toast success-toast';
+    successToast.innerHTML = `
+        <div class="toast-icon">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="toast-content">
+            <div class="toast-title">Succes</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    document.body.appendChild(successToast);
+
+    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    setTimeout(() => successToast.classList.add('show'), 10);
+
+    // Fjern automatisk efter 3 sekunder
+    setTimeout(() => {
+        successToast.classList.remove('show');
+        setTimeout(() => successToast.remove(), 300);
+    }, 3000);
 }
 
 function showErrorMessage(message) {
-    // Genbruger eksisterende beskedfunktion fra test-functions.js
-    if (typeof window.showErrorMessage === 'function') {
-        window.showErrorMessage(message);
-    } else {
-        alert('Fejl: ' + message);
-    }
-}
+    const errorToast = document.createElement('div');
+    errorToast.className = 'custom-toast error-toast';
+    errorToast.innerHTML = `
+        <div class="toast-icon">
+            <i class="fas fa-exclamation-circle"></i>
+        </div>
+        <div class="toast-content">
+            <div class="toast-title">Fejl</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    document.body.appendChild(errorToast);
 
-// Tilføj event listeners til slet-knapper
-document.querySelectorAll('.delete-container-btn').forEach(button => {
-    button.addEventListener('click', function() {
-        const containerId = this.getAttribute('data-container-id');
-        deleteContainer(containerId);
-    });
-});
+    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    setTimeout(() => errorToast.classList.add('show'), 10);
+
+    // Fjern automatisk efter 5 sekunder
+    setTimeout(() => {
+        errorToast.classList.remove('show');
+        setTimeout(() => errorToast.remove(), 300);
+    }, 5000);
+}

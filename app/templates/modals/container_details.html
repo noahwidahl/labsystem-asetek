@@ -89,7 +89,14 @@
                                             </div>
                                         {% endif %}
                                     </div>
-                                    <span class="badge bg-primary rounded-pill">{{ sample.Amount }}</span>
+                                    <div>
+                                        <span class="badge bg-primary rounded-pill">{{ sample.Amount }}</span>
+                                        <button class="btn btn-sm btn-outline-danger ms-2 remove-sample-btn" 
+                                                data-container-id="{{ container.ContainerID }}"
+                                                data-sample-id="{{ sample.SampleID|replace('PRV-', '') }}">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
                                 </li>
                             {% endfor %}
                             </ul>
