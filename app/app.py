@@ -436,16 +436,19 @@ def get_storage_locations():
                 sl.LocationName,
                 COUNT(ss.StorageID) as count,
                 CASE WHEN COUNT(ss.StorageID) > 0 THEN 'occupied' ELSE 'available' END as status,
-                l.LabName
+                IFNULL(l.LabName, 'Unknown') as LabName
             FROM StorageLocation sl
-            JOIN Lab l ON sl.LabID = l.LabID
+            LEFT JOIN Lab l ON sl.LabID = l.LabID
             LEFT JOIN SampleStorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
-            GROUP BY sl.LocationID
-            LIMIT 12
+            GROUP BY sl.LocationID, sl.LocationName, l.LabName
+            ORDER BY sl.LocationName
         """)
         
         columns = [col[0] for col in cursor.description]
         locations = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        # Debug udskrift
+        print(f"API returnerer {len(locations)} lokationer")
         
         cursor.close()
         

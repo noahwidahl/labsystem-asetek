@@ -696,6 +696,8 @@ function setupBarcodeInput() {
 }
 
 function createGridFromLocations(locations) {
+    console.log("createGridFromLocations med", locations.length, "lokationer");
+    
     const grid = document.querySelector('.storage-grid');
     if (!grid) return;
 
@@ -709,8 +711,11 @@ function createGridFromLocations(locations) {
         const cell = document.createElement('div');
         cell.className = 'storage-cell';
         
+        // Debug info
+        console.log("Behandler lokation:", location);
+        
         // Markér cellen som optaget hvis der er prøver på lokationen
-        if (location.Status === 'occupied') {
+        if (location.status === 'occupied') {
             cell.classList.add('occupied');
         }
 
@@ -720,14 +725,14 @@ function createGridFromLocations(locations) {
 
         const capacity = document.createElement('div');
         capacity.className = 'capacity';
-        capacity.textContent = location.Status === 'occupied' ? 'Optaget' : 'Ledig';
+        capacity.textContent = location.status === 'occupied' ? 'Optaget' : 'Ledig';
 
         cell.appendChild(locationEl);
         cell.appendChild(capacity);
         grid.appendChild(cell);
 
         // Kun tilføj event listener til ledige celler
-        if (location.Status !== 'occupied') {
+        if (location.status !== 'occupied') {
             cell.addEventListener('click', () => selectStorageCell(cell));
         }
     });
@@ -743,9 +748,11 @@ function setupStorageGrid() {
     fetch('/api/storage-locations')
         .then(response => response.json())
         .then(data => {
+            console.log("Modtaget lagerplaceringsdata:", data);
             if (data.locations) {
                 createGridFromLocations(data.locations);
             } else {
+                console.error("Ingen locations i responsen");
                 // Fallback til hardcodede lokationer
                 createSpecificStorageGrid();
             }
