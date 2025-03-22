@@ -1,344 +1,93 @@
-{% extends "base.html" %}
-
-{% block title %}Register Samples - Laboratory Sample System{% endblock %}
-
-{% block content %}
-<section id="register" class="content-section">
-    <div class="registration-container">
-        <div class="registration-steps">
-            <div class="steps-container">
-                <div class="step active">
-                    <span>Reception</span>
-                </div>
-                <div class="step">
-                    <span>Sample Information</span>
-                </div>
-                <div class="step">
-                    <span>Identification</span>
-                </div>
-                <div class="step">
-                    <span>Location</span>
-                </div>
-            </div>
-            <div class="progress mt-3">
-                <div class="progress-bar" role="progressbar" style="width: 25%"></div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Laboratory Sample System{% endblock %}</title>
+    <!-- Favicon-link -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon/favicon.ico') }}" type="image/x-icon">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon/favicon.ico') }}" type="image/x-icon">
+    <!-- Keep the order that works -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="lab-system">
+    <!-- Simplified header -->
+    <header class="main-header">
+        <div class="header-brand">
+            <h1>Asetek Lab System</h1>
+        </div>
+        <div class="header-center">
+            <div class="search-container">
+                <input type="text" placeholder="Search across all samples..." class="global-search">
+                <button class="search-btn">
+                    <i class="fas fa-search"></i>
+                </button>
             </div>
         </div>
-
-        <div class="registration-form">
-            <div class="form-step active" id="step1">
-                <h3>Reception Information</h3>
-                <div class="form-group">
-                    <label>Supplier</label>
-                    <div class="input-group">
-                        <select class="form-control" name="supplier" id="supplierSelect">
-                            <option value="">No supplier (internal sender)</option>
-                            {% for supplier in suppliers %}
-                            <option value="{{ supplier.SupplierID }}">{{ supplier.SupplierName }}</option>
-                            {% endfor %}
-                            <option value="new">+ Create new supplier</option>
-                        </select>
-                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#newSupplierModal">
-                            <i class="fas fa-plus"></i>
-                        </button>
-                    </div>
-                    <small class="text-muted">Optional - select only if the sample comes from an external supplier</small>
-                </div>
-                <div class="form-group">
-                    <label>Tracking Number</label>
-                    <input type="text" class="form-control" name="trackingNumber" placeholder="E.g. DHL tracking number">
-                </div>
-                <div class="form-group">
-                    <label>Registered by</label>
-                    <input type="text" class="form-control" name="custodian" readonly value="{{ current_user.Name }}">
-                    <input type="hidden" name="custodian" value="{{ current_user.UserID }}">
-                    <small class="text-muted">Person registering this sample in the system</small>
+        <div class="header-controls">
+            <div class="lab-badge">DK-Lab</div>
+            <div class="user-info">
+                <div class="user-name">BWM</div>
+                <div class="user-roles">
+                    <span class="role-badge admin">Admin</span>
                 </div>
             </div>
+        </div>
+    </header>
 
-            <!-- Step 2: Basic Information -->
-            <div class="form-step" id="step2">
-                <div class="copy-buttons">
-                    <button type="button" class="btn-copy" id="copyLastButton">
-                        <i class="fas fa-clone"></i>
-                        Use last registered sample
-                    </button>
-                    <button class="btn-copy" data-bs-toggle="modal" data-bs-target="#copyRegistrationModal">
-                        <i class="fas fa-copy"></i>
-                        Use previously registered sample
-                    </button>
-                </div>
-                <h3>Sample Information</h3>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Part Number</label>
-                        <input type="text" class="form-control" name="partNumber">
-                    </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <input type="text" class="form-control" name="description" required>
-                    </div>
-
-                    <!-- Package Type section - restructured -->
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="isBulkSample" name="isBulkSample">
-                            <label for="isBulkSample">Bulk quantity (liquid/meter)</label>
-                        </div>
-                        
-                        <div class="checkbox-group mt-2">
-                            <input type="checkbox" id="isMultiPackage" name="isMultiPackage">
-                            <label for="isMultiPackage">Multiple packages of the same type</label>
-                        </div>
-                    </div>
-
-                    <!-- "isMultiPackage" -->
-                    <div class="checkbox-group mt-2">
-                        <input type="checkbox" id="createContainers" name="createContainers">
-                        <label for="createContainers">Place samples in containers</label>
-                        <small class="text-muted d-block mt-1">Select this if the samples should be registered in physical containers in storage</small>
-                    </div>
-
-                    <div id="containerDetailsSection" class="container-related d-none mt-3 p-3 bg-light rounded">
-                        <h5>Container details</h5>
-                        <div class="form-group mb-3">
-                            <label>Container description</label>
-                            <input type="text" class="form-control" id="containerDescription" name="containerDescription" placeholder="E.g. 'Red plastic box'">
-                            <small class="text-muted">Default: Same as sample description</small>
-                        </div>
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="containerIsMixed" name="containerIsMixed">
-                            <label class="form-check-label" for="containerIsMixed">
-                                Can contain mixed sample types
-                            </label>
-                        </div>
-                    </div>
-
-                    <div id="existingContainerSection" class="container-related d-none mt-3 p-3 bg-light rounded">
-                        <div class="form-group mb-3">
-                            <div class="d-flex align-items-center mb-2">
-                                <input type="radio" name="containerOption" id="newContainerOption" value="new" checked>
-                                <label for="newContainerOption" class="ms-2 mb-0">Create new container</label>
-                            </div>
-                            <div class="d-flex align-items-center">
-                                <input type="radio" name="containerOption" id="existingContainerOption" value="existing">
-                                <label for="existingContainerOption" class="ms-2 mb-0">Select existing container</label>
-                            </div>
-                        </div>
-                        
-                        <div id="existingContainerSelectArea" class="d-none mt-3">
-                            <div class="form-group">
-                                <label>Select an existing container</label>
-                                <select class="form-control" id="existingContainerSelect" name="existingContainer">
-                                    <option value="">Select container...</option>
-                                    <!-- Populated dynamically -->
-                                </select>
-                                <small class="text-muted">Select a container that was created via Container Administration</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Multi-package fields - compact version -->
-                    <div id="multiplePackageFields" class="d-none">
-                        <div class="package-container p-3 bg-light rounded">
-                            <h5>Multi-package information</h5>
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Number of packages</label>
-                                        <input type="number" class="form-control" name="packageCount" min="1" value="1">
-                                        <small class="text-muted">How many separate packages/boxes have you received?</small>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Amount per package</label>
-                                        <input type="number" class="form-control" name="amountPerPackage" min="1">
-                                        <small class="text-muted">How many units are in each package?</small>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="total-calculation p-2 bg-white rounded mb-3">
-                                <div class="d-flex justify-content-between">
-                                    <span>Total amount (automatically calculated):</span>
-                                    <span id="calculatedTotal" class="font-weight-bold">0</span>
-                                </div>
-                            </div>
-                            
-                            <!-- Container for location information -->
-                            <div class="form-check mb-3">
-                                <input class="form-check-input" type="checkbox" id="differentLocations" name="differentLocations">
-                                <label class="form-check-label" for="differentLocations">
-                                    Place packages at different locations
-                                </label>
-                            </div>
-
-                            <!-- Package location summary -->
-                            <div id="packageLocationsSummary" class="d-none p-2 border rounded mb-3">
-                                <div class="package-locations-list">
-                                    <!-- List of configured package locations will appear here -->
-                                </div>
-                            </div>
-
-                            <!-- Show/hide area for location configuration -->
-                            <div id="packageLocationsConfig" class="d-none">
-                                <div class="card mb-3">
-                                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                                        <h6 class="mb-0">Configure package locations</h6>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="collapseLocationsBtn">
-                                            <i class="fas fa-chevron-up"></i>
-                                        </button>
-                                    </div>
-                                    <div class="card-body" id="packageLocationsContainer">
-                                        <!-- Package location content added dynamically via JS -->
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    <!-- Simplified navigation -->
+    <nav class="side-nav">
+        <div class="nav-section">
+            <a href="{{ url_for('dashboard.dashboard') }}" class="nav-item {% if request.path == url_for('dashboard.dashboard') or request.path == '/' %}active{% endif %}">
+                <i class="fas fa-home"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="{{ url_for('sample.register') }}" class="nav-item {% if request.path == url_for('sample.register') %}active{% endif %}">
+                <i class="fas fa-plus-circle"></i>
+                <span>Register Samples</span>
+            </a>
+            <a href="{{ url_for('sample.storage') }}" class="nav-item {% if request.path == url_for('sample.storage') %}active{% endif %}">
+                <i class="fas fa-box"></i>
+                <span>Sample Overview</span>
+            </a>
+            <a href="{{ url_for('test.testing') }}" class="nav-item {% if request.path == url_for('test.testing') %}active{% endif %}">
+                <i class="fas fa-flask"></i>
+                <span>Test Administration</span>
+            </a>
+            <a href="{{ url_for('container.containers') }}" class="nav-item {% if request.path == url_for('container.containers') %}active{% endif %}">
+                <i class="fas fa-box-open"></i>
+                <span>Containers</span>
+            </a>
+            <a href="{{ url_for('dashboard.history') }}" class="nav-item {% if request.path == url_for('dashboard.history') %}active{% endif %}">
+                <i class="fas fa-history"></i>
+                <span>History</span>
+            </a>
+        </div>
         
-                    <!-- Total amount field - now with better explanation -->
-                    <div class="form-group">
-                        <label>Total Amount</label>
-                        <input type="number" class="form-control" name="totalAmount" required min="1">
-                        <small class="text-muted" id="totalAmountHelper">Total number of units being received</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Unit</label>
-                        <select class="form-control" name="unit" required>
-                            <option value="">Select unit</option>
-                            {% for unit in units %}
-                            <option value="{{ unit.UnitID }}">{{ unit.UnitName }}</option>
-                            {% endfor %}
-                        </select>
-                        <small class="text-muted unit-helper">When selecting "Bulk quantity" above, units other than pcs can be selected</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Responsible for sample</label>
-                        <select class="form-control" name="owner" required>
-                            <option value="{{ current_user.UserID }}" selected>{{ current_user.Name }} (you)</option>
-                            {% for user in users %}
-                            {% if user.UserID != current_user.UserID %}
-                            <option value="{{ user.UserID }}">{{ user.Name }}</option>
-                            {% endif %}
-                            {% endfor %}
-                        </select>
-                        <small class="text-muted">Select the person responsible for this sample</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Expiry Date</label>
-                        <input type="date" class="form-control" name="expiryDate">
-                        <small class="text-muted">Default: 2 months from today</small>
-                    </div>
-                </div>
-                
-                <div class="form-group mt-4">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="hasSerialNumbers" name="hasSerialNumbers">
-                        <label for="hasSerialNumbers">Samples have individual serial numbers</label>
-                        <small class="text-muted d-block mt-1">Select this if each sample has a unique serial number or barcode</small>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Other</label>
-                    <textarea class="form-control" name="other" rows="3" placeholder="Enter any remarks or other details"></textarea>
-                </div>
-            </div>
-
-            <!-- Step 3: Identification -->
-            <div class="form-step" id="step3">
-                <h3>Sample Identification</h3>
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> 
-                    Here you can scan or enter serial numbers for your samples. Each unique sample should have its own serial number.
-                </div>
-                
-                <div class="scanner-section">
-                    <div class="scanner-header">
-                        <div class="counter">Scanned samples: <span id="scannedCount">0</span> of <span id="totalCount">0</span></div>
-                        <div class="btn-group">
-                            <button class="btn btn-outline-primary" id="scanButton">
-                                <i class="fas fa-barcode"></i> Start Scanning
-                            </button>
-                            <button class="btn btn-outline-secondary" id="bulkEntryButton">
-                                <i class="fas fa-list"></i> Bulk Entry
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="scan-input-group">
-                        <input type="text" class="form-control" id="barcodeInput" placeholder="Scan or enter serial number" autofocus>
-                        <button class="btn btn-secondary" id="addManualBtn">Add</button>
-                    </div>
-                    
-                    <!-- New bulk entry section -->
-                    <div class="bulk-entry d-none mt-3 mb-3">
-                        <div class="form-group">
-                            <label>Enter multiple serial numbers (one per line)</label>
-                            <textarea class="form-control" id="bulkBarcodes" rows="5" placeholder="Enter serial numbers here, one per line"></textarea>
-                        </div>
-                        <button class="btn btn-primary mt-2" id="addBulkBtn">Add All</button>
-                    </div>
-                    
-                    <!-- New organized list of scanned items -->
-                    <div class="scanned-items-header mt-4 d-flex justify-content-between">
-                        <h5>Scanned Samples</h5>
-                        <button class="btn btn-sm btn-outline-danger" id="clearAllScannedBtn">Clear All</button>
-                    </div>
-                    
-                    <div class="scanned-items mt-2">
-                        <!-- Scanned items displayed here via JavaScript -->
-                        <div class="empty-scanned-message text-center p-3 text-muted">
-                            No samples scanned yet. Use the scanner or enter serial numbers manually above.
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 4: Location -->
-            <div class="form-step" id="step4">
-                <h3>Select Location</h3>
-                <div class="storage-selector">
-                    <!-- Info box -->
-                    <div class="alert alert-info mb-3">
-                        <i class="fas fa-info-circle"></i>
-                        Select a storage location by clicking on an available space in the grid below.
-                    </div>
-
-                    <div class="storage-grid">
-                        <!-- Dynamically generated grid of available spaces via JavaScript -->
-                    </div>
-                </div>
-            </div>
-
-            <div class="form-navigation">
-                <div class="form-nav-buttons">
-                    <button id="prevButton" class="btn btn-secondary" style="display: none;">Back</button>
-                    <button id="nextButton" class="btn btn-primary">Next</button>
-                </div>
-                <div class="progress mt-3">
-                    <div class="progress-bar" role="progressbar" style="width: 25%"></div>
-                </div>
-            </div>
+        <div class="nav-section mt-4">
+            <div class="nav-header px-3 text-muted small">TOOLS</div>
+            <a href="#" class="nav-item" onclick="showDisposalModal(event)">
+                <i class="fas fa-trash-alt"></i>
+                <span>Disposal</span>
+            </a>
         </div>
-    </div>
-</section>
-{% endblock %}
+    </nav>
 
-{% block scripts %}
-<!-- Include our separate registration script -->
-<script src="{{ url_for('static', filename='js/register.js') }}"></script>
-<script src="{{ url_for('static', filename='js/package-locations.js') }}"></script>
-<script src="{{ url_for('static', filename='js/container.js') }}"></script>
-<script>
-    // Initialize container module when document is loaded
-    document.addEventListener('DOMContentLoaded', function() {
-        ContainerModule.init();
-    });
-</script>
-{% endblock %}
+    <main class="content-area">
+        <!-- All content will be dynamically loaded here -->
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Modal windows -->
+    {% include "modals/disposal_modal.html" %}
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/script_v2.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/test-functions.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/disposal-functions.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
