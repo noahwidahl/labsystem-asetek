@@ -1,13 +1,13 @@
-// Basisvariabler til multistep
+// Basic variables for multistep
 let currentStep = 1;
 const totalSteps = 4;
 let scannedItems = [];
 let selectedLocation = null;
 const REGISTRATION_EXPIRY_MONTHS = 2;
 
-// Initialiser når dokumentet er indlæst
+// Initialize when document is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Sæt default udløbsdato til 2 måneder frem
+    // Set default expiry date to 2 months ahead
     setDefaultExpiryDate();
     
     // Setup registration form steps
@@ -22,17 +22,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup scanner functionality
     setupScannerListeners();
     
-    // Setup bulk sample handling (for enheder)
+    // Setup bulk sample handling (for units)
     setupBulkSampleHandling();
     
     // Setup container options
     setupContainerOptions();
     
-    // Initialiser første skridt
+    // Initialize first step
     showStep(1);
 });
 
-// Funktion til at håndtere container options
+// Function to handle container options
 function setupContainerOptions() {
     const createContainersCheckbox = document.getElementById('createContainers');
     const existingContainerSection = document.getElementById('existingContainerSection');
@@ -43,13 +43,13 @@ function setupContainerOptions() {
     
     if (!createContainersCheckbox || !existingContainerSection) return;
     
-    // Vis/skjul container options baseret på om containere er aktiveret
+    // Show/hide container options based on whether containers are enabled
     createContainersCheckbox.addEventListener('change', function() {
         existingContainerSection.classList.toggle('d-none', !this.checked);
         containerDetailsSection.classList.toggle('d-none', !this.checked || existingContainerOption.checked);
     });
     
-    // Håndter radioknap valg
+    // Handle radio button selection
     newContainerOption.addEventListener('change', function() {
         if (this.checked) {
             containerDetailsSection.classList.remove('d-none');
@@ -66,53 +66,53 @@ function setupContainerOptions() {
     });
 }
 
-// Funktion til at hente eksisterende containere
+// Function to fetch existing containers
 function fetchExistingContainers() {
     const existingContainerSelect = document.getElementById('existingContainerSelect');
     if (!existingContainerSelect) return;
     
-    // Ryd eksisterende options bortset fra den første
+    // Clear existing options except the first one
     while (existingContainerSelect.options.length > 1) {
         existingContainerSelect.remove(1);
     }
     
-    // Tilføj en "indlæser..." option
+    // Add a "loading..." option
     const loadingOption = document.createElement('option');
-    loadingOption.textContent = 'Indlæser containere...';
+    loadingOption.textContent = 'Loading containers...';
     loadingOption.disabled = true;
     existingContainerSelect.appendChild(loadingOption);
     
-    // Hent containere fra serveren
+    // Fetch containers from server
     fetch('/api/containers/available')
         .then(response => response.json())
         .then(data => {
-            // Fjern "indlæser..." option
+            // Remove "loading..." option
             existingContainerSelect.remove(existingContainerSelect.options.length - 1);
             
             if (data.containers && data.containers.length > 0) {
                 data.containers.forEach(container => {
                     const option = document.createElement('option');
                     option.value = container.ContainerID;
-                    option.textContent = `${container.ContainerID}: ${container.Description} (${container.sample_count || 0} prøver)`;
+                    option.textContent = `${container.ContainerID}: ${container.Description} (${container.sample_count || 0} samples)`;
                     existingContainerSelect.appendChild(option);
                 });
             } else {
                 const noContainersOption = document.createElement('option');
-                noContainersOption.textContent = 'Ingen tilgængelige containere fundet';
+                noContainersOption.textContent = 'No available containers found';
                 noContainersOption.disabled = true;
                 existingContainerSelect.appendChild(noContainersOption);
             }
         })
         .catch(error => {
-            console.error('Fejl ved hentning af containere:', error);
+            console.error('Error fetching containers:', error);
             const errorOption = document.createElement('option');
-            errorOption.textContent = 'Fejl ved hentning af containere';
+            errorOption.textContent = 'Error fetching containers';
             errorOption.disabled = true;
             existingContainerSelect.appendChild(errorOption);
         });
 }
 
-// Sæt default udløbsdato
+// Set default expiry date
 function setDefaultExpiryDate() {
     const expiryInput = document.querySelector('input[name="expiryDate"]');
     if (expiryInput) {
@@ -135,7 +135,7 @@ function showStep(step) {
         updateProgress(step);
         updateNavigationButtons(step);
 
-        // Initialiser den aktuelle side
+        // Initialize the current page
         if (step === 1) {
             initReceptionDate();
         } else if (step === 3 && document.getElementById('hasSerialNumbers').checked) {
@@ -144,7 +144,7 @@ function showStep(step) {
             setupStorageGrid();
         }
         
-        // Opdater current step global variabel
+        // Update current step global variable
         currentStep = step;
     }
 }
@@ -152,13 +152,13 @@ function showStep(step) {
 function updateProgress(step) {
     const progress = ((step - 1) / (totalSteps - 1)) * 100;
     
-    // Opdater alle progress-bars på siden
+    // Update all progress bars on the page
     const progressBars = document.querySelectorAll('.progress-bar');
     progressBars.forEach(bar => {
         bar.style.width = `${progress}%`;
     });
     
-    // Opdater steps visning
+    // Update steps display
     const steps = document.querySelectorAll('.step');
     steps.forEach((el, index) => {
         el.classList.remove('active', 'completed');
@@ -180,7 +180,7 @@ function updateNavigationButtons(step) {
     }
 
     if (nextButton) {
-        nextButton.textContent = step === totalSteps ? 'Gem' : 'Næste';
+        nextButton.textContent = step === totalSteps ? 'Save' : 'Next';
     }
 }
 
@@ -209,15 +209,15 @@ function nextStep() {
     if (validateCurrentStep()) {
         const hasSerialNumbers = document.getElementById('hasSerialNumbers')?.checked || false;
         
-        // Inkrementer altid til næste trin først
+        // Always increment to next step first
         currentStep += 1;
         
-        // Hvis vi lander på identifikationstrinnet (trin 3) og der ikke er serienumre, spring til trin 4
+        // If we land on identification step (step 3) and there are no serial numbers, skip to step 4
         if (currentStep === 3 && !hasSerialNumbers) {
             currentStep = 4;
         }
         
-        // Sørg for, at vi ikke går udover det maksimale antal trin
+        // Make sure we don't go beyond the maximum number of steps
         currentStep = Math.min(currentStep, totalSteps);
         
         showStep(currentStep);
@@ -227,29 +227,30 @@ function nextStep() {
 function previousStep() {
     const hasSerialNumbers = document.getElementById('hasSerialNumbers')?.checked || false;
     
-    // Dekrementer altid til forrige trin først
+    // Always decrement to previous step first
     currentStep -= 1;
     
-    // Hvis vi lander på identifikationstrinnet (trin 3) og der ikke er serienumre, spring til trin 2
+    // If we land on identification step (step 3) and there are no serial numbers, skip to step 2
     if (currentStep === 3 && !hasSerialNumbers) {
         currentStep = 2;
     }
     
-    // Sørg for, at vi ikke går under det første trin
+    // Make sure we don't go below the first step
     currentStep = Math.max(currentStep, 1);
     
     showStep(currentStep);
 }
 
+// Function to validate the current step
 function validateCurrentStep() {
     clearValidationErrors();
     
     switch(currentStep) {
         case 1:
-            // Validering af modtagelsesoplysninger - ingen obligatoriske felter
+            // Validation of reception information - no mandatory fields
             return true;
         case 2:
-            // Validering af prøve information
+            // Validation of sample information
             const description = document.querySelector('[name="description"]');
             const totalAmount = document.querySelector('[name="totalAmount"]');
             const unit = document.querySelector('[name="unit"]');
@@ -257,51 +258,51 @@ function validateCurrentStep() {
             let isValid = true;
             
             if (!description || !description.value.trim()) {
-                showErrorMessage('Indtast venligst en beskrivelse', 'description');
+                showErrorMessage('Please enter a description', 'description');
                 isValid = false;
             }
             
             if (!totalAmount || totalAmount.value <= 0) {
-                showErrorMessage('Indtast venligst et gyldigt antal', 'totalAmount');
+                showErrorMessage('Please enter a valid amount', 'totalAmount');
                 isValid = false;
             }
             
             if (!unit || !unit.value) {
-                showErrorMessage('Vælg venligst en enhed', 'unit');
+                showErrorMessage('Please select a unit', 'unit');
                 isValid = false;
             }
             
             return isValid;
         case 3:
-            // Validering af identifikation
+            // Validation of identification
             const hasSerialNumbers = document.getElementById('hasSerialNumbers')?.checked;
             if (hasSerialNumbers) {
                 const expectedCount = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
                 if (scannedItems.length < expectedCount) {
-                    showErrorMessage(`Der mangler at blive scannet ${expectedCount - scannedItems.length} enheder`);
+                    showErrorMessage(`${expectedCount - scannedItems.length} more samples need to be scanned`);
                     return false;
                 }
             }
             return true;
         case 4:
-            // Validering af placering
+            // Validation of location
             const isMultiPackage = document.getElementById('isMultiPackage')?.checked || false;
             const packageCount = isMultiPackage ? (parseInt(document.querySelector('[name="packageCount"]')?.value) || 1) : 1;
             
-            // For multipakker, tjek om der er valgt lokationer for alle pakker
+            // For multi-packages, check if locations are selected for all packages
             if (isMultiPackage && packageCount > 1) {
                 if (typeof PackageLocations !== 'undefined') {
                     const selectedLocations = PackageLocations.getSelectedLocations();
                     if (selectedLocations.length < packageCount) {
-                        showErrorMessage(`Du skal vælge ${packageCount} lokationer. Du har valgt ${selectedLocations.length}.`);
+                        showErrorMessage(`You need to select ${packageCount} locations. You have selected ${selectedLocations.length}.`);
                         return false;
                     }
                 }
                 return true;
             } else {
-                // Standard validering for én lokation
+                // Standard validation for one location
                 if (!selectedLocation) {
-                    showErrorMessage('Vælg venligst en placering ved at klikke på en ledig plads i griddet.');
+                    showErrorMessage('Please select a location by clicking on an available space in the grid.');
                     return false;
                 }
                 return true;
@@ -320,61 +321,61 @@ function setupSerialNumberToggle() {
     }
 }
 
-// Funktion til at håndtere løs mængde vs. stk
+// Function to handle bulk quantity vs. pieces
 function setupBulkSampleHandling() {
     const isBulkSampleCheckbox = document.getElementById('isBulkSample');
     const unitSelect = document.querySelector('[name="unit"]');
     
     if (isBulkSampleCheckbox && unitSelect) {
-        // Gem alle originale options til senere brug
+        // Save all original options for later use
         const allOptions = Array.from(unitSelect.options);
         const stkOption = Array.from(unitSelect.options).find(opt => 
-            opt.textContent.trim().toLowerCase() === 'stk' || 
+            opt.textContent.trim().toLowerCase() === 'pcs' || 
             opt.textContent.trim().toLowerCase() === 'pcs');
         
-        // Standardindstilling: Kun stk er tilgængelig
+        // Default setting: Only pcs is available
         updateUnitOptions(false);
         
-        // Håndter ændringer i checkboksen
+        // Handle changes in the checkbox
         isBulkSampleCheckbox.addEventListener('change', function() {
             updateUnitOptions(this.checked);
         });
         
-        // Hjælpefunktion til at opdatere unit-options
+        // Helper function to update unit options
         function updateUnitOptions(isBulk) {
-            // Gem det aktuelle valg
+            // Save the current selection
             const currentValue = unitSelect.value;
             
-            // Ryd alle options
+            // Clear all options
             unitSelect.innerHTML = '';
             
-            // Tilføj tom valgmulighed
+            // Add empty option
             const emptyOption = document.createElement('option');
             emptyOption.value = '';
-            emptyOption.textContent = 'Vælg enhed';
+            emptyOption.textContent = 'Select unit';
             unitSelect.appendChild(emptyOption);
             
             if (isBulk) {
-                // Ved løs mængde: Tilføj alle enheder undtagen stk
+                // For bulk quantity: Add all units except pcs
                 allOptions.forEach(option => {
-                    if (option.value && option.textContent.trim().toLowerCase() !== 'stk' && 
+                    if (option.value && option.textContent.trim().toLowerCase() !== 'pcs' && 
                         option.textContent.trim().toLowerCase() !== 'pcs') {
                         unitSelect.appendChild(option.cloneNode(true));
                     }
                 });
                 
-                // Nulstil value (tvinger brugeren til at vælge enhed)
+                // Reset value (forces the user to select a unit)
                 unitSelect.value = '';
             } else {
-                // Ved stykgods: Kun stk er tilgængelig
+                // For pieces: Only pcs is available
                 if (stkOption) {
                     unitSelect.appendChild(stkOption.cloneNode(true));
                     unitSelect.value = stkOption.value;
                 } else {
-                    // Fallback hvis vi ikke fandt stk-option
+                    // Fallback if we didn't find pcs option
                     const newStkOption = document.createElement('option');
-                    newStkOption.value = "1"; // Antager at stk har ID=1
-                    newStkOption.textContent = 'stk';
+                    newStkOption.value = "1"; // Assuming pcs has ID=1
+                    newStkOption.textContent = 'pcs';
                     unitSelect.appendChild(newStkOption);
                     unitSelect.value = "1";
                 }
@@ -383,7 +384,7 @@ function setupBulkSampleHandling() {
     }
 }
 
-// Lyt efter ændringer i checkboxes for multipakker og forskellige lokationer
+// Listen for changes in checkboxes for multi-packages and different locations
 function setupMultiPackageHandling() {
     const isMultiPackageCheckbox = document.getElementById('isMultiPackage');
     const multiplePackageFields = document.getElementById('multiplePackageFields');
@@ -394,41 +395,41 @@ function setupMultiPackageHandling() {
     const totalAmountHelper = document.getElementById('totalAmountHelper');
     const totalCounter = document.getElementById('totalCount');
     
-    // Fjern den del der viser "forskellige lokationer" i step 2
-    // Det skal kun vises i step 4
+    // Remove the part that shows "different locations" in step 2
+    // It should only be shown in step 4
     const differentLocationsCheckbox = document.getElementById('differentLocations');
     if (differentLocationsCheckbox) {
-        // Skjul denne checkbox og dens label
+        // Hide this checkbox and its label
         const parentElement = differentLocationsCheckbox.closest('.form-check');
         if (parentElement) {
             parentElement.classList.add('d-none');
         }
     }
     
-    // Vis/skjul felter for multiple pakker
+    // Show/hide fields for multiple packages
     if (isMultiPackageCheckbox && multiplePackageFields) {
         isMultiPackageCheckbox.addEventListener('change', function() {
             multiplePackageFields.classList.toggle('d-none', !this.checked);
             
             if (this.checked) {
-                totalAmountHelper.textContent = "Total mængde beregnes automatisk fra pakkeoplysninger";
+                totalAmountHelper.textContent = "Total amount is automatically calculated from package information";
                 totalAmountInput.readOnly = true;
             } else {
-                totalAmountHelper.textContent = "Samlet antal enheder der modtages";
+                totalAmountHelper.textContent = "Total number of units received";
                 totalAmountInput.readOnly = false;
                 
-                // Nulstil pakkelokationer
+                // Reset package locations
                 if (typeof PackageLocations !== 'undefined') {
                     PackageLocations.reset();
                 }
             }
             
-            // Opdater total mængde når checkbox ændres
+            // Update total amount when checkbox changes
             updateTotalAmount();
         });
     }
     
-    // Beregn total mængde baseret på antal pakker og mængde pr. pakke
+    // Calculate total amount based on number of packages and amount per package
     function updateTotalAmount() {
         if (isMultiPackageCheckbox && isMultiPackageCheckbox.checked && 
             packageCountInput && amountPerPackageInput && totalAmountInput) {
@@ -441,19 +442,19 @@ function setupMultiPackageHandling() {
                 calculatedTotal.textContent = total;
             }
             
-            // Opdater også totalCounter for scanning
+            // Also update totalCounter for scanning
             if (totalCounter) {
                 totalCounter.textContent = total;
             }
         }
     }
     
-    // Lyt efter ændringer i pakke-felterne
+    // Listen for changes in package fields
     if (packageCountInput && amountPerPackageInput) {
         packageCountInput.addEventListener('input', updateTotalAmount);
         amountPerPackageInput.addEventListener('input', updateTotalAmount);
         
-        // Lyt også efter ændringer i totalAmount
+        // Also listen for changes in totalAmount
         if (totalAmountInput) {
             totalAmountInput.addEventListener('input', function() {
                 if (totalCounter) {
@@ -464,7 +465,7 @@ function setupMultiPackageHandling() {
     }
 }
 
-// Scanner funktionalitet
+// Scanner functionality
 function setupScannerListeners() {
     const scannerInput = document.getElementById('barcodeInput');
     const addManualBtn = document.getElementById('addManualBtn');
@@ -475,7 +476,7 @@ function setupScannerListeners() {
     const clearAllScannedBtn = document.getElementById('clearAllScannedBtn');
     
     if (scannerInput && addManualBtn) {
-        // Scanner input håndtering
+        // Scanner input handling
         scannerInput.addEventListener('keypress', function(event) {
             if (event.key === 'Enter') {
                 event.preventDefault();
@@ -487,7 +488,7 @@ function setupScannerListeners() {
             }
         });
         
-        // Manuel tilføjelse
+        // Manual addition
         addManualBtn.addEventListener('click', function() {
             const barcode = scannerInput.value.trim();
             if (barcode) {
@@ -498,35 +499,35 @@ function setupScannerListeners() {
         });
     }
     
-    // Toggle scanning tilstand
+    // Toggle scanning state
     if (scanButton) {
         scanButton.addEventListener('click', function() {
             const isActive = this.classList.contains('btn-primary');
             
             if (isActive) {
-                // Deaktiver scanning
+                // Deactivate scanning
                 this.classList.remove('btn-primary');
                 this.classList.add('btn-outline-primary');
                 this.innerHTML = '<i class="fas fa-barcode"></i> Start Scanning';
                 if (scannerInput) {
                     scannerInput.disabled = true;
-                    scannerInput.placeholder = "Scanning deaktiveret";
+                    scannerInput.placeholder = "Scanning disabled";
                 }
             } else {
-                // Aktiver scanning
+                // Activate scanning
                 this.classList.remove('btn-outline-primary');
                 this.classList.add('btn-primary');
-                this.innerHTML = '<i class="fas fa-barcode"></i> Scanning Aktiv';
+                this.innerHTML = '<i class="fas fa-barcode"></i> Scanning Active';
                 if (scannerInput) {
                     scannerInput.disabled = false;
-                    scannerInput.placeholder = "Scan eller indtast serienummer";
+                    scannerInput.placeholder = "Scan or enter serial number";
                     scannerInput.focus();
                 }
             }
         });
     }
     
-    // Vis/skjul masse-indtastning
+    // Show/hide bulk entry
     if (bulkEntryButton && bulkEntrySection) {
         bulkEntryButton.addEventListener('click', function() {
             bulkEntrySection.classList.toggle('d-none');
@@ -537,7 +538,7 @@ function setupScannerListeners() {
         });
     }
     
-    // Tilføj bulk serienumre
+    // Add bulk serial numbers
     if (addBulkBtn) {
         addBulkBtn.addEventListener('click', function() {
             const bulkBarcodes = document.getElementById('bulkBarcodes');
@@ -550,7 +551,7 @@ function setupScannerListeners() {
                 const currentCount = scannedItems.length;
                 
                 if (currentCount + barcodes.length > totalExpected) {
-                    showErrorMessage(`Kan ikke tilføje ${barcodes.length} stregkoder. Maksimalt antal er ${totalExpected} (${currentCount} allerede scannet)`);
+                    showErrorMessage(`Cannot add ${barcodes.length} barcodes. Maximum count is ${totalExpected} (${currentCount} already scanned)`);
                     return;
                 }
                 
@@ -559,49 +560,49 @@ function setupScannerListeners() {
                 });
                 
                 bulkBarcodes.value = '';
-                showSuccessMessage(`${barcodes.length} stregkoder tilføjet succesfuldt`);
+                showSuccessMessage(`${barcodes.length} barcodes added successfully`);
                 
-                // Skjul masse-indtastning efter tilføjelse
+                // Hide bulk entry after addition
                 bulkEntrySection.classList.add('d-none');
             }
         });
     }
     
-    // Ryd alle scannede items
+    // Clear all scanned items
     if (clearAllScannedBtn) {
         clearAllScannedBtn.addEventListener('click', function() {
-            if (confirm('Er du sikker på at du vil fjerne alle scannede prøver?')) {
+            if (confirm('Are you sure you want to remove all scanned samples?')) {
                 scannedItems = [];
                 updateScanUI();
-                showSuccessMessage('Alle scannede prøver er blevet fjernet');
+                showSuccessMessage('All scanned samples have been removed');
             }
         });
     }
 }
 
-// Håndter scanning af en barcode
+// Handle scanning a barcode
 function processScan(barcode) {
     if (!barcode) return;
 
     const totalExpected = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
     
-    // Tjek for duplikater
+    // Check for duplicates
     if (scannedItems.includes(barcode)) {
-        showWarningMessage(`Stregkode "${barcode}" er allerede scannet`);
+        showWarningMessage(`Barcode "${barcode}" has already been scanned`);
         return;
     }
 
     if (scannedItems.length < totalExpected) {
         scannedItems.push(barcode);
         updateScanUI();
-        // Afspil en lyd for at indikere succesfuld scanning
+        // Play a sound to indicate successful scanning
         playSuccessSound();
     } else {
-        showErrorMessage('Maksimalt antal prøver er nået');
+        showErrorMessage('Maximum number of samples reached');
     }
 }
 
-// Opdater UI med scannede items
+// Update UI with scanned items
 function updateScanUI() {
     const counter = document.getElementById('scannedCount');
     const totalCounter = document.getElementById('totalCount');
@@ -613,20 +614,20 @@ function updateScanUI() {
 
     const container = document.querySelector('.scanned-items');
     if (container) {
-        // Fjern tom besked hvis der er scannede items
+        // Remove empty message if there are scanned items
         if (emptyMessage) {
             emptyMessage.style.display = scannedItems.length > 0 ? 'none' : 'block';
         }
         
-        // Hvis ingen scannede items, vis tom besked og returner
+        // If no scanned items, show empty message and return
         if (scannedItems.length === 0) {
             container.innerHTML = `<div class="empty-scanned-message text-center p-3 text-muted">
-                Ingen prøver scannet endnu. Brug scanneren eller indtast serienumre manuelt ovenfor.
+                No samples scanned yet. Use the scanner or enter serial numbers manually above.
             </div>`;
             return;
         }
         
-        // Opbyg liste af scannede items
+        // Build list of scanned items
         let html = '<div class="list-group">';
         
         scannedItems.forEach((code, index) => {
@@ -646,7 +647,7 @@ function updateScanUI() {
         html += '</div>';
         container.innerHTML = html;
         
-        // Tilføj event listeners til fjern-knapper
+        // Add event listeners to remove buttons
         container.querySelectorAll('.remove-item').forEach(button => {
             button.addEventListener('click', function() {
                 const index = parseInt(this.getAttribute('data-index'));
@@ -656,16 +657,16 @@ function updateScanUI() {
     }
 }
 
-// Fjern en scannet item
+// Remove a scanned item
 function removeScannedItem(index) {
     scannedItems.splice(index, 1);
     updateScanUI();
 }
 
-// Spil en succeslyd ved scanning
+// Play a success sound when scanning
 function playSuccessSound() {
     try {
-        // Opret en simpel lyd
+        // Create a simple sound
         const context = new (window.AudioContext || window.webkitAudioContext)();
         const oscillator = context.createOscillator();
         const gainNode = context.createGain();
@@ -682,12 +683,12 @@ function playSuccessSound() {
             oscillator.stop();
         }, 100);
     } catch (e) {
-        // Lydeffekter er ikke afgørende, så vi ignorerer fejl
-        console.log('Lydeffekter ikke understøttet');
+        // Sound effects are not crucial, so we ignore errors
+        console.log('Sound effects not supported');
     }
 }
 
-// Fokuser på barcode input
+// Focus on barcode input
 function setupBarcodeInput() {
     const barcodeInput = document.getElementById('barcodeInput');
     if (barcodeInput) {
@@ -696,25 +697,25 @@ function setupBarcodeInput() {
 }
 
 function createGridFromLocations(locations) {
-    console.log("createGridFromLocations med", locations.length, "lokationer");
+    console.log("createGridFromLocations with", locations.length, "locations");
     
     const grid = document.querySelector('.storage-grid');
     if (!grid) return;
 
     grid.innerHTML = '';
     
-    // Sortér lokationerne for at sikre konsistent visning
+    // Sort locations to ensure consistent display
     locations.sort((a, b) => a.LocationName.localeCompare(b.LocationName));
 
-    // Opbyg grid med data fra API
+    // Build grid with data from API
     locations.forEach(location => {
         const cell = document.createElement('div');
         cell.className = 'storage-cell';
         
         // Debug info
-        console.log("Behandler lokation:", location);
+        console.log("Processing location:", location);
         
-        // Markér cellen som optaget hvis der er prøver på lokationen
+        // Mark the cell as occupied if there are samples at the location
         if (location.status === 'occupied') {
             cell.classList.add('occupied');
         }
@@ -725,13 +726,13 @@ function createGridFromLocations(locations) {
 
         const capacity = document.createElement('div');
         capacity.className = 'capacity';
-        capacity.textContent = location.status === 'occupied' ? 'Optaget' : 'Ledig';
+        capacity.textContent = location.status === 'occupied' ? 'Occupied' : 'Available';
 
         cell.appendChild(locationEl);
         cell.appendChild(capacity);
         grid.appendChild(cell);
 
-        // Kun tilføj event listener til ledige celler
+        // Only add event listener to available cells
         if (location.status !== 'occupied') {
             cell.addEventListener('click', () => selectStorageCell(cell));
         }
@@ -742,43 +743,43 @@ function setupStorageGrid() {
     const grid = document.querySelector('.storage-grid');
     if (!grid) return;
 
-    grid.innerHTML = '<div class="text-center p-3"><div class="spinner-border"></div><p>Indlæser lagerplaceringer...</p></div>';
+    grid.innerHTML = '<div class="text-center p-3"><div class="spinner-border"></div><p>Loading storage locations...</p></div>';
 
-    // Hent lagerplaceringer fra API
+    // Fetch storage locations from API
     fetch('/api/storage-locations')
         .then(response => response.json())
         .then(data => {
-            console.log("Modtaget lagerplaceringsdata:", data);
+            console.log("Received storage location data:", data);
             if (data.locations) {
                 createGridFromLocations(data.locations);
             } else {
-                console.error("Ingen locations i responsen");
-                // Fallback til hardcodede lokationer
+                console.error("No locations in response");
+                // Fallback to hardcoded locations
                 createSpecificStorageGrid();
             }
         })
         .catch(error => {
-            console.error('Fejl ved hentning af lagerplaceringer:', error);
-            // Fallback til hardcodede lokationer
+            console.error('Error fetching storage locations:', error);
+            // Fallback to hardcoded locations
             createSpecificStorageGrid();
         });
 }
 
-// Vi bibeholder vores grid-skabende funktion
+// We maintain our grid creation function
 function createSpecificStorageGrid() {
     const grid = document.querySelector('.storage-grid');
     if (!grid) return;
 
     grid.innerHTML = '';
     
-    // Opret 12 lagerpladser med format A1.B1 til A3.B4
+    // Create 12 storage spaces with format A1.B1 to A3.B4
     for (let i = 1; i <= 3; i++) {
         for (let j = 1; j <= 4; j++) {
             const cell = document.createElement('div');
             cell.className = 'storage-cell';
             
-            // Simuler at nogle celler er optaget (for demonstration)
-            // I en faktisk implementering ville denne data komme fra serveren
+            // Simulate that some cells are occupied (for demonstration)
+            // In a real implementation, this data would come from the server
             if ((i === 1 && j === 3) || (i === 2 && j === 2)) {
                 cell.classList.add('occupied');
             }
@@ -789,13 +790,13 @@ function createSpecificStorageGrid() {
 
             const capacity = document.createElement('div');
             capacity.className = 'capacity';
-            capacity.textContent = cell.classList.contains('occupied') ? 'Optaget' : 'Ledig';
+            capacity.textContent = cell.classList.contains('occupied') ? 'Occupied' : 'Available';
 
             cell.appendChild(locationEl);
             cell.appendChild(capacity);
             grid.appendChild(cell);
 
-            // Vigtig: Kun tilføj event listener til ledige celler
+            // Important: Only add event listener to available cells
             if (!cell.classList.contains('occupied')) {
                 cell.addEventListener('click', () => selectStorageCell(cell));
             }
@@ -803,24 +804,24 @@ function createSpecificStorageGrid() {
     }
 }
 
-// Highlighte et antal celler i storage gridden baseret på pakkeantal
+// Highlight a number of cells in the storage grid based on package count
 function storageGridHighlightForPackages(packageCount) {
-    // Reset grid highlighting først
+    // Reset grid highlighting first
     resetStorageGridHighlighting();
     
-    // Markér alle LEDIGE celler som tilgængelige
+    // Mark all AVAILABLE cells as available
     const gridCells = document.querySelectorAll('.storage-cell:not(.occupied)');
     gridCells.forEach(cell => {
         cell.classList.add('multi-package-available');
     });
     
-    // Tilføj info-besked hvis nødvendigt
+    // Add info message if necessary
     if (packageCount > 1) {
         const existingMessage = document.querySelector('.multi-package-message');
         if (!existingMessage) {
             const message = document.createElement('div');
             message.className = 'alert alert-info multi-package-message mt-3';
-            message.innerHTML = `<i class="fas fa-info-circle"></i> Vælg ${packageCount} forskellige placeringer til dine pakker.`;
+            message.innerHTML = `<i class="fas fa-info-circle"></i> Select ${packageCount} different locations for your packages.`;
             
             const storageSelector = document.querySelector('.storage-selector');
             if (storageSelector) {
@@ -830,30 +831,30 @@ function storageGridHighlightForPackages(packageCount) {
     }
 }
 
-// Fjern highlighting fra storage grid
+// Remove highlighting from storage grid
 function resetStorageGridHighlighting() {
     document.querySelectorAll('.storage-cell').forEach(cell => {
         cell.classList.remove('multi-package-available', 'multi-package-selected');
     });
     
-    // Fjern eventuel info-besked
+    // Remove any info message
     const message = document.querySelector('.multi-package-message');
     if (message) {
         message.remove();
     }
     
-    // Fjern eventuel pakkeopsummering-besked
+    // Remove any package summary message
     const packageSummary = document.querySelector('.package-selection-summary');
     if (packageSummary) {
         packageSummary.remove();
     }
 }
 
-// Opdateret selectStorageCell funktion - med direkte gemning af lokation uden dropdown
+// Updated selectStorageCell function - with direct saving of location without dropdown
 function selectStorageCell(cell) {
     if (cell.classList.contains('occupied')) {
-        // Blokér valg af optagne celler
-        showWarningMessage("Denne placering er allerede optaget. Vælg venligst en ledig placering.");
+        // Block selection of occupied cells
+        showWarningMessage("This location is already occupied. Please select an available location.");
         return;
     }
     
@@ -861,29 +862,29 @@ function selectStorageCell(cell) {
     const packageCount = isMultiPackage ? (parseInt(document.querySelector('[name="packageCount"]')?.value) || 1) : 1;
     
     if (isMultiPackage && packageCount > 1) {
-        // Håndter multipakke-valg
+        // Handle multi-package selection
         handleMultiPackageSelection(cell);
     } else {
-        // Standard valg af lokation (én lokation)
+        // Standard location selection (one location)
         handleSingleLocationSelection(cell);
     }
     
-    // Opdater visning af valgte pakker
+    // Update display of selected packages
     updatePackageSelectionSummary();
 }
 
-// Håndterer valg af lokation for enkelte prøver
+// Handles location selection for individual samples
 function handleSingleLocationSelection(cell) {
-    // Fjern markering fra alle celler
+    // Remove marking from all cells
     document.querySelectorAll('.storage-cell').forEach(c => c.classList.remove('selected'));
     
-    // Marker den valgte celle
+    // Mark the selected cell
     cell.classList.add('selected');
     
-    // Gem lokationen direkte i et hidden input field
+    // Save the location directly in a hidden input field
     const locationText = cell.querySelector('.location').textContent;
     
-    // Find eksisterende eller opret nyt hidden input til at gemme lokationen
+    // Find existing or create new hidden input to store the location
     let locationInput = document.getElementById('selectedLocationInput');
     if (!locationInput) {
         locationInput = document.createElement('input');
@@ -893,10 +894,10 @@ function handleSingleLocationSelection(cell) {
         document.querySelector('.storage-selector').appendChild(locationInput);
     }
     
-    // Gem lokationsnavnet (vi finder det faktiske ID ved formularindsendelse)
+    // Save the location name (we find the actual ID during form submission)
     locationInput.value = locationText;
     
-    // Opdater også en synlig indikator
+    // Update a visible indicator as well
     let locationIndicator = document.querySelector('.selected-location-indicator');
     if (!locationIndicator) {
         locationIndicator = document.createElement('div');
@@ -904,60 +905,60 @@ function handleSingleLocationSelection(cell) {
         document.querySelector('.storage-selector').appendChild(locationIndicator);
     }
     
-    locationIndicator.innerHTML = `<strong>Valgt placering:</strong> ${locationText}`;
+    locationIndicator.innerHTML = `<strong>Selected location:</strong> ${locationText}`;
     
-    // Gem også som global variabel for kompatibilitet
+    // Also save as global variable for compatibility
     selectedLocation = locationText;
 }
 
-// Håndterer valg af lokation for multipakker
+// Function to handle multi-package selection
 function handleMultiPackageSelection(cell) {
     const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
     const selectedCellsCount = document.querySelectorAll('.storage-cell.multi-package-selected').length;
     
-    // Tjek om cellen allerede er valgt
+    // Check if cell is already selected
     if (cell.classList.contains('multi-package-selected')) {
-        // Afvælg cellen
+        // Deselect cell
         cell.classList.remove('multi-package-selected');
         cell.classList.add('multi-package-available');
         
-        // Find lokationen og fjern den fra pakkelokationer-listen
+        // Find location and remove it from package-locations list
         const locationText = cell.querySelector('.location').textContent;
         
-        // Find pakkenummeret baseret på rækkefølgen af valget
+        // Find package number based on selection order
         if (typeof PackageLocations !== 'undefined') {
             PackageLocations.removeLocationByName(locationText);
         }
     } else {
-        // Tjek om vi allerede har valgt maksimalt antal lokationer
+        // Check if we already selected maximum number of locations
         if (selectedCellsCount < packageCount) {
-            // Vælg cellen
+            // Select cell
             cell.classList.add('multi-package-selected');
             cell.classList.remove('multi-package-available');
             
-            // Tilføj til pakkelokationer (med næste ledige pakkenummer)
+            // Add to package locations (with next available package number)
             if (typeof PackageLocations !== 'undefined') {
                 const locationText = cell.querySelector('.location').textContent;
                 
-                // Tilføj lokationen til den næste ledige pakke
+                // Add location to next available package
                 PackageLocations.addLocation(selectedCellsCount + 1, mapLocationNameToId(locationText), locationText);
             }
         } else {
-            // Vi har allerede valgt max antal - vis fejl
-            showWarningMessage(`Du kan maksimalt vælge ${packageCount} lokationer. Fjern en lokation før du tilføjer en ny.`);
+            // We already selected max count - show error
+            showWarningMessage(`You can only select ${packageCount} locations. Remove a location before adding a new one.`);
         }
     }
 }
 
-// Opdater visning af valgte pakker og lokationer
+// Update display of selected packages and locations
 function updatePackageSelectionSummary() {
     const isMultiPackage = document.getElementById('isMultiPackage')?.checked || false;
     const packageCount = isMultiPackage ? (parseInt(document.querySelector('[name="packageCount"]')?.value) || 1) : 1;
     
-    // Kun vis opsummering for multipakker
+    // Only show summary for multi-packages
     if (!isMultiPackage || packageCount <= 1) return;
     
-    // Find eller opret opsummerings-container
+    // Find or create summary container
     let summaryContainer = document.querySelector('.package-selection-summary');
     if (!summaryContainer) {
         summaryContainer = document.createElement('div');
@@ -969,12 +970,12 @@ function updatePackageSelectionSummary() {
         }
     }
     
-    // Hent valgte pakkelokationer
+    // Get selected package locations
     if (typeof PackageLocations === 'undefined') return;
     
     const selectedLocations = PackageLocations.getSelectedLocations();
     
-    // Opdater opsummering
+    // Update summary
     if (selectedLocations.length === 0) {
         summaryContainer.innerHTML = '';
         summaryContainer.classList.add('d-none');
@@ -983,14 +984,14 @@ function updatePackageSelectionSummary() {
     
     summaryContainer.classList.remove('d-none');
     
-    // Sortér efter pakkenummer
+    // Sort by package number
     const sortedLocations = [...selectedLocations].sort((a, b) => 
         parseInt(a.packageNumber) - parseInt(b.packageNumber));
     
     let html = `
         <div class="card">
             <div class="card-header bg-light">
-                <h5 class="mb-0">Valgte pakkelokationer</h5>
+                <h5 class="mb-0">Selected Package Locations</h5>
             </div>
             <div class="card-body">
                 <ul class="list-group list-group-flush">
@@ -1000,7 +1001,7 @@ function updatePackageSelectionSummary() {
         html += `
             <li class="list-group-item d-flex justify-content-between align-items-center">
                 <div>
-                    <span class="badge bg-primary me-2">Pakke ${pkg.packageNumber}</span>
+                    <span class="badge bg-primary me-2">Package ${pkg.packageNumber}</span>
                     <span>${pkg.locationName}</span>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-danger remove-location" data-package="${pkg.packageNumber}">
@@ -1015,9 +1016,9 @@ function updatePackageSelectionSummary() {
             </div>
             <div class="card-footer">
                 <div class="d-flex justify-content-between align-items-center">
-                    <span>${selectedLocations.length} af ${packageCount} lokationer valgt</span>
+                    <span>${selectedLocations.length} of ${packageCount} locations selected</span>
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="clearAllLocations">
-                        Ryd alle
+                        Clear all
                     </button>
                 </div>
             </div>
@@ -1026,14 +1027,14 @@ function updatePackageSelectionSummary() {
     
     summaryContainer.innerHTML = html;
     
-    // Tilføj event listeners til fjern-knapper
+    // Add event listeners to remove buttons
     summaryContainer.querySelectorAll('.remove-location').forEach(button => {
         button.addEventListener('click', function() {
             const packageNumber = this.getAttribute('data-package');
             const locationData = PackageLocations.getLocationByPackage(packageNumber);
             
             if (locationData) {
-                // Find og opdater den tilsvarende grid-celle
+                // Find and update the corresponding grid cell
                 const gridCells = document.querySelectorAll('.storage-cell');
                 gridCells.forEach(cell => {
                     const locationText = cell.querySelector('.location')?.textContent;
@@ -1043,53 +1044,53 @@ function updatePackageSelectionSummary() {
                     }
                 });
                 
-                // Fjern fra pakkelokationer
+                // Remove from package locations
                 PackageLocations.removeLocation(packageNumber);
                 
-                // Opdater opsummering
+                // Update summary
                 updatePackageSelectionSummary();
             }
         });
     });
     
-    // Tilføj event listener til "ryd alle" knappen
+    // Add event listener to "clear all" button
     const clearAllBtn = document.getElementById('clearAllLocations');
     if (clearAllBtn) {
         clearAllBtn.addEventListener('click', function() {
-            // Fjern alle valgte lokationer
+            // Remove all selected locations
             PackageLocations.reset();
             
-            // Nulstil grid-celler
+            // Reset grid cells
             const gridCells = document.querySelectorAll('.storage-cell.multi-package-selected');
             gridCells.forEach(cell => {
                 cell.classList.remove('multi-package-selected');
                 cell.classList.add('multi-package-available');
             });
             
-            // Opdater opsummering
+            // Update summary
             updatePackageSelectionSummary();
         });
     }
 }
 
-// Initialiser receptionsdato hvis nødvendigt
+// Initialize reception date if needed
 function initReceptionDate() {
-    // Intet at gøre her i denne implementering
+    // Nothing to do here in this implementation
 }
 
-// Hjælpefunktion til at mappe lokationsnavn til ID
+// Helper function to map location name to ID
 function mapLocationNameToId(locationName) {
-    // Dette er en enkel implementering. I et rigtigt system ville dette
-    // sandsynligvis slå op i en tabel eller API
+    // This is a simple implementation. In a real system, this
+    // would probably look up in a table or API
     
-    // Format: A{row}.B{column} hvor row=1-3, column=1-4
+    // Format: A{row}.B{column} where row=1-3, column=1-4
     const match = locationName.match(/A(\d+)\.B(\d+)/);
     if (match) {
         const row = parseInt(match[1]);
         const column = parseInt(match[2]);
         
-        // Beregn et ID baseret på række og kolonne
-        // Antager at ID'er starter fra 1 og går op til 12
+        // Calculate an ID based on row and column
+        // Assuming IDs start from 1 and go up to 12
         const id = (row - 1) * 4 + column;
         
         return id.toString();
@@ -1099,7 +1100,7 @@ function mapLocationNameToId(locationName) {
     return "1";
 }
 
-// Håndter form submission
+// Handle form submission
 function handleFormSubmission() {
     if (!validateCurrentStep()) return;
     
@@ -1205,7 +1206,7 @@ function handleFormSubmission() {
     });
 }
 
-// Nulstil formular
+// Reset form
 function resetForm() {
     currentStep = 1;
     scannedItems = [];
@@ -1234,23 +1235,23 @@ function resetForm() {
         document.getElementById('isMultiPackage').checked = false;
     }
     
-    // Reset pakkelokationer
+    // Reset package locations
     if (typeof PackageLocations !== 'undefined') {
         PackageLocations.reset();
     }
     
-    // Skjul multiple package felter
+    // Hide multiple package fields
     const multiplePackageFields = document.getElementById('multiplePackageFields');
     if (multiplePackageFields) {
         multiplePackageFields.classList.add('d-none');
     }
     
-    // Ryd scannede items
+    // Clear scanned items
     const scannedItemsContainer = document.querySelector('.scanned-items');
     if (scannedItemsContainer) {
         scannedItemsContainer.innerHTML = `
         <div class="empty-scanned-message text-center p-3 text-muted">
-            Ingen prøver scannet endnu. Brug scanneren eller indtast serienumre manuelt ovenfor.
+            No samples scanned yet. Use the scanner or enter serial numbers manually above.
         </div>`;
     }
 
@@ -1258,9 +1259,9 @@ function resetForm() {
     showStep(1);
 }
 
-// UI Besked funktioner
+// UI Message functions
 function showSuccessMessage(message) {
-    // Fjern eksisterende fejlmeddelelser
+    // Remove existing error messages
     clearValidationErrors();
     
     const successToast = document.createElement('div');
@@ -1270,7 +1271,7 @@ function showSuccessMessage(message) {
             <i class="fas fa-check-circle"></i>
         </div>
         <div class="toast-content">
-            <div class="toast-title">Succes</div>
+            <div class="toast-title">Success</div>
             <div class="toast-message">${message}</div>
         </div>
         <button class="toast-close" onclick="this.parentElement.remove()">
@@ -1279,10 +1280,10 @@ function showSuccessMessage(message) {
     `;
     document.body.appendChild(successToast);
 
-    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    // Add 'show' class after a short delay (for animation effect)
     setTimeout(() => successToast.classList.add('show'), 10);
 
-    // Fjern automatisk efter 3 sekunder
+    // Remove automatically after 3 seconds
     setTimeout(() => {
         successToast.classList.remove('show');
         setTimeout(() => successToast.remove(), 300);
@@ -1297,7 +1298,7 @@ function showErrorMessage(message, field = null) {
             <i class="fas fa-exclamation-circle"></i>
         </div>
         <div class="toast-content">
-            <div class="toast-title">Fejl</div>
+            <div class="toast-title">Error</div>
             <div class="toast-message">${message}</div>
         </div>
         <button class="toast-close" onclick="this.parentElement.remove()">
@@ -1306,35 +1307,35 @@ function showErrorMessage(message, field = null) {
     `;
     document.body.appendChild(errorToast);
 
-    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    // Add 'show' class after a short delay (for animation effect)
     setTimeout(() => errorToast.classList.add('show'), 10);
 
-    // Fjern automatisk efter 5 sekunder
+    // Remove automatically after 5 seconds
     setTimeout(() => {
         errorToast.classList.remove('show');
         setTimeout(() => errorToast.remove(), 300);
     }, 5000);
     
-    // Hvis et bestemt felt er angivet, marker det med en fejl
+    // If a specific field is specified, mark it with an error
     if (field) {
         const fieldElement = document.querySelector(`[name="${field}"]`);
         if (fieldElement) {
             fieldElement.classList.add('field-error');
             
-            // Tilføj fejlmeddelelse under feltet
+            // Add error message below the field
             const fieldContainer = fieldElement.closest('.form-group');
             if (fieldContainer) {
-                // Fjern eventuelle eksisterende fejlmeddelelser
+                // Remove any existing error messages
                 const existingError = fieldContainer.querySelector('.field-error-message');
                 if (existingError) existingError.remove();
                 
-                // Tilføj ny fejlmeddelelse
+                // Add new error message
                 const errorMsg = document.createElement('div');
                 errorMsg.className = 'field-error-message';
                 errorMsg.textContent = message;
                 fieldContainer.appendChild(errorMsg);
                 
-                // Tilføj lyttere til at fjerne fejlmarkering ved input
+                // Add listeners to remove error marking on input
                 fieldElement.addEventListener('input', function() {
                     this.classList.remove('field-error');
                     const errorMsg = fieldContainer.querySelector('.field-error-message');
@@ -1353,7 +1354,7 @@ function showWarningMessage(message) {
             <i class="fas fa-exclamation-triangle"></i>
         </div>
         <div class="toast-content">
-            <div class="toast-title">Advarsel</div>
+            <div class="toast-title">Warning</div>
             <div class="toast-message">${message}</div>
         </div>
         <button class="toast-close" onclick="this.parentElement.remove()">
@@ -1362,24 +1363,24 @@ function showWarningMessage(message) {
     `;
     document.body.appendChild(warningToast);
 
-    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    // Add 'show' class after a short delay (for animation effect)
     setTimeout(() => warningToast.classList.add('show'), 10);
 
-    // Fjern automatisk efter 4 sekunder
+    // Remove automatically after 4 seconds
     setTimeout(() => {
         warningToast.classList.remove('show');
         setTimeout(() => warningToast.remove(), 300);
     }, 4000);
 }
 
-// Hjælpefunktion til at fjerne alle valideringsfejl
+// Helper function to remove all validation errors
 function clearValidationErrors() {
-    // Fjern fejlklasser fra alle felter
+    // Remove error classes from all fields
     document.querySelectorAll('.field-error').forEach(field => {
         field.classList.remove('field-error');
     });
     
-    // Fjern alle fejlmeddelelser
+    // Remove all error messages
     document.querySelectorAll('.field-error-message').forEach(msg => {
         msg.remove();
     });

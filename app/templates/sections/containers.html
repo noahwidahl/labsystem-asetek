@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Containere - Laboratorie Prøvesystem{% endblock %}
+{% block title %}Containers - Laboratory Sample System{% endblock %}
 
 {% block content %}
 <section id="containers" class="content-section">
@@ -11,7 +11,7 @@
                     <h2>Container Administration</h2>
                     <div>
                         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createContainerModal">
-                            <i class="fas fa-plus"></i> Opret container
+                            <i class="fas fa-plus"></i> Create container
                         </button>
                     </div>
                 </div>
@@ -20,7 +20,7 @@
         
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">Containere på lager</h5>
+                <h5 class="mb-0">Containers in storage</h5>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -28,12 +28,12 @@
                         <thead>
                             <tr>
                                 <th>ID</th>
-                                <th>Beskrivelse</th>
+                                <th>Description</th>
                                 <th>Type</th>
-                                <th>Blandet</th>
-                                <th>Indhold</th>
+                                <th>Mixed</th>
+                                <th>Content</th>
                                 <th>Status</th>
-                                <th>Handling</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -45,22 +45,22 @@
                                     <td>{{ container.TypeName }}</td>
                                     <td>
                                     {% if container.IsMixed == 1 or container.IsMixed == True %}
-                                        Ja
+                                        Yes
                                     {% else %}
-                                        Nej
+                                        No
                                     {% endif %}
                                     </td>
-                                    <td>{{ container.SampleCount|default(0) }} prøver / {{ container.TotalItems|default(0) }} enheder</td>
-                                    <td><span class="badge bg-primary">{{ container.Status|default('Aktiv') }}</span></td>
+                                    <td>{{ container.SampleCount|default(0) }} samples / {{ container.TotalItems|default(0) }} units</td>
+                                    <td><span class="badge bg-primary">{{ container.Status|default('Active') }}</span></td>
                                     <td>
-                                        <button class="btn btn-sm btn-secondary">Detaljer</button>
-                                        <button class="btn btn-sm btn-outline-danger delete-container-btn" data-container-id="{{ container.ContainerID }}">Slet</button>
+                                        <button class="btn btn-sm btn-secondary">Details</button>
+                                        <button class="btn btn-sm btn-outline-danger delete-container-btn" data-container-id="{{ container.ContainerID }}">Delete</button>
                                     </td>
                                 </tr>
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="7" class="text-center">Ingen containere fundet</td>
+                                    <td colspan="7" class="text-center">No containers found</td>
                                 </tr>
                             {% endif %}
                         </tbody>
@@ -71,7 +71,7 @@
         
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Container Typer</h5>
+                <h5 class="mb-0">Container Types</h5>
             </div>
             <div class="card-body">
                 <div class="row">
@@ -81,7 +81,7 @@
                             <div class="card h-100">
                                 <div class="card-body">
                                     <h5 class="card-title">{{ type.TypeName }}</h5>
-                                    <p class="card-text">Kapacitet: {{ type.DefaultCapacity|default('Ubegrænset') }}</p>
+                                    <p class="card-text">Capacity: {{ type.DefaultCapacity|default('Unlimited') }}</p>
                                     {% if type.Description %}
                                     <p class="card-text text-muted small">{{ type.Description }}</p>
                                     {% endif %}
@@ -91,7 +91,7 @@
                         {% endfor %}
                     {% else %}
                         <div class="col-12">
-                            <p class="text-center text-muted">Ingen container typer defineret</p>
+                            <p class="text-center text-muted">No container types defined</p>
                         </div>
                     {% endif %}
                 </div>
@@ -100,7 +100,7 @@
     </div>
 </section>
 
-<!-- Inkluder modale vinduer -->
+<!-- Include modals -->
 {% include "modals/create_container_modal.html" %}
 {% include "modals/add_sample_to_container_modal.html" %}
 {% endblock %}

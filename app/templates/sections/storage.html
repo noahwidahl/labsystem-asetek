@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Prøveoversigt - Laboratorie Prøvesystem{% endblock %}
+{% block title %}Sample Overview - Laboratory Sample System{% endblock %}
 
 {% block content %}
 <section id="storage" class="content-section">
@@ -8,13 +8,13 @@
         <div class="row">
             <div class="col-12">
                 <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h2>Prøveoversigt</h2>
+                    <h2>Sample Overview</h2>
                     <div>
                         <button class="btn btn-outline-primary me-2">
                             <i class="fas fa-filter"></i> Filter
                         </button>
                         <button class="btn btn-outline-primary">
-                            <i class="fas fa-download"></i> Eksporter
+                            <i class="fas fa-download"></i> Export
                         </button>
                     </div>
                 </div>
@@ -23,7 +23,7 @@
         
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">Prøver på lager</h5>
+                <h5 class="mb-0">Samples in Storage</h5>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -31,13 +31,13 @@
                         <thead>
                             <tr>
                                 <th>ID</th>
-                                <th>Beskrivelse</th>
-                                <th>Modtagelse</th>
-                                <th>Antal</th>
-                                <th>Placering</th>
-                                <th>Registreret</th>
+                                <th>Description</th>
+                                <th>Reception</th>
+                                <th>Amount</th>
+                                <th>Location</th>
+                                <th>Registered</th>
                                 <th>Status</th>
-                                <th>Handling</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -45,21 +45,21 @@
                                 {% for sample in samples %}
                                 <tr>
                                     <td>{{ sample.ID }}</td>
-                                    <td>{{ sample.Beskrivelse }}</td>
-                                    <td>{{ sample.Modtagelse }}</td>
-                                    <td>{{ sample.Antal }}</td>
-                                    <td>{{ sample.Placering }}</td>
-                                    <td>{{ sample.Registreret }}</td>
+                                    <td>{{ sample.Description }}</td>
+                                    <td>{{ sample.Reception }}</td>
+                                    <td>{{ sample.Amount }}</td>
+                                    <td>{{ sample.Location }}</td>
+                                    <td>{{ sample.Registered }}</td>
                                     <td><span class="badge bg-primary">{{ sample.Status }}</span></td>
                                     <td>
-                                        <button class="btn btn-sm btn-secondary">Detaljer</button>
-                                        <button class="btn btn-sm btn-outline-primary">Flyt</button>
+                                        <button class="btn btn-sm btn-secondary">Details</button>
+                                        <button class="btn btn-sm btn-outline-primary">Move</button>
                                     </td>
                                 </tr>
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="8" class="text-center">Ingen prøver fundet</td>
+                                    <td colspan="8" class="text-center">No samples found</td>
                                 </tr>
                             {% endif %}
                         </tbody>

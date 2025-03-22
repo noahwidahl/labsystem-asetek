@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 
-{% block title %}Historik - Laboratorie Prøvesystem{% endblock %}
+{% block title %}History - Laboratory Sample System{% endblock %}
 
 {% block content %}
 <section id="history" class="content-section">
     <div class="section-header">
-        <h2>Historik</h2>
+        <h2>History</h2>
         <div class="history-filters">
-            <input type="text" class="form-control" placeholder="Søg på prøve ID...">
+            <input type="text" class="form-control" placeholder="Search for sample ID...">
             <select class="form-control">
-                <option>Alle typer</option>
-                <option>Modtaget</option>
+                <option>All types</option>
+                <option>Received</option>
                 <option>Test</option>
-                <option>Kasseret</option>
+                <option>Disposed</option>
             </select>
             <button class="btn btn-secondary">
                 <i class="fas fa-filter"></i> Filter
@@ -36,7 +36,7 @@
                     <div class="custody-details">
                         {{ item.Notes }}
                         <br>
-                        Håndteret af: {{ item.UserName }}
+                        Handled by: {{ item.UserName }}
                     </div>
                 </div>
             </div>
@@ -44,11 +44,11 @@
         {% else %}
             <div class="custody-item">
                 <div class="custody-timeline">
-                    <div class="timeline-date">Ingen historik</div>
+                    <div class="timeline-date">No history</div>
                 </div>
                 <div class="custody-content">
                     <div class="custody-details">
-                        Der er ingen registreret historik i systemet endnu.
+                        There is no recorded history in the system yet.
                     </div>
                 </div>
             </div>

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Test Administration - Laboratorie Prøvesystem{% endblock %}
+{% block title %}Test Administration - Laboratory Sample System{% endblock %}
 
 {% block content %}
 <section id="testing" class="content-section">
@@ -8,19 +8,19 @@
         <h2>Test Administration</h2>
         <div class="section-actions">
             <button class="btn btn-primary" onclick="showCreateTestModal()">
-                <i class="fas fa-plus"></i> Start Ny Test
+                <i class="fas fa-plus"></i> Start New Test
             </button>
         </div>
     </div>
 
-    <!-- Aktive Tests -->
+    <!-- Active Tests -->
     <div class="active-tests">
         <div class="welcome-message mb-4">
-            <h4>Velkommen til Test Administration</h4>
-            <p>Du har <strong>{{ active_tests|length }}</strong> aktive tests i systemet.</p>
+            <h4>Welcome to Test Administration</h4>
+            <p>You have <strong>{{ active_tests|length }}</strong> active tests in the system.</p>
         </div>
         
-        <h3 class="mb-3">Aktive Tests</h3>
+        <h3 class="mb-3">Active Tests</h3>
         
         {% if active_tests %}
             <div class="row">
@@ -28,7 +28,7 @@
                 <div class="col-md-6 col-lg-4 mb-4">
                     <div class="card test-card h-100 shadow-sm">
                         <div class="card-header d-flex justify-content-between align-items-center bg-light py-2">
-                            <span class="text-muted small">#{{ loop.index }} Aktiv</span>
+                            <span class="text-muted small">#{{ loop.index }} Active</span>
                             <span class="badge rounded-pill bg-primary">{{ test.TestID }}</span>
                         </div>
                         <div class="card-body">
@@ -45,15 +45,15 @@
                             
                             <ul class="list-unstyled mb-3">
                                 <li class="mb-2">
-                                    <span class="text-muted">Antal Prøver:</span> 
+                                    <span class="text-muted">Number of Samples:</span> 
                                     <strong>{{ test.sample_count }}</strong>
                                 </li>
                                 <li class="mb-2">
-                                    <span class="text-muted">Start Dato:</span> 
+                                    <span class="text-muted">Start Date:</span> 
                                     <strong>{{ test.CreatedDate }}</strong>
                                 </li>
                                 <li class="mb-2">
-                                    <span class="text-muted">Ejer:</span> 
+                                    <span class="text-muted">Owner:</span> 
                                     <strong>{{ test.UserName }}</strong>
                                 </li>
                             </ul>
@@ -63,7 +63,7 @@
                                     <div class="sample-item px-2 py-1 bg-white rounded border">{{ test.TestID }}_1</div>
                                     <div class="sample-item px-2 py-1 bg-white rounded border">{{ test.TestID }}_2</div>
                                     {% if test.sample_count > 2 %}
-                                    <div class="sample-more px-2 py-1 bg-white rounded border">+{{ test.sample_count - 2 }} mere</div>
+                                    <div class="sample-more px-2 py-1 bg-white rounded border">+{{ test.sample_count - 2 }} more</div>
                                     {% endif %}
                                 </div>
                             </div>
@@ -71,10 +71,10 @@
                         <div class="card-footer bg-white pt-0 border-top-0">
                             <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                                 <button class="btn btn-outline-secondary" onclick="showTestDetails('{{ test.TestID }}')">
-                                    <i class="fas fa-info-circle me-1"></i> Se Detaljer
+                                    <i class="fas fa-info-circle me-1"></i> View Details
                                 </button>
                                 <button class="btn btn-outline-danger" onclick="completeTest('{{ test.TestID }}')">
-                                    <i class="fas fa-check-circle me-1"></i> Afslut Test
+                                    <i class="fas fa-check-circle me-1"></i> Complete Test
                                 </button>
                             </div>
                         </div>
@@ -85,24 +85,24 @@
         {% else %}
             <div class="alert alert-info">
                 <i class="fas fa-info-circle me-2"></i>
-                Ingen aktive tests fundet. Opret en ny test for at komme i gang.
+                No active tests found. Create a new test to get started.
             </div>
         {% endif %}
     </div>
 </section>
 
-<!-- Inkluder modale vinduer -->
+<!-- Include modals -->
 {% include "modals/test_details_modal.html" %}
 {% include "modals/create_test_modal.html" %}
 
 <script>
-    // Variable til at gemme den aktuelle test ID
+    // Variable to store current test ID
     let currentTestId = null;
     
-    // Opdater showTestDetails funktionen for at sætte currentTestId
+    // Update showTestDetails function to set currentTestId
     function showTestDetails(testId) {
         currentTestId = testId;
-        // Hent testdetaljer fra serveren
+        // Fetch test details from server
         fetch(`/api/testDetails/${testId}`)
             .then(response => response.json())
             .then(data => {
@@ -111,11 +111,11 @@
                     const modal = new bootstrap.Modal(document.getElementById('testDetailsModal'));
                     modal.show();
                 } else {
-                    throw new Error("Ingen testdata returneret");
+                    throw new Error("No test data returned");
                 }
             })
             .catch(error => {
-                showErrorMessage(`Kunne ikke hente testdetaljer: ${error}`);
+                showErrorMessage(`Could not fetch test details: ${error}`);
             });
     }
 </script>

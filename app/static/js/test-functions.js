@@ -150,6 +150,7 @@ function populateSampleTable(samples) {
 }
 
 // Funktion til at oprette en test
+// Funktion til at oprette en test
 function createTest() {
     // Hent testoplysninger
     const testType = document.querySelector('[name="testType"]').value;
@@ -157,14 +158,14 @@ function createTest() {
     
     // Valider input
     if (!testType) {
-        showErrorMessage("Vælg venligst en testtype");
+        showErrorMessage("Please select a test type");
         return;
     }
     
     // Hent valgte prøver
     const selectedSampleElements = document.querySelectorAll('input[name="selectedSamples"]:checked');
     if (selectedSampleElements.length === 0) {
-        showErrorMessage("Vælg mindst én prøve");
+        showErrorMessage("Select at least one sample");
         return;
     }
     
@@ -198,7 +199,7 @@ function createTest() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showSuccessMessage(`Test ${data.test_id} er blevet oprettet succesfuldt!`);
+            showSuccessMessage(`Test ${data.test_id} has been created successfully!`);
             
             // Luk modal og genindlæs siden
             const modal = bootstrap.Modal.getInstance(document.getElementById('createTestModal'));
@@ -209,17 +210,17 @@ function createTest() {
                 window.location.reload();
             }, 1500);
         } else {
-            showErrorMessage(`Fejl ved oprettelse af test: ${data.error}`);
+            showErrorMessage(`Error creating test: ${data.error}`);
         }
     })
     .catch(error => {
-        showErrorMessage(`Der opstod en fejl: ${error}`);
+        showErrorMessage(`An error occurred: ${error}`);
     });
 }
 
 // CompleteTest funktion
 function completeTest(testId) {
-    confirmAction(`Er du sikker på at du vil afslutte test ${testId}?`, function() {
+    confirmAction(`Are you sure you want to finish test ${testId}?`, function() {
         // Vis indlæsningsindikator
         showLoadingOverlay();
         
@@ -232,7 +233,7 @@ function completeTest(testId) {
         })
         .then(response => {
             if (!response.ok) {
-                throw new Error(`Server svarede med status: ${response.status}`);
+                throw new Error(`Server answered with status: ${response.status}`);
             }
             return response.json();
         })
@@ -241,7 +242,7 @@ function completeTest(testId) {
             hideLoadingOverlay();
             
             if (data.success) {
-                showSuccessMessage(`Test ${testId} er blevet afsluttet!`);
+                showSuccessMessage(`Test ${testId} has been finished!`);
                 
                 // Luk modal hvis åben
                 const modal = bootstrap.Modal.getInstance(document.getElementById('testDetailsModal'));
@@ -250,14 +251,14 @@ function completeTest(testId) {
                 // Fjern test-kortet manuelt (klientsiden)
                 removeTestCardFromDOM(testId);
             } else {
-                showErrorMessage(`Fejl ved afslutning af test: ${data.error}`);
+                showErrorMessage(`Error while finishing test: ${data.error}`);
             }
         })
         .catch(error => {
             // Skjul indlæsningsindikator
             hideLoadingOverlay();
-            showErrorMessage(`Der opstod en fejl: ${error}`);
-            console.error("Fejl ved afslutning af test:", error);
+            showErrorMessage(`An error has occured: ${error}`);
+            console.error("Error while finishing test:", error);
         });
     });
 }
@@ -309,7 +310,7 @@ function removeTestCardFromDOM(testId) {
     });
     
     if (!foundCard) {
-        console.warn(`Kunne ikke finde test-kort for test ${testId}`);
+        console.warn(`Could not find test card for test ${testId}`);
     }
 }
 
@@ -345,7 +346,6 @@ function hideLoadingOverlay() {
     }
 }
 
-// ShowTestDetails funktion
 function showTestDetails(testId) {
     currentTestId = testId;
     // Vis loading indikator
@@ -353,18 +353,18 @@ function showTestDetails(testId) {
     modal.show();
     
     // Vis indlæsningsindikator i modalen
-    document.querySelector('.test-info').innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Indlæser testdetaljer...</p></div>';
-    document.querySelector('.test-samples-table tbody').innerHTML = '<tr><td colspan="4" class="text-center">Indlæser...</td></tr>';
+    document.querySelector('.test-info').innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Loading test details...</p></div>';
+    document.querySelector('.test-samples-table tbody').innerHTML = '<tr><td colspan="4" class="text-center">Loading...</td></tr>';
     
     // Hent testdetaljer fra serveren
     fetch(`/api/testDetails/${testId}`)
         .then(response => {
             if (response.status === 404) {
                 // Hvis testen ikke findes (måske er den blevet afsluttet)
-                throw new Error("Testen blev ikke fundet. Den er muligvis blevet afsluttet.");
+                throw new Error("The test was not found. It may have been completed.");
             }
             if (!response.ok) {
-                throw new Error(`Server svarede med status: ${response.status}`);
+                throw new Error(`Server responded with status: ${response.status}`);
             }
             return response.json();
         })
@@ -372,24 +372,22 @@ function showTestDetails(testId) {
             if (data.test) {
                 populateTestDetailsModal(data.test);
             } else {
-                throw new Error("Ingen testdata returneret");
+                throw new Error("No test data returned");
             }
         })
         .catch(error => {
-            document.querySelector('.test-info').innerHTML = `<div class="alert alert-danger">Fejl: ${error.message}</div>`;
-            document.querySelector('.test-samples-table tbody').innerHTML = '<tr><td colspan="4" class="text-center">Kunne ikke hente data</td></tr>';
-            console.error("Fejl ved hentning af testdetaljer:", error);
+            document.querySelector('.test-info').innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+            document.querySelector('.test-samples-table tbody').innerHTML = '<tr><td colspan="4" class="text-center">Could not load data</td></tr>';
+            console.error("Error fetching test details:", error);
         });
 }
 
-// Funktion til at kassere alle prøver i en test
+// Funktion til at kassere alle prøver på én gang
 function disposeAllTestSamples(testId) {
-    if (!testId) {
-        alert("Fejl: Mangler test ID");
-        return;
-    }
-    
-    if (confirm(`Er du sikker på at du vil kassere ALLE prøver i test ${testId}?`)) {
+    confirmAction(`Are you sure you want to dispose ALL samples in test ${testId}?`, function() {
+        // Vis indlæsningsindikator
+        showLoadingOverlay();
+        
         fetch('/api/disposeAllTestSamples', {
             method: 'POST',
             headers: {
@@ -397,27 +395,28 @@ function disposeAllTestSamples(testId) {
             },
             body: JSON.stringify({ testId: testId })
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Server svarede med status: ${response.status}`);
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
+            // Skjul indlæsningsindikator
+            hideLoadingOverlay();
+            
             if (data.success) {
-                alert(`Alle prøver i test ${testId} er kasseret!`);
+                showSuccessMessage(`All samples in test ${testId} have been disposed!`);
+                
+                // Genindlæs siden efter kort pause
                 setTimeout(() => {
                     window.location.reload();
-                }, 500);
+                }, 1500);
             } else {
-                alert(`Fejl ved kassation: ${data.error}`);
+                showErrorMessage(`Error during disposal: ${data.error}`);
             }
         })
         .catch(error => {
-            console.error("Fejl ved kassation:", error);
-            alert(`Der opstod en fejl: ${error}`);
+            // Skjul indlæsningsindikator
+            hideLoadingOverlay();
+            showErrorMessage(`An error occurred: ${error}`);
         });
-    }
+    });
 }
 
 function populateTestDetailsModal(test) {

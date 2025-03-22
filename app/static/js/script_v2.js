@@ -80,7 +80,7 @@ function updateStorageGrid(locations) {
 
             const capacity = document.createElement('div');
             capacity.className = 'small';
-            capacity.textContent = location.status === 'occupied' ? `${location.count}` : 'Ledig';
+            capacity.textContent = location.status === 'occupied' ? `${location.count}` : 'Available';
 
             cell.appendChild(locationEl);
             cell.appendChild(capacity);
@@ -108,7 +108,7 @@ function createDummyStorageGrid() {
 
             const capacity = document.createElement('div');
             capacity.className = 'small';
-            capacity.textContent = i % 3 === 0 ? 'Optaget' : 'Ledig';
+            capacity.textContent = i % 3 === 0 ? 'Occupied' : 'Available';
 
             cell.appendChild(locationEl);
             cell.appendChild(capacity);

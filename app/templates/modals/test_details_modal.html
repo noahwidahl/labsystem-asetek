@@ -3,37 +3,37 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Test Detaljer</h5>
+                <h5 class="modal-title">Test Details</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <!-- Test information -->
                 <div class="test-info mb-4">
-                    <!-- Vil blive udfyldt dynamisk via JavaScript -->
+                    <!-- Will be populated dynamically via JavaScript -->
                 </div>
                 
-                <!-- Prøvetabel -->
-                <h5>Prøver i denne test</h5>
+                <!-- Sample table -->
+                <h5>Samples in this test</h5>
                 <div class="table-responsive">
                     <table class="table table-hover test-samples-table">
                         <thead>
                             <tr>
                                 <th>Test ID</th>
-                                <th>Beskrivelse</th>
-                                <th>Oprindelig Prøve</th>
-                                <th>Handling</th>
+                                <th>Description</th>
+                                <th>Original Sample</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <!-- Vil blive udfyldt dynamisk via JavaScript -->
+                            <!-- Will be populated dynamically via JavaScript -->
                         </tbody>
                     </table>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Luk</button>
-                <button type="button" class="btn btn-danger" onclick="disposeAllTestSamples(currentTestId)">Kassér Alle Prøver</button>
-                <button type="button" class="btn btn-primary" onclick="completeTest(currentTestId)">Afslut Test</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger" onclick="disposeAllTestSamples(currentTestId)">Dispose All Samples</button>
+                <button type="button" class="btn btn-primary" onclick="completeTest(currentTestId)">Complete Test</button>
             </div>
         </div>
     </div>

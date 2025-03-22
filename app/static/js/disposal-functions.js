@@ -110,28 +110,28 @@ function formatDate(dateString) {
     });
 }
 
-// Opdater max antal baseret på valgt prøve
+// Add event listener to sample selection in disposal modal
 function updateDisposalAmount() {
     const sampleSelect = document.getElementById('sampleSelect');
     const disposalAmount = document.getElementById('disposalAmount');
     
     if (!sampleSelect || !disposalAmount) return;
     
-    // Hvis ingen prøve er valgt, deaktiver antal-feltet
+    // If no sample selected, disable amount field
     if (!sampleSelect.value) {
         disposalAmount.disabled = true;
         disposalAmount.value = '';
         return;
     }
     
-    // Aktiver antal-feltet
+    // Enable amount field
     disposalAmount.disabled = false;
     
-    // Find den valgte prøve fra dropdown-teksten
+    // Find selected sample from dropdown text
     const selectedOption = sampleSelect.options[sampleSelect.selectedIndex];
     const optionText = selectedOption.textContent;
     
-    // Forsøg at udtrække det maksimale antal fra teksten med regex
+    // Try to extract maximum amount from text with regex
     const match = optionText.match(/\((\d+)/);
     if (match && match[1]) {
         const maxAmount = parseInt(match[1]);
@@ -203,9 +203,9 @@ function createDisposal() {
     });
 }
 
-// Funktion til at kassere en testprøve
+// Function to dispose a test sample
 function disposeSample(testSampleId) {
-    if (confirm("Er du sikker på at du vil kassere denne prøve?")) {
+    if (confirm("Are you sure you want to dispose this sample?")) {
         fetch('/api/disposeSample', {
             method: 'POST',
             headers: {
@@ -216,25 +216,25 @@ function disposeSample(testSampleId) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showSuccessMessage("Prøve er kasseret succesfuldt!");
+                showSuccessMessage("Sample has been disposed successfully!");
                 
-                // Genindlæs siden efter kort pause
+                // Reload page after short pause
                 setTimeout(() => {
                     window.location.reload();
                 }, 1500);
             } else {
-                showErrorMessage(`Fejl ved kassation: ${data.error}`);
+                showErrorMessage(`Error during disposal: ${data.error}`);
             }
         })
         .catch(error => {
-            showErrorMessage(`Der opstod en fejl: ${error}`);
+            showErrorMessage(`An error occurred: ${error}`);
         });
     }
 }
 
-// Kassér alle prøver på én gang
+// Dispose all samples at once
 function disposeAllTestSamples(testId) {
-    if (confirm(`Er du sikker på at du vil kassere ALLE prøver i test ${testId}?`)) {
+    if (confirm(`Are you sure you want to dispose ALL samples in test ${testId}?`)) {
         fetch('/api/disposeAllTestSamples', {
             method: 'POST',
             headers: {
@@ -245,18 +245,18 @@ function disposeAllTestSamples(testId) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showSuccessMessage(`Alle prøver i test ${testId} er kasseret!`);
+                showSuccessMessage(`All samples in test ${testId} have been disposed!`);
                 
-                // Genindlæs siden efter kort pause
+                // Reload page after short pause
                 setTimeout(() => {
                     window.location.reload();
                 }, 1500);
             } else {
-                showErrorMessage(`Fejl ved kassation: ${data.error}`);
+                showErrorMessage(`Error during disposal: ${data.error}`);
             }
         })
         .catch(error => {
-            showErrorMessage(`Der opstod en fejl: ${error}`);
+            showErrorMessage(`An error occurred: ${error}`);
         });
     }
 }

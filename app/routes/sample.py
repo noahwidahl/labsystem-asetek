@@ -13,19 +13,19 @@ def init_sample(blueprint, mysql):
         try:
             cursor = mysql.connection.cursor()
             
-            # Hent leverandører
+            # Get suppliers
             cursor.execute("SELECT SupplierID, SupplierName FROM Supplier")
             suppliers = [dict(SupplierID=row[0], SupplierName=row[1]) for row in cursor.fetchall()]
             
-            # Hent brugere
+            # Get users
             cursor.execute("SELECT UserID, Name FROM User")
             users = [dict(UserID=row[0], Name=row[1]) for row in cursor.fetchall()]
             
-            # Hent enheder
+            # Get units
             cursor.execute("SELECT UnitID, UnitName FROM Unit ORDER BY UnitName")
             units = [dict(UnitID=row[0], UnitName=row[1]) for row in cursor.fetchall()]
             
-            # Hent lokationer
+            # Get locations
             cursor.execute("""
                 SELECT l.LocationID, l.LocationName, lb.LabName
                 FROM StorageLocation l
@@ -49,30 +49,30 @@ def init_sample(blueprint, mysql):
         except Exception as e:
             print(f"Error loading register page: {e}")
             return render_template('sections/register.html', 
-                                error="Fejl ved indlæsning af registreringsform")
+                                error="Error loading registration form")
     
     @blueprint.route('/storage')
     def storage():
         try:
             samples = sample_service.get_all_samples()
             
-            # Konverter til format anvendt af template
+            # Convert to format used by template
             samples_for_template = []
             for sample in samples:
-                # Hent yderligere information
+                # Get additional information
                 cursor = mysql.connection.cursor()
                 
-                # Hent modtagelsesdato
+                # Get reception date
                 cursor.execute("SELECT ReceivedDate FROM Reception WHERE ReceptionID = %s", (sample.reception_id,))
                 reception_result = cursor.fetchone()
-                modtagelse_dato = reception_result[0] if reception_result else None
+                reception_date = reception_result[0] if reception_result else None
                 
-                # Hent enhed
+                # Get unit
                 cursor.execute("SELECT UnitName FROM Unit WHERE UnitID = %s", (sample.unit_id,))
                 unit_result = cursor.fetchone()
-                enhed = unit_result[0] if unit_result else "stk"
+                unit = unit_result[0] if unit_result else "pcs"
                 
-                # Hent placering
+                # Get location
                 cursor.execute("""
                     SELECT sl.LocationName 
                     FROM SampleStorage ss 
@@ -80,31 +80,31 @@ def init_sample(blueprint, mysql):
                     WHERE ss.SampleID = %s
                 """, (sample.id,))
                 location_result = cursor.fetchone()
-                placering = location_result[0] if location_result else "Ukendt"
+                location = location_result[0] if location_result else "Unknown"
                 
                 cursor.close()
                 
                 samples_for_template.append({
                     "ID": f"SMP-{sample.id}",
-                    "Beskrivelse": sample.description,
-                    "Modtagelse": modtagelse_dato.strftime('%Y-%m-%d') if modtagelse_dato else "Ukendt",
-                    "Antal": f"{sample.amount} {enhed}",
-                    "Placering": placering,
-                    "Registreret": modtagelse_dato.strftime('%Y-%m-%d %H:%M') if modtagelse_dato else "Ukendt",
+                    "Description": sample.description,
+                    "Reception": reception_date.strftime('%Y-%m-%d') if reception_date else "Unknown",
+                    "Amount": f"{sample.amount} {unit}",
+                    "Location": location,
+                    "Registered": reception_date.strftime('%Y-%m-%d %H:%M') if reception_date else "Unknown",
                     "Status": sample.status
                 })
             
             return render_template('sections/storage.html', samples=samples_for_template)
         except Exception as e:
             print(f"Error loading storage: {e}")
-            return render_template('sections/storage.html', error="Fejl ved indlæsning af lager")
+            return render_template('sections/storage.html', error="Error loading storage")
     
     @blueprint.route('/api/samples', methods=['POST'])
     def create_sample():
         try:
             data = request.json
             
-            # Validering af input
+            # Validate input
             validation_result = validate_sample_data(data)
             if not validation_result.get('valid', False):
                 return jsonify({
@@ -113,11 +113,11 @@ def init_sample(blueprint, mysql):
                     'field': validation_result.get('field')
                 }), 400
             
-            # Hent aktuel bruger
+            # Get current user
             current_user = get_current_user()
             user_id = current_user['UserID']
             
-            # Opret prøven via service
+            # Create the sample via service
             result = sample_service.create_sample(data, user_id)
             
             return jsonify(result)

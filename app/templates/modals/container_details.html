@@ -1,7 +1,7 @@
 <!-- app/templates/sections/container_details.html -->
 {% extends "base.html" %}
 
-{% block title %}Container {{ container.ContainerID }} - Laboratorie Prøvesystem{% endblock %}
+{% block title %}Container {{ container.ContainerID }} - Laboratory Sample System{% endblock %}
 
 {% block content %}
 <section id="container-details" class="content-section">
@@ -10,7 +10,7 @@
             <div class="col-12">
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="{{ url_for('containers') }}">Containere</a></li>
+                        <li class="breadcrumb-item"><a href="{{ url_for('containers') }}">Containers</a></li>
                         <li class="breadcrumb-item active">Container {{ container.ContainerID }}</li>
                     </ol>
                 </nav>
@@ -19,10 +19,10 @@
                     <h2>Container: {{ container.Description }}</h2>
                     <div>
                         <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addSampleToContainerModal">
-                            <i class="fas fa-plus"></i> Tilføj prøve
+                            <i class="fas fa-plus"></i> Add sample
                         </button>
                         <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#moveContainerModal">
-                            <i class="fas fa-arrow-right"></i> Flyt container
+                            <i class="fas fa-arrow-right"></i> Move container
                         </button>
                     </div>
                 </div>
@@ -32,7 +32,7 @@
         <!-- Container info card -->
         <div class="row mb-4">
             <div class="col-md-6">
-                <div class="card">
+                <div class<div class="card">
                     <div class="card-header">
                         <h5 class="mb-0">Container information</h5>
                     </div>
@@ -43,7 +43,7 @@
                                 <td>{{ container.ContainerID }}</td>
                             </tr>
                             <tr>
-                                <th>Beskrivelse:</th>
+                                <th>Description:</th>
                                 <td>{{ container.Description }}</td>
                             </tr>
                             <tr>
@@ -55,12 +55,12 @@
                                 <td><span class="badge bg-primary">{{ container.Status }}</span></td>
                             </tr>
                             <tr>
-                                <th>Blandede prøver:</th>
-                                <td>{{ "Ja" if container.IsMixed else "Nej" }}</td>
+                                <th>Mixed samples:</th>
+                                <td>{{ "Yes" if container.IsMixed else "No" }}</td>
                             </tr>
                             <tr>
-                                <th>Kapacitet:</th>
-                                <td>{{ container.Capacity|default('Ubegrænset') }}</td>
+                                <th>Capacity:</th>
+                                <td>{{ container.Capacity|default('Unlimited') }}</td>
                             </tr>
                         </table>
                     </div>
@@ -70,7 +70,7 @@
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="mb-0">Indhold</h5>
+                        <h5 class="mb-0">Contents</h5>
                     </div>
                     <div class="card-body">
                         {% if container_samples %}
@@ -79,12 +79,12 @@
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>{{ sample.SampleID }}</strong>: {{ sample.Description }}
-                                        <div class="text-muted small">Placering: {{ sample.LocationName }}</div>
+                                        <div class="text-muted small">Location: {{ sample.LocationName }}</div>
                                         {% if sample.ExpireDate %}
                                             <div class="text-{{ 'danger' if sample.days_until_expiry < 14 else 'muted' }} small">
-                                                Udløber: {{ sample.ExpireDate }} 
+                                                Expires: {{ sample.ExpireDate }} 
                                                 {% if sample.days_until_expiry < 14 %}
-                                                ({{ sample.days_until_expiry }} dage)
+                                                ({{ sample.days_until_expiry }} days)
                                                 {% endif %}
                                             </div>
                                         {% endif %}
@@ -101,7 +101,7 @@
                             {% endfor %}
                             </ul>
                         {% else %}
-                            <p class="text-center text-muted">Ingen prøver i denne container</p>
+                            <p class="text-center text-muted">No samples in this container</p>
                         {% endif %}
                     </div>
                 </div>
@@ -111,7 +111,7 @@
         <!-- Container history -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">Container historik</h5>
+                <h5 class="mb-0">Container history</h5>
             </div>
             <div class="card-body">
                 {% if container_history %}
@@ -119,10 +119,10 @@
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Dato</th>
-                                    <th>Handling</th>
-                                    <th>Bruger</th>
-                                    <th>Noter</th>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                    <th>User</th>
+                                    <th>Notes</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -138,14 +138,14 @@
                         </table>
                     </div>
                 {% else %}
-                    <p class="text-center text-muted">Ingen historik fundet for denne container</p>
+                    <p class="text-center text-muted">No history found for this container</p>
                 {% endif %}
             </div>
         </div>
     </div>
 </section>
 
-<!-- Inkluder modale vinduer -->
+<!-- Include modals -->
 {% include "modals/add_sample_to_container_modal.html" %}
 {% include "modals/move_container_modal.html" %}
 {% endblock %}

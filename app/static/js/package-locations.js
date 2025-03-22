@@ -1,8 +1,8 @@
 /**
- * Package Locations modul til at håndtere forskellige lokationer for pakker
+ * Package Locations module to handle different locations for packages
  */
 const PackageLocations = (function() {
-    // Private variabler
+    // Private variables
     let packageLocations = [];
     
     // Private methods
@@ -23,64 +23,64 @@ const PackageLocations = (function() {
     // Public API
     return {
         init: function() {
-            console.log("Package Locations initialiseret");
+            console.log("Package Locations initialized");
         },
         
-        // Tilføj lokation for en bestemt pakke
+        // Add location for a specific package
         addLocation: function(packageNumber, locationId, locationName) {
-            // Fjern eventuel eksisterende lokation for denne pakke
+            // Remove any existing location for this package
             this.removeLocation(packageNumber);
             
-            // Tilføj den nye lokation
+            // Add the new location
             packageLocations.push({
                 packageNumber: packageNumber,
                 locationId: locationId,
                 locationName: locationName
             });
             
-            console.log('Tilføjet lokation for pakke', packageNumber, ':', locationName);
+            console.log('Added location for package', packageNumber, ':', locationName);
         },
         
-        // Fjern lokation baseret på pakkenummer
+        // Remove location based on package number
         removeLocation: function(packageNumber) {
             const index = packageLocations.findIndex(p => p.packageNumber == packageNumber);
             if (index >= 0) {
                 packageLocations.splice(index, 1);
-                console.log('Fjernet lokation for pakke', packageNumber);
+                console.log('Removed location for package', packageNumber);
             }
         },
         
-        // Fjern lokation baseret på lokationsnavn
+        // Remove location based on location name
         removeLocationByName: function(locationName) {
             const index = packageLocations.findIndex(p => p.locationName === locationName);
             if (index >= 0) {
                 packageLocations.splice(index, 1);
-                console.log('Fjernet lokation:', locationName);
+                console.log('Removed location:', locationName);
             }
         },
         
-        // Hent alle valgte lokationer
+        // Get all selected locations
         getSelectedLocations: function() {
             return packageLocations;
         },
         
-        // Hent lokation for en bestemt pakke
+        // Get location for a specific package
         getLocationByPackage: function(packageNumber) {
             return packageLocations.find(p => p.packageNumber == packageNumber);
         },
         
-        // Hent lokation med et bestemt lokationsnavn
+        // Get location with a specific location name
         getLocationByName: function(locationName) {
             return packageLocations.find(p => p.locationName === locationName);
         },
         
-        // Nulstil alle pakkelokationer
+        // Reset all package locations
         reset: function() {
             packageLocations = [];
-            console.log('Pakkelokationer nulstillet');
+            console.log('Package locations reset');
         },
         
-        // Hent data til gemning i databasen
+        // Get data for saving to database
         getData: function() {
             return {
                 differentLocations: true,
@@ -94,7 +94,7 @@ const PackageLocations = (function() {
     };
 })();
 
-// Initialiser når dokumentet er indlæst
+// Initialize when document is loaded
 document.addEventListener('DOMContentLoaded', function() {
     PackageLocations.init();
 });

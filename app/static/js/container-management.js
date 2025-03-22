@@ -4,9 +4,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Debug info
     const containers = document.querySelectorAll('table tbody tr[data-container-id]');
-    console.log(`Fandt ${containers.length} container rækker i DOM`);
+    console.log(`Found ${containers.length} container rows in DOM`);
     
-    // Søgefunktionalitet til containertabellen
+    // Search functionality for container table
     const searchInput = document.getElementById('containerSearch');
     if (searchInput) {
         searchInput.addEventListener('input', function() {
@@ -20,10 +20,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Filter knapper
+    // Filter buttons
     setupFilterButtons();
     
-    // Tilføj event listener til slet-knapper
+    // Add event listener to delete buttons
     document.querySelectorAll('.delete-container-btn').forEach(button => {
         button.addEventListener('click', function() {
             const containerId = this.getAttribute('data-container-id');
@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Tilføj event listeners til "Tilføj prøve" knapper
+    // Add event listeners to "Add sample" buttons
     document.querySelectorAll('.add-sample-btn').forEach(button => {
         button.addEventListener('click', function() {
             const containerId = this.getAttribute('data-container-id');
@@ -47,28 +47,28 @@ function setupFilterButtons() {
     
     if (!filterAll || !filterEmpty || !filterFull) return;
     
-    // Alle containere
+    // All containers
     filterAll.addEventListener('click', function() {
         resetButtonStates([filterAll, filterEmpty, filterFull]);
         this.classList.add('active');
         filterContainers('all');
     });
     
-    // Tomme containere
+    // Empty containers
     filterEmpty.addEventListener('click', function() {
         resetButtonStates([filterAll, filterEmpty, filterFull]);
         this.classList.add('active');
         filterContainers('empty');
     });
     
-    // Fyldte containere
+    // Filled containers
     filterFull.addEventListener('click', function() {
         resetButtonStates([filterAll, filterEmpty, filterFull]);
         this.classList.add('active');
         filterContainers('full');
     });
     
-    // Standard: Vis alle
+    // Default: Show all
     filterAll.classList.add('active');
 }
 
@@ -90,7 +90,7 @@ function filterContainers(filter) {
         }
         
         const countText = sampleCount.textContent;
-        // Find første tal i teksten (prøver X / enheder Y)
+        // Find first number in text (samples X / units Y)
         const firstNumber = parseInt(countText.match(/\d+/) || [0]);
         
         if (filter === 'all') {
@@ -103,31 +103,31 @@ function filterContainers(filter) {
     });
 }
 
-// Funktion til at tilføje prøve til container
+// Function to add sample to container
 function addSampleToContainer() {
     const containerId = document.getElementById('targetContainerId').value;
     const sampleId = document.getElementById('sampleSelect').value;
     const amount = parseInt(document.getElementById('sampleAmount').value) || 1;
     
-    // Validering
+    // Validation
     if (!sampleId) {
-        showErrorMessage('Vælg venligst en prøve');
+        showErrorMessage('Please select a sample');
         return;
     }
     
     if (amount < 1) {
-        showErrorMessage('Antal skal være mindst 1');
+        showErrorMessage('Amount must be at least 1');
         return;
     }
     
-    // Opret data-objekt
+    // Create data object
     const data = {
         containerId: containerId,
         sampleId: sampleId,
         amount: amount
     };
     
-    // Send til server
+    // Send to server
     fetch('/api/containers/add-sample', {
         method: 'POST',
         headers: {
@@ -138,9 +138,9 @@ function addSampleToContainer() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showSuccessMessage('Prøve tilføjet til container!');
+            showSuccessMessage('Sample added to container!');
             
-            // Luk modal og genindlæs siden
+            // Close modal and reload page
             const modal = bootstrap.Modal.getInstance(document.getElementById('addSampleToContainerModal'));
             modal.hide();
             
@@ -148,24 +148,24 @@ function addSampleToContainer() {
                 window.location.reload();
             }, 1000);
         } else {
-            showErrorMessage(`Fejl ved tilføjelse af prøve: ${data.error}`);
+            showErrorMessage(`Error adding sample: ${data.error}`);
         }
     })
     .catch(error => {
-        showErrorMessage(`Der opstod en fejl: ${error}`);
+        showErrorMessage(`An error occurred: ${error}`);
     });
 }
 
-// Opret ny container
+// Create new container
 function createContainer() {
     const description = document.getElementById('containerDescription').value;
     const typeId = document.getElementById('containerType').value;
     const capacity = document.getElementById('containerCapacity').value;
     const isMixed = document.getElementById('containerIsMixed').checked;
     
-    // Validering
+    // Validation
     if (!description) {
-        showErrorMessage('Indtast venligst en beskrivelse for containeren');
+        showErrorMessage('Please enter a description for the container');
         return;
     }
     
@@ -177,7 +177,7 @@ function createContainer() {
         isMixed
     });
     
-    // Opret container-objekt
+    // Create container object
     const containerData = {
         description: description,
         containerTypeId: typeId || null,
@@ -185,7 +185,7 @@ function createContainer() {
         isMixed: isMixed
     };
     
-    // Send til server
+    // Send to server
     fetch('/api/containers', {
         method: 'POST',
         headers: {
@@ -200,9 +200,9 @@ function createContainer() {
     .then(data => {
         console.log('Server response data:', data);
         if (data.success) {
-            showSuccessMessage('Container oprettet succesfuldt!');
+            showSuccessMessage('Container created successfully!');
             
-            // Luk modal og genindlæs siden
+            // Close modal and reload page
             const modal = bootstrap.Modal.getInstance(document.getElementById('createContainerModal'));
             if (modal) modal.hide();
             
@@ -210,18 +210,18 @@ function createContainer() {
                 window.location.reload();
             }, 1000);
         } else {
-            showErrorMessage(`Fejl ved oprettelse: ${data.error}`);
+            showErrorMessage(`Error during creation: ${data.error}`);
         }
     })
     .catch(error => {
         console.error('Error creating container:', error);
-        showErrorMessage(`Der opstod en fejl: ${error}`);
+        showErrorMessage(`An error occurred: ${error}`);
     });
 }
 
-// Slet container
+// Delete container
 function deleteContainer(containerId) {
-    if (confirm(`Er du sikker på at du vil slette container ${containerId}?`)) {
+    if (confirm(`Are you sure you want to delete container ${containerId}?`)) {
         console.log('Deleting container:', containerId);
         
         fetch(`/api/containers/${containerId}`, {
@@ -230,30 +230,30 @@ function deleteContainer(containerId) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showSuccessMessage('Container slettet succesfuldt!');
+                showSuccessMessage('Container deleted successfully!');
                 
-                // Fjern række fra tabellen
+                // Remove row from table
                 const row = document.querySelector(`tr[data-container-id="${containerId}"]`);
                 if (row) {
                     row.remove();
                 } else {
-                    // Genindlæs siden hvis rækken ikke findes
+                    // Reload page if row not found
                     setTimeout(() => {
                         window.location.reload();
                     }, 1000);
                 }
             } else {
-                showErrorMessage(`Fejl ved sletning: ${data.error}`);
+                showErrorMessage(`Error during deletion: ${data.error}`);
             }
         })
         .catch(error => {
             console.error('Error deleting container:', error);
-            showErrorMessage(`Der opstod en fejl: ${error}`);
+            showErrorMessage(`An error occurred: ${error}`);
         });
     }
 }
 
-// Beskedfunktioner
+// Message functions
 function showSuccessMessage(message) {
     const successToast = document.createElement('div');
     successToast.className = 'custom-toast success-toast';
@@ -262,7 +262,7 @@ function showSuccessMessage(message) {
             <i class="fas fa-check-circle"></i>
         </div>
         <div class="toast-content">
-            <div class="toast-title">Succes</div>
+            <div class="toast-title">Success</div>
             <div class="toast-message">${message}</div>
         </div>
         <button class="toast-close" onclick="this.parentElement.remove()">
@@ -271,10 +271,10 @@ function showSuccessMessage(message) {
     `;
     document.body.appendChild(successToast);
 
-    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    // Add 'show' class after short delay (for animation effect)
     setTimeout(() => successToast.classList.add('show'), 10);
 
-    // Fjern automatisk efter 3 sekunder
+    // Remove automatically after 3 seconds
     setTimeout(() => {
         successToast.classList.remove('show');
         setTimeout(() => successToast.remove(), 300);
@@ -289,7 +289,7 @@ function showErrorMessage(message) {
             <i class="fas fa-exclamation-circle"></i>
         </div>
         <div class="toast-content">
-            <div class="toast-title">Fejl</div>
+            <div class="toast-title">Error</div>
             <div class="toast-message">${message}</div>
         </div>
         <button class="toast-close" onclick="this.parentElement.remove()">
@@ -298,10 +298,10 @@ function showErrorMessage(message) {
     `;
     document.body.appendChild(errorToast);
 
-    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    // Add 'show' class after short delay (for animation effect)
     setTimeout(() => errorToast.classList.add('show'), 10);
 
-    // Fjern automatisk efter 5 sekunder
+    // Remove automatically after 5 seconds
     setTimeout(() => {
         errorToast.classList.remove('show');
         setTimeout(() => errorToast.remove(), 300);
