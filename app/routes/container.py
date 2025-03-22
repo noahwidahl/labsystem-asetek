@@ -33,7 +33,7 @@ def init_container(blueprint, mysql):
             cursor.execute("""
                 SELECT 
                     s.SampleID,
-                    CONCAT('PRV-', s.SampleID) as SampleIDFormatted,
+                    CONCAT('SMP-', s.SampleID) as SampleIDFormatted,
                     s.Description,
                     ss.AmountRemaining,
                     u.UnitName as Unit

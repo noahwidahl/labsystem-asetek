@@ -47,7 +47,7 @@ def init_test(blueprint, mysql):
             for sample in samples_data:
                 samples.append({
                     "SampleID": sample[0],
-                    "SampleIDFormatted": f"PRV-{sample[0]}",
+                    "SampleIDFormatted": f"SMP-{sample[0]}",
                     "Description": sample[1],
                     "AmountRemaining": sample[2],
                     "LocationName": sample[3]

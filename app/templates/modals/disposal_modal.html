@@ -2,53 +2,52 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Registrer Kassation</h5>
+                <h5 class="modal-title">Register Disposal</h5>
             </div>
             <div class="modal-body">
                 <div class="form-group mb-3">
-                    <label for="sampleSelect">Vælg Prøve</label>
+                    <label for="sampleSelect">Select Sample</label>
                     <select class="form-control" id="sampleSelect" required>
-                        <option value="">Vælg prøve</option>
-                        <!-- Vil blive udfyldt dynamisk via JavaScript -->
+                        <option value="">Select sample</option>
+                        <!-- Will be populated dynamically via JavaScript -->
                     </select>
                 </div>
                 <div class="form-group mb-3">
-                    <label for="disposalAmount">Antal</label>
+                    <label for="disposalAmount">Amount</label>
                     <input type="number" class="form-control" id="disposalAmount" min="1" required>
                 </div>
                 <div class="form-group mb-3">
-                    <label for="disposalUser">Kasseret Af</label>
+                    <label for="disposalUser">Disposed By</label>
                     <select class="form-control" id="disposalUser" required>
                         <option value="{{ current_user.UserID }}">{{ current_user.Name }}</option>
                     </select>
                 </div>
                 <div class="form-group mb-3">
-                    <label for="disposalNotes">Noter</label>
+                    <label for="disposalNotes">Notes</label>
                     <textarea class="form-control" id="disposalNotes" rows="3"></textarea>
                 </div>
                 
                 <hr class="mb-4">
                 
-                <h6>Seneste Kassationer</h6>
+                <h6>Recent Disposals</h6>
                 <div class="recent-disposals mt-3">
                     <table class="table table-sm">
                         <thead>
                             <tr>
-                                <th>Prøve ID</th>
-                                <th>Dato</th>
-                                <th>Antal</th>
-                                <th>Bruger</th>
+                                <th>Sample ID</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>User</th>
                             </tr>
                         </thead>
                         <tbody id="disposalTableBody">
-                            <!-- Dynamisk indhold via JavaScript -->
+                            <!-- Dynamic content via JavaScript -->
                         </tbody>
                     </table>
                 </div>
             </div>
             <div class="modal-footer">
-                <!-- Annuller-knappen er fjernet -->
-                <button type="button" class="btn btn-danger" onclick="createDisposal()">Registrer Kassation</button>
+                <button type="button" class="btn btn-danger" onclick="createDisposal()">Register Disposal</button>
             </div>
         </div>
     </div>

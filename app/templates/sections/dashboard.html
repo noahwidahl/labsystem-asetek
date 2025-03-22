@@ -19,10 +19,10 @@
                     <div class="card-body">
                         <div class="d-flex align-items-center mb-2">
                             <i class="fas fa-exclamation-triangle text-warning me-2"></i>
-                            <h5 class="card-title mb-0">Udløber Snart</h5>
+                            <h5 class="card-title mb-0">Expiring Soon</h5>
                         </div>
                         <p class="card-text display-4">{{ expiring_count|default(0) }}</p>
-                        <p class="card-text text-danger">Inden for 14 dage</p>
+                        <p class="card-text text-danger">Within 14 days</p>
                     </div>
                 </div>
             </div>
@@ -33,10 +33,10 @@
                     <div class="card-body">
                         <div class="d-flex align-items-center mb-2">
                             <i class="fas fa-box text-primary me-2"></i>
-                            <h5 class="card-title mb-0">På Lager</h5>
+                            <h5 class="card-title mb-0">In Storage</h5>
                         </div>
                         <p class="card-text display-4">{{ sample_count|default(0) }}</p>
-                        <p class="card-text text-success">+{{ new_today|default(0) }} i dag</p>
+                        <p class="card-text text-success">+{{ new_today|default(0) }} today</p>
                     </div>
                 </div>
             </div>
@@ -47,10 +47,10 @@
                     <div class="card-body">
                         <div class="d-flex align-items-center mb-2">
                             <i class="fas fa-flask text-primary me-2"></i>
-                            <h5 class="card-title mb-0">I Test</h5>
+                            <h5 class="card-title mb-0">In Testing</h5>
                         </div>
                         <p class="card-text display-4">{{ active_tests_count|default(0) }}</p>
-                        <p class="card-text">{{ active_tests_count|default(0) }} tests aktive</p>
+                        <p class="card-text">{{ active_tests_count|default(0) }} active tests</p>
                     </div>
                 </div>
             </div>
@@ -61,7 +61,7 @@
             <div class="col-md-6 mb-4">
                 <div class="card">
                     <div class="card-header">
-                        <h5>Lageroversigt</h5>
+                        <h5>Storage Overview</h5>
                     </div>
                     <div class="card-body">
                         <div class="storage-grid">
@@ -73,17 +73,16 @@
                                         {% if location.status == 'occupied' %}
                                         {{ location.count }}
                                         {% else %}
-                                        Ledig
+                                        Available
                                         {% endif %}
                                     </div>
                                 </div>
                                 {% endfor %}
                             {% else %}
-                                <!-- Fallback til dummy-data hvis ingen locations -->
                                 {% for i in range(1, 13) %}
                                 <div class="storage-cell {% if i % 3 == 0 %}bg-light border-primary{% endif %}">
                                     <div class="fw-bold">A{{ (i // 4) + 1 }}.B{{ i % 4 if i % 4 != 0 else 4 }}</div>
-                                    <div class="small">{% if i % 3 == 0 %}Optaget{% else %}Ledig{% endif %}</div>
+                                    <div class="small">{% if i % 3 == 0 %}Occupied{% else %}Available{% endif %}</div>
                                 </div>
                                 {% endfor %}
                             {% endif %}
@@ -96,7 +95,7 @@
             <div class="col-md-6 mb-4">
                 <div class="card">
                     <div class="card-header">
-                        <h5>Seneste Aktivitet</h5>
+                        <h5>Recent Activity</h5>
                     </div>
                     <div class="card-body">
                         <div class="list-group">
@@ -105,7 +104,7 @@
                                 <div class="list-group-item">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="badge bg-primary rounded-pill">{{ item.ActionType }}</span>
-                                        <small>{{ item.Timestamp|default('Nu') }}</small>
+                                        <small>{{ item.Timestamp|default('Now') }}</small>
                                     </div>
                                     <p class="mb-1 mt-2">{{ item.Notes }}</p>
                                     <small class="text-muted">{{ item.UserName }}</small>
@@ -113,7 +112,7 @@
                                 {% endfor %}
                             {% else %}
                                 <div class="list-group-item">
-                                    <p class="mb-0">Ingen nylig aktivitet</p>
+                                    <p class="mb-0">No recent activity</p>
                                 </div>
                             {% endif %}
                         </div>

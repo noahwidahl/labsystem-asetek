@@ -1103,13 +1103,13 @@ function mapLocationNameToId(locationName) {
 function handleFormSubmission() {
     if (!validateCurrentStep()) return;
     
-    // Saml alle data fra formular
+    // Collect all data from form
     const formData = {
-        // Modtagelsesoplysninger
+        // Reception information
         supplier: document.querySelector('[name="supplier"]')?.value || '',
         trackingNumber: document.querySelector('[name="trackingNumber"]')?.value || '',
         
-        // Prøve information
+        // Sample information
         partNumber: document.querySelector('[name="partNumber"]')?.value || '',
         description: document.querySelector('[name="description"]')?.value || '',
         isBulkSample: document.getElementById('isBulkSample')?.checked || false,
@@ -1123,30 +1123,32 @@ function handleFormSubmission() {
         hasSerialNumbers: document.getElementById('hasSerialNumbers')?.checked || false,
         other: document.querySelector('[name="other"]')?.value || '',
         
-        // Container-funktionalitet
+        // Container functionality
         createContainers: document.getElementById('createContainers')?.checked || false,
+        containerDescription: document.getElementById('containerDescription')?.value || '',
+        containerIsMixed: document.getElementById('containerIsMixed')?.checked || false,
         
-        // Identifikation
+        // Identification
         serialNumbers: scannedItems || [],
         
-        // Lokation - nu fra valgt celle i stedet for dropdown
+        // Location - now from selected cell instead of dropdown
         storageLocation: document.getElementById('selectedLocationInput')?.value || selectedLocation || ''
     };
     
-    // Hvis vi har valgt location ved at klikke på en celle, konverter locationName til et ID
+    // If we have selected location by clicking on a cell, convert locationName to an ID
     if (formData.storageLocation && !formData.storageLocation.match(/^\d+$/)) {
         formData.storageLocation = mapLocationNameToId(formData.storageLocation);
     }
     
-    // Hvis PackageLocations modul er tilgængeligt, hent pakkedata
+    // If PackageLocations module is available, get package data
     if (typeof PackageLocations !== 'undefined') {
         const packageLocationsData = PackageLocations.getData();
         
-        // For hvert valgt lokationsnavn, omsæt til location ID
+        // For each selected location name, convert to location ID
         if (packageLocationsData.packageLocations) {
             packageLocationsData.packageLocations = packageLocationsData.packageLocations.map(pkg => {
                 if (pkg.locationName && (!pkg.locationId || isNaN(pkg.locationId))) {
-                    // Konverter locationName til locationId
+                    // Convert locationName to locationId
                     return {
                         packageNumber: pkg.packageNumber,
                         locationId: mapLocationNameToId(pkg.locationName)
@@ -1159,15 +1161,15 @@ function handleFormSubmission() {
         Object.assign(formData, packageLocationsData);
     }
     
-    // Hvis ContainerModule er tilgængeligt, hent container-data
+    // If ContainerModule is available, get container data
     if (typeof ContainerModule !== 'undefined') {
-        formData.createContainers = ContainerModule.isEnabled();
+        // The ContainerModule will add its data to the formData object
         ContainerModule.addToFormData(formData);
     }
     
     console.log("Sending form data:", formData);
     
-    // Send data til server
+    // Send data to server
     fetch('/api/samples', {
         method: 'POST',
         headers: {
@@ -1178,28 +1180,28 @@ function handleFormSubmission() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            let successMessage = `Prøve ${data.sample_id} er blevet registreret succesfuldt!`;
+            let successMessage = `Sample ${data.sample_id} has been registered successfully!`;
             
-            // Tilføj information om containere hvis relevant
+            // Add information about containers if relevant
             if (data.container_ids && data.container_ids.length > 0) {
-                successMessage += ` ${data.container_ids.length} containere blev oprettet.`;
+                successMessage += ` ${data.container_ids.length} containers were created.`;
             }
             
             showSuccessMessage(successMessage);
             
-            // Nulstil formularen og gå tilbage til step 1 efter kort pause
+            // Reset the form and go back to step 1 after a short pause
             setTimeout(() => {
                 resetForm();
                 
-                // Send brugeren tilbage til dashboard
+                // Send the user back to dashboard
                 window.location.href = '/dashboard';
             }, 2000);
         } else {
-            showErrorMessage(`Fejl ved registrering: ${data.error}`);
+            showErrorMessage(`Error during registration: ${data.error}`);
         }
     })
     .catch(error => {
-        showErrorMessage(`Der opstod en fejl: ${error}`);
+        showErrorMessage(`An error occurred: ${error}`);
     });
 }
 

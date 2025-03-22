@@ -1,18 +1,18 @@
 /**
- * Container modul til at håndtere container-funktionalitet på registreringssiden
+ * Container module to handle container functionality on the registration page
  */
 const ContainerModule = (function() {
-    // Private variabler
+    // Private variables
     let containersEnabled = false;
     
-    // Private metoder
+    // Private methods
     function _updateContainerOptions() {
         const createContainersCheckbox = document.getElementById('createContainers');
         if (!createContainersCheckbox) return;
         
         containersEnabled = createContainersCheckbox.checked;
         
-        // Container-specifik sektion der vises/skjules baseret på checkbox
+        // Container-specific section to show/hide based on checkbox
         const containerDetailsSection = document.getElementById('containerDetailsSection');
         if (containerDetailsSection) {
             containerDetailsSection.classList.toggle('d-none', !containersEnabled);
@@ -24,33 +24,37 @@ const ContainerModule = (function() {
     // Public API
     return {
         init: function() {
-            console.log("Container modul initialiseret");
+            console.log("Container module initialized");
             
-            // Initialiser status baseret på nuværende checkbox-tilstand
+            // Initialize status based on current checkbox state
             const createContainersCheckbox = document.getElementById('createContainers');
             if (createContainersCheckbox) {
                 containersEnabled = createContainersCheckbox.checked;
                 
-                // Lyt efter ændringer i container-checkboxen
+                // Listen for changes on the container checkbox
                 createContainersCheckbox.addEventListener('change', _updateContainerOptions);
                 
-                // Kør opdatering første gang for at sætte initial tilstand
+                // Run update first time to set initial state
                 _updateContainerOptions();
             }
         },
         
-        // Returner om container-oprettelse er aktiveret
+        // Return if container creation is enabled
         isEnabled: function() {
             return containersEnabled;
         },
         
-        // Tilføj til form data inden indsendelse
+        // Add to form data before submission
         addToFormData: function(formData) {
             if (!formData) return formData;
             
             formData.createContainers = containersEnabled;
             
-            // Tilføj eventuelle andre container-relaterede felter her hvis nødvendigt
+            // Add any other container-related fields if needed
+            if (containersEnabled) {
+                formData.containerDescription = document.getElementById('containerDescription')?.value || '';
+                formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
+            }
             
             return formData;
         }

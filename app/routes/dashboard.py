@@ -126,7 +126,7 @@ def init_dashboard(blueprint, mysql):
             
             history_items = []
             for item in history_data:
-                sample_desc = f"PRV-{item[4]}" if item[4] and item[4] != 'N/A' else 'N/A'
+                sample_desc = f"SMP-{item[4]}" if item[4] and item[4] != 'N/A' else 'N/A'
                 history_items.append({
                     "LogID": item[0],
                     "Timestamp": item[1],
@@ -140,7 +140,7 @@ def init_dashboard(blueprint, mysql):
             return render_template('sections/history.html', history_items=history_items)
         except Exception as e:
             print(f"Error loading history: {e}")
-            return render_template('sections/history.html', error="Fejl ved indlæsning af historik")
+            return render_template('sections/history.html', error="Error loading history")
     
     @blueprint.route('/api/storage-locations')
     def get_storage_locations():

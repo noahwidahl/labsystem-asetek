@@ -46,7 +46,7 @@ class Sample:
     def to_dict(self):
         return {
             'SampleID': self.id,
-            'SampleIDFormatted': f"PRV-{self.id}" if self.id else None,
+            'SampleIDFormatted': f"SMP-{self.id}" if self.id else None,
             'Description': self.description,
             'Barcode': self.barcode,
             'IsUnique': self.is_unique,

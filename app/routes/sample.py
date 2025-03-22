@@ -85,7 +85,7 @@ def init_sample(blueprint, mysql):
                 cursor.close()
                 
                 samples_for_template.append({
-                    "ID": f"PRV-{sample.id}",
+                    "ID": f"SMP-{sample.id}",
                     "Beskrivelse": sample.description,
                     "Modtagelse": modtagelse_dato.strftime('%Y-%m-%d') if modtagelse_dato else "Ukendt",
                     "Antal": f"{sample.amount} {enhed}",
