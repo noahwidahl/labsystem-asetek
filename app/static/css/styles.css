@@ -791,6 +791,46 @@ body {
     color: #333;
 }
 
+/* Styling for storage overview on dashboard */
+.storage-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.rack-section {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    overflow: hidden;
+}
+
+.rack-section .card-header {
+    background-color: #f8f9fa;
+    padding: 0.75rem 1rem;
+}
+
+.location-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.location-item {
+    transition: background-color 0.2s;
+}
+
+.location-item:hover {
+    background-color: #f8f9fa;
+}
+
+.location-item:last-child {
+    border-bottom: none !important;
+}
+
+.badge {
+    min-width: 80px;
+    text-align: center;
+}
+
 /* Animations for selected cells */
 @keyframes pulse {
     0% {
