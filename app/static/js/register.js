@@ -3,6 +3,8 @@ let currentStep = 1;
 const totalSteps = 4;
 let scannedItems = [];
 let selectedLocation = null;
+let selectedContainerLocation = null;
+let skipLocationSelection = false;
 const REGISTRATION_EXPIRY_MONTHS = 2;
 
 // Initialize when document is loaded
@@ -47,6 +49,13 @@ function setupContainerOptions() {
     createContainersCheckbox.addEventListener('change', function() {
         existingContainerSection.classList.toggle('d-none', !this.checked);
         containerDetailsSection.classList.toggle('d-none', !this.checked || existingContainerOption.checked);
+        
+        // Hvis vi bruger eksisterende container, spring placeringen over
+        if (this.checked && existingContainerOption.checked) {
+            skipLocationSelection = true;
+        } else {
+            skipLocationSelection = false;
+        }
     });
     
     // Handle radio button selection
@@ -54,6 +63,7 @@ function setupContainerOptions() {
         if (this.checked) {
             containerDetailsSection.classList.remove('d-none');
             existingContainerSelectArea.classList.add('d-none');
+            skipLocationSelection = false;
         }
     });
     
@@ -62,8 +72,33 @@ function setupContainerOptions() {
             containerDetailsSection.classList.add('d-none');
             existingContainerSelectArea.classList.remove('d-none');
             fetchExistingContainers();
+            skipLocationSelection = true;
         }
     });
+
+    // Lyt efter valg af container for at få dens placering
+    const existingContainerSelect = document.getElementById('existingContainerSelect');
+    if (existingContainerSelect) {
+        existingContainerSelect.addEventListener('change', function() {
+            fetchContainerLocation(this.value);
+        });
+    }
+}
+
+// Funktion til at hente containerplacering
+function fetchContainerLocation(containerId) {
+    if (!containerId) return;
+    
+    fetch(`/api/containers/${containerId}/location`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.location) {
+                console.log("Container placering:", data.location);
+                // Gem containerens placering til senere brug
+                selectedContainerLocation = data.location;
+            }
+        })
+        .catch(error => console.error("Fejl ved hentning af containerplacering:", error));
 }
 
 // Function to fetch existing containers
@@ -78,7 +113,7 @@ function fetchExistingContainers() {
     
     // Add a "loading..." option
     const loadingOption = document.createElement('option');
-    loadingOption.textContent = 'Loading containers...';
+    loadingOption.textContent = 'Indlæser containere...';
     loadingOption.disabled = true;
     existingContainerSelect.appendChild(loadingOption);
     
@@ -93,20 +128,20 @@ function fetchExistingContainers() {
                 data.containers.forEach(container => {
                     const option = document.createElement('option');
                     option.value = container.ContainerID;
-                    option.textContent = `${container.ContainerID}: ${container.Description} (${container.sample_count || 0} samples)`;
+                    option.textContent = `${container.ContainerID}: ${container.Description} (${container.sample_count || 0} prøver)`;
                     existingContainerSelect.appendChild(option);
                 });
             } else {
                 const noContainersOption = document.createElement('option');
-                noContainersOption.textContent = 'No available containers found';
+                noContainersOption.textContent = 'Ingen tilgængelige containere fundet';
                 noContainersOption.disabled = true;
                 existingContainerSelect.appendChild(noContainersOption);
             }
         })
         .catch(error => {
-            console.error('Error fetching containers:', error);
+            console.error('Fejl ved hentning af containere:', error);
             const errorOption = document.createElement('option');
-            errorOption.textContent = 'Error fetching containers';
+            errorOption.textContent = 'Fejl ved hentning af containere';
             errorOption.disabled = true;
             existingContainerSelect.appendChild(errorOption);
         });
@@ -180,7 +215,7 @@ function updateNavigationButtons(step) {
     }
 
     if (nextButton) {
-        nextButton.textContent = step === totalSteps ? 'Save' : 'Next';
+        nextButton.textContent = step === totalSteps ? 'Gem' : 'Næste';
     }
 }
 
@@ -258,17 +293,17 @@ function validateCurrentStep() {
             let isValid = true;
             
             if (!description || !description.value.trim()) {
-                showErrorMessage('Please enter a description', 'description');
+                showErrorMessage('Indtast venligst en beskrivelse', 'description');
                 isValid = false;
             }
             
             if (!totalAmount || totalAmount.value <= 0) {
-                showErrorMessage('Please enter a valid amount', 'totalAmount');
+                showErrorMessage('Indtast venligst et gyldigt antal', 'totalAmount');
                 isValid = false;
             }
             
             if (!unit || !unit.value) {
-                showErrorMessage('Please select a unit', 'unit');
+                showErrorMessage('Vælg venligst en enhed', 'unit');
                 isValid = false;
             }
             
@@ -279,12 +314,17 @@ function validateCurrentStep() {
             if (hasSerialNumbers) {
                 const expectedCount = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
                 if (scannedItems.length < expectedCount) {
-                    showErrorMessage(`${expectedCount - scannedItems.length} more samples need to be scanned`);
+                    showErrorMessage(`${expectedCount - scannedItems.length} flere prøver skal scannes`);
                     return false;
                 }
             }
             return true;
         case 4:
+            // Skip location validation if we're using existing container
+            if (skipLocationSelection) {
+                return true;
+            }
+            
             // Validation of location
             const isMultiPackage = document.getElementById('isMultiPackage')?.checked || false;
             const packageCount = isMultiPackage ? (parseInt(document.querySelector('[name="packageCount"]')?.value) || 1) : 1;
@@ -294,7 +334,7 @@ function validateCurrentStep() {
                 if (typeof PackageLocations !== 'undefined') {
                     const selectedLocations = PackageLocations.getSelectedLocations();
                     if (selectedLocations.length < packageCount) {
-                        showErrorMessage(`You need to select ${packageCount} locations. You have selected ${selectedLocations.length}.`);
+                        showErrorMessage(`Du skal vælge ${packageCount} placeringer. Du har valgt ${selectedLocations.length}.`);
                         return false;
                     }
                 }
@@ -302,7 +342,7 @@ function validateCurrentStep() {
             } else {
                 // Standard validation for one location
                 if (!selectedLocation) {
-                    showErrorMessage('Please select a location by clicking on an available space in the grid.');
+                    showErrorMessage('Vælg venligst en placering ved at klikke på et tilgængeligt felt i grid\'et.');
                     return false;
                 }
                 return true;
@@ -330,10 +370,10 @@ function setupBulkSampleHandling() {
         // Save all original options for later use
         const allOptions = Array.from(unitSelect.options);
         const stkOption = Array.from(unitSelect.options).find(opt => 
-            opt.textContent.trim().toLowerCase() === 'pcs' || 
+            opt.textContent.trim().toLowerCase() === 'stk' || 
             opt.textContent.trim().toLowerCase() === 'pcs');
         
-        // Default setting: Only pcs is available
+        // Default setting: Only stk is available
         updateUnitOptions(false);
         
         // Handle changes in the checkbox
@@ -352,13 +392,13 @@ function setupBulkSampleHandling() {
             // Add empty option
             const emptyOption = document.createElement('option');
             emptyOption.value = '';
-            emptyOption.textContent = 'Select unit';
+            emptyOption.textContent = 'Vælg enhed';
             unitSelect.appendChild(emptyOption);
             
             if (isBulk) {
-                // For bulk quantity: Add all units except pcs
+                // For bulk quantity: Add all units except stk
                 allOptions.forEach(option => {
-                    if (option.value && option.textContent.trim().toLowerCase() !== 'pcs' && 
+                    if (option.value && option.textContent.trim().toLowerCase() !== 'stk' && 
                         option.textContent.trim().toLowerCase() !== 'pcs') {
                         unitSelect.appendChild(option.cloneNode(true));
                     }
@@ -367,15 +407,15 @@ function setupBulkSampleHandling() {
                 // Reset value (forces the user to select a unit)
                 unitSelect.value = '';
             } else {
-                // For pieces: Only pcs is available
+                // For pieces: Only stk is available
                 if (stkOption) {
                     unitSelect.appendChild(stkOption.cloneNode(true));
                     unitSelect.value = stkOption.value;
                 } else {
-                    // Fallback if we didn't find pcs option
+                    // Fallback if we didn't find stk option
                     const newStkOption = document.createElement('option');
-                    newStkOption.value = "1"; // Assuming pcs has ID=1
-                    newStkOption.textContent = 'pcs';
+                    newStkOption.value = "1"; // Assuming stk has ID=1
+                    newStkOption.textContent = 'stk';
                     unitSelect.appendChild(newStkOption);
                     unitSelect.value = "1";
                 }
@@ -412,10 +452,10 @@ function setupMultiPackageHandling() {
             multiplePackageFields.classList.toggle('d-none', !this.checked);
             
             if (this.checked) {
-                totalAmountHelper.textContent = "Total amount is automatically calculated from package information";
+                totalAmountHelper.textContent = "Totalt antal beregnes automatisk ud fra pakke-information";
                 totalAmountInput.readOnly = true;
             } else {
-                totalAmountHelper.textContent = "Total number of units received";
+                totalAmountHelper.textContent = "Totalt antal modtagne enheder";
                 totalAmountInput.readOnly = false;
                 
                 // Reset package locations
@@ -511,16 +551,16 @@ function setupScannerListeners() {
                 this.innerHTML = '<i class="fas fa-barcode"></i> Start Scanning';
                 if (scannerInput) {
                     scannerInput.disabled = true;
-                    scannerInput.placeholder = "Scanning disabled";
+                    scannerInput.placeholder = "Scanning deaktiveret";
                 }
             } else {
                 // Activate scanning
                 this.classList.remove('btn-outline-primary');
                 this.classList.add('btn-primary');
-                this.innerHTML = '<i class="fas fa-barcode"></i> Scanning Active';
+                this.innerHTML = '<i class="fas fa-barcode"></i> Scanning Aktiv';
                 if (scannerInput) {
                     scannerInput.disabled = false;
-                    scannerInput.placeholder = "Scan or enter serial number";
+                    scannerInput.placeholder = "Scan eller indtast serienummer";
                     scannerInput.focus();
                 }
             }
@@ -551,7 +591,7 @@ function setupScannerListeners() {
                 const currentCount = scannedItems.length;
                 
                 if (currentCount + barcodes.length > totalExpected) {
-                    showErrorMessage(`Cannot add ${barcodes.length} barcodes. Maximum count is ${totalExpected} (${currentCount} already scanned)`);
+                    showErrorMessage(`Kan ikke tilføje ${barcodes.length} stregkoder. Maksimalt antal er ${totalExpected} (${currentCount} allerede scannet)`);
                     return;
                 }
                 
@@ -560,7 +600,7 @@ function setupScannerListeners() {
                 });
                 
                 bulkBarcodes.value = '';
-                showSuccessMessage(`${barcodes.length} barcodes added successfully`);
+                showSuccessMessage(`${barcodes.length} stregkoder tilføjet succesfuldt`);
                 
                 // Hide bulk entry after addition
                 bulkEntrySection.classList.add('d-none');
@@ -571,10 +611,10 @@ function setupScannerListeners() {
     // Clear all scanned items
     if (clearAllScannedBtn) {
         clearAllScannedBtn.addEventListener('click', function() {
-            if (confirm('Are you sure you want to remove all scanned samples?')) {
+            if (confirm('Er du sikker på, at du vil fjerne alle scannede prøver?')) {
                 scannedItems = [];
                 updateScanUI();
-                showSuccessMessage('All scanned samples have been removed');
+                showSuccessMessage('Alle scannede prøver er blevet fjernet');
             }
         });
     }
@@ -588,7 +628,7 @@ function processScan(barcode) {
     
     // Check for duplicates
     if (scannedItems.includes(barcode)) {
-        showWarningMessage(`Barcode "${barcode}" has already been scanned`);
+        showWarningMessage(`Stregkode "${barcode}" er allerede scannet`);
         return;
     }
 
@@ -598,7 +638,7 @@ function processScan(barcode) {
         // Play a sound to indicate successful scanning
         playSuccessSound();
     } else {
-        showErrorMessage('Maximum number of samples reached');
+        showErrorMessage('Maksimalt antal prøver nået');
     }
 }
 
@@ -622,7 +662,7 @@ function updateScanUI() {
         // If no scanned items, show empty message and return
         if (scannedItems.length === 0) {
             container.innerHTML = `<div class="empty-scanned-message text-center p-3 text-muted">
-                No samples scanned yet. Use the scanner or enter serial numbers manually above.
+                Ingen prøver scannet endnu. Brug scanneren eller indtast serienumre manuelt ovenfor.
             </div>`;
             return;
         }
@@ -697,46 +737,118 @@ function setupBarcodeInput() {
 }
 
 function createGridFromLocations(locations) {
-    console.log("createGridFromLocations with", locations.length, "locations");
+    console.log("createGridFromLocations med", locations.length, "placeringer");
     
     const grid = document.querySelector('.storage-grid');
     if (!grid) return;
 
     grid.innerHTML = '';
     
-    // Sort locations to ensure consistent display
-    locations.sort((a, b) => a.LocationName.localeCompare(b.LocationName));
-
-    // Build grid with data from API
-    locations.forEach(location => {
-        const cell = document.createElement('div');
-        cell.className = 'storage-cell';
+    // Organisér lokationer efter reol, sektion, hylde
+    const organizedLocations = organizeLocationsByStructure(locations);
+    
+    // Opret reol-sektioner
+    Object.keys(organizedLocations).sort((a, b) => parseInt(a) - parseInt(b)).forEach(reolNum => {
+        const reolSection = document.createElement('div');
+        reolSection.className = 'reol-section mb-4';
         
-        // Debug info
-        console.log("Processing location:", location);
+        const reolHeader = document.createElement('h5');
+        reolHeader.textContent = `Reol ${reolNum}`;
+        reolHeader.className = 'mb-2';
+        reolSection.appendChild(reolHeader);
         
-        // Mark the cell as occupied if there are samples at the location
-        if (location.status === 'occupied') {
-            cell.classList.add('occupied');
-        }
-
-        const locationEl = document.createElement('div');
-        locationEl.className = 'location';
-        locationEl.textContent = location.LocationName;
-
-        const capacity = document.createElement('div');
-        capacity.className = 'capacity';
-        capacity.textContent = location.status === 'occupied' ? 'Occupied' : 'Available';
-
-        cell.appendChild(locationEl);
-        cell.appendChild(capacity);
-        grid.appendChild(cell);
-
-        // Only add event listener to available cells
-        if (location.status !== 'occupied') {
-            cell.addEventListener('click', () => selectStorageCell(cell));
-        }
+        const sektionsContainer = document.createElement('div');
+        sektionsContainer.className = 'd-flex flex-wrap';
+        
+        // For hver sektion i reolen
+        Object.keys(organizedLocations[reolNum]).sort((a, b) => parseInt(a) - parseInt(b)).forEach(sektionNum => {
+            const sektionDiv = document.createElement('div');
+            sektionDiv.className = 'sektion-container me-3 mb-3';
+            
+            const sektionHeader = document.createElement('div');
+            sektionHeader.textContent = `Sektion ${sektionNum}`;
+            sektionHeader.className = 'sektion-header small text-muted mb-1';
+            sektionDiv.appendChild(sektionHeader);
+            
+            const hyldeContainer = document.createElement('div');
+            hyldeContainer.className = 'd-flex flex-column';
+            
+            // For hver hylde i sektionen
+            Object.keys(organizedLocations[reolNum][sektionNum]).sort((a, b) => parseInt(a) - parseInt(b)).forEach(hyldeNum => {
+                const location = organizedLocations[reolNum][sektionNum][hyldeNum];
+                const locationName = `${reolNum}.${sektionNum}.${hyldeNum}`;
+                
+                // Opret hylde-celle
+                const cell = document.createElement('div');
+                cell.className = 'storage-cell mb-1';
+                cell.dataset.locationId = location.LocationID;
+                cell.dataset.locationName = locationName;
+                
+                // Viser antal prøver på hylden i stedet for "occupied"
+                const count = location.count || 0;
+                
+                const locationEl = document.createElement('div');
+                locationEl.className = 'location fw-bold';
+                locationEl.textContent = locationName;
+                
+                const capacity = document.createElement('div');
+                capacity.className = 'capacity small';
+                capacity.textContent = count > 0 ? `${count} prøve(r)` : 'Ledig';
+                
+                cell.appendChild(locationEl);
+                cell.appendChild(capacity);
+                hyldeContainer.appendChild(cell);
+                
+                // Tilføj klikevent til cellen - altid klikbar uanset indhold
+                cell.addEventListener('click', () => selectStorageCell(cell));
+            });
+            
+            sektionDiv.appendChild(hyldeContainer);
+            sektionsContainer.appendChild(sektionDiv);
+        });
+        
+        reolSection.appendChild(sektionsContainer);
+        grid.appendChild(reolSection);
     });
+}
+
+// Organize locations by structure
+function organizeLocationsByStructure(locations) {
+    const organized = {};
+    
+    locations.forEach(location => {
+        let reolNum, sektionNum, hyldeNum;
+        
+        // If we have Reol, Sektion, Hylde columns directly
+        if (location.Reol !== undefined && location.Sektion !== undefined && location.Hylde !== undefined) {
+            reolNum = location.Reol;
+            sektionNum = location.Sektion;
+            hyldeNum = location.Hylde;
+        } else {
+            // Parse LocationName (assumes format rack.section.shelf)
+            const parts = location.LocationName.split('.');
+            if (parts.length === 3) {
+                [reolNum, sektionNum, hyldeNum] = parts;
+            } else if (parts.length === 2) {
+                // Handle older A1.B1 format
+                reolNum = location.LocationName.substring(1, 2);
+                sektionNum = "1";
+                hyldeNum = location.LocationName.substring(4);
+            } else {
+                console.log("Unknown format:", location.LocationName);
+                return; // Skip if format not recognized
+            }
+        }
+        
+        // Create necessary objects if they don't exist
+        if (!organized[reolNum]) organized[reolNum] = {};
+        if (!organized[reolNum][sektionNum]) organized[reolNum][sektionNum] = {};
+        
+        // Store location in organizational structure
+        organized[reolNum][sektionNum][hyldeNum] = location;
+    });
+    
+    return organized;
 }
 
 function setupStorageGrid() {
@@ -754,137 +866,110 @@ function setupStorageGrid() {
                 createGridFromLocations(data.locations);
             } else {
                 console.error("No locations in response");
-                // Fallback to hardcoded locations
-                createSpecificStorageGrid();
+                // Fallback to rack.section.shelf format
+                createDefaultStorageGrid();
             }
         })
         .catch(error => {
             console.error('Error fetching storage locations:', error);
-            // Fallback to hardcoded locations
-            createSpecificStorageGrid();
+            // Fallback to rack.section.shelf format
+            createDefaultStorageGrid();
         });
 }
 
-// We maintain our grid creation function
-function createSpecificStorageGrid() {
+// We maintain our grid creation function with updated format
+function createDefaultStorageGrid() {
     const grid = document.querySelector('.storage-grid');
     if (!grid) return;
 
     grid.innerHTML = '';
     
-    // Create 12 storage spaces with format A1.B1 to A3.B4
-    for (let i = 1; i <= 3; i++) {
-        for (let j = 1; j <= 4; j++) {
-            const cell = document.createElement('div');
-            cell.className = 'storage-cell';
+    // Create default storage grid with rack.section.shelf format
+    for (let rack = 1; rack <= 3; rack++) {
+        const reolSection = document.createElement('div');
+        reolSection.className = 'reol-section mb-4';
+        
+        const reolHeader = document.createElement('h5');
+        reolHeader.textContent = `Rack ${rack}`;
+        reolHeader.className = 'mb-2';
+        reolSection.appendChild(reolHeader);
+        
+        const sektionsContainer = document.createElement('div');
+        sektionsContainer.className = 'd-flex flex-wrap';
+        
+        for (let section = 1; section <= 2; section++) {
+            const sektionDiv = document.createElement('div');
+            sektionDiv.className = 'sektion-container me-3 mb-3';
             
-            // Simulate that some cells are occupied (for demonstration)
-            // In a real implementation, this data would come from the server
-            if ((i === 1 && j === 3) || (i === 2 && j === 2)) {
-                cell.classList.add('occupied');
-            }
-
-            const locationEl = document.createElement('div');
-            locationEl.className = 'location';
-            locationEl.textContent = `A${i}.B${j}`;
-
-            const capacity = document.createElement('div');
-            capacity.className = 'capacity';
-            capacity.textContent = cell.classList.contains('occupied') ? 'Occupied' : 'Available';
-
-            cell.appendChild(locationEl);
-            cell.appendChild(capacity);
-            grid.appendChild(cell);
-
-            // Important: Only add event listener to available cells
-            if (!cell.classList.contains('occupied')) {
+            const sektionHeader = document.createElement('div');
+            sektionHeader.textContent = `Section ${section}`;
+            sektionHeader.className = 'sektion-header small text-muted mb-1';
+            sektionDiv.appendChild(sektionHeader);
+            
+            const hyldeContainer = document.createElement('div');
+            hyldeContainer.className = 'd-flex flex-column';
+            
+            for (let shelf = 1; shelf <= 5; shelf++) {
+                const cell = document.createElement('div');
+                cell.className = 'storage-cell mb-1';
+                
+                const locationName = `${rack}.${section}.${shelf}`;
+                cell.dataset.locationName = locationName;
+                cell.dataset.locationId = `${rack}${section}${shelf}`; // Simulated ID
+                
+                const locationEl = document.createElement('div');
+                locationEl.className = 'location fw-bold';
+                locationEl.textContent = locationName;
+                
+                const capacity = document.createElement('div');
+                capacity.className = 'capacity small';
+                capacity.textContent = 'Available';
+                
+                cell.appendChild(locationEl);
+                cell.appendChild(capacity);
+                hyldeContainer.appendChild(cell);
+                
+                // Add click event to the cell
                 cell.addEventListener('click', () => selectStorageCell(cell));
             }
-        }
-    }
-}
-
-// Highlight a number of cells in the storage grid based on package count
-function storageGridHighlightForPackages(packageCount) {
-    // Reset grid highlighting first
-    resetStorageGridHighlighting();
-    
-    // Mark all AVAILABLE cells as available
-    const gridCells = document.querySelectorAll('.storage-cell:not(.occupied)');
-    gridCells.forEach(cell => {
-        cell.classList.add('multi-package-available');
-    });
-    
-    // Add info message if necessary
-    if (packageCount > 1) {
-        const existingMessage = document.querySelector('.multi-package-message');
-        if (!existingMessage) {
-            const message = document.createElement('div');
-            message.className = 'alert alert-info multi-package-message mt-3';
-            message.innerHTML = `<i class="fas fa-info-circle"></i> Select ${packageCount} different locations for your packages.`;
             
-            const storageSelector = document.querySelector('.storage-selector');
-            if (storageSelector) {
-                storageSelector.appendChild(message);
-            }
+            sektionDiv.appendChild(hyldeContainer);
+            sektionsContainer.appendChild(sektionDiv);
         }
-    }
-}
-
-// Remove highlighting from storage grid
-function resetStorageGridHighlighting() {
-    document.querySelectorAll('.storage-cell').forEach(cell => {
-        cell.classList.remove('multi-package-available', 'multi-package-selected');
-    });
-    
-    // Remove any info message
-    const message = document.querySelector('.multi-package-message');
-    if (message) {
-        message.remove();
-    }
-    
-    // Remove any package summary message
-    const packageSummary = document.querySelector('.package-selection-summary');
-    if (packageSummary) {
-        packageSummary.remove();
+        
+        reolSection.appendChild(sektionsContainer);
+        grid.appendChild(reolSection);
     }
 }
 
 // Updated selectStorageCell function - with direct saving of location without dropdown
 function selectStorageCell(cell) {
-    if (cell.classList.contains('occupied')) {
-        // Block selection of occupied cells
-        showWarningMessage("This location is already occupied. Please select an available location.");
-        return;
-    }
+    // All cells are clickable, regardless of how many samples are on a shelf
     
-    const isMultiPackage = document.getElementById('isMultiPackage')?.checked || false;
-    const packageCount = isMultiPackage ? (parseInt(document.querySelector('[name="packageCount"]')?.value) || 1) : 1;
-    
-    if (isMultiPackage && packageCount > 1) {
-        // Handle multi-package selection
-        handleMultiPackageSelection(cell);
-    } else {
-        // Standard location selection (one location)
-        handleSingleLocationSelection(cell);
-    }
-    
-    // Update display of selected packages
-    updatePackageSelectionSummary();
-}
-
-// Handles location selection for individual samples
-function handleSingleLocationSelection(cell) {
     // Remove marking from all cells
     document.querySelectorAll('.storage-cell').forEach(c => c.classList.remove('selected'));
     
     // Mark the selected cell
     cell.classList.add('selected');
     
-    // Save the location directly in a hidden input field
-    const locationText = cell.querySelector('.location').textContent;
+    // Get location ID and name
+    const locationId = cell.dataset.locationId;
+    const locationName = cell.dataset.locationName;
     
-    // Find existing or create new hidden input to store the location
+    // Save the location for form submission
+    selectedLocation = locationId;
+    
+    // Display selected location
+    let locationIndicator = document.querySelector('.selected-location-indicator');
+    if (!locationIndicator) {
+        locationIndicator = document.createElement('div');
+        locationIndicator.className = 'selected-location-indicator mt-3 p-2 bg-light rounded';
+        document.querySelector('.storage-selector').appendChild(locationIndicator);
+    }
+    
+    locationIndicator.innerHTML = `<strong>Selected location:</strong> ${locationName}`;
+    
+    // Update hidden input fields
     let locationInput = document.getElementById('selectedLocationInput');
     if (!locationInput) {
         locationInput = document.createElement('input');
@@ -894,21 +979,7 @@ function handleSingleLocationSelection(cell) {
         document.querySelector('.storage-selector').appendChild(locationInput);
     }
     
-    // Save the location name (we find the actual ID during form submission)
-    locationInput.value = locationText;
-    
-    // Update a visible indicator as well
-    let locationIndicator = document.querySelector('.selected-location-indicator');
-    if (!locationIndicator) {
-        locationIndicator = document.createElement('div');
-        locationIndicator.className = 'selected-location-indicator mt-3 p-2 bg-light rounded';
-        document.querySelector('.storage-selector').appendChild(locationIndicator);
-    }
-    
-    locationIndicator.innerHTML = `<strong>Selected location:</strong> ${locationText}`;
-    
-    // Also save as global variable for compatibility
-    selectedLocation = locationText;
+    locationInput.value = locationId;
 }
 
 // Function to handle multi-package selection
@@ -941,7 +1012,8 @@ function handleMultiPackageSelection(cell) {
                 const locationText = cell.querySelector('.location').textContent;
                 
                 // Add location to next available package
-                PackageLocations.addLocation(selectedCellsCount + 1, mapLocationNameToId(locationText), locationText);
+                const locationId = cell.dataset.locationId;
+                PackageLocations.addLocation(selectedCellsCount + 1, locationId, locationText);
             }
         } else {
             // We already selected max count - show error
@@ -1078,28 +1150,6 @@ function initReceptionDate() {
     // Nothing to do here in this implementation
 }
 
-// Helper function to map location name to ID
-function mapLocationNameToId(locationName) {
-    // This is a simple implementation. In a real system, this
-    // would probably look up in a table or API
-    
-    // Format: A{row}.B{column} where row=1-3, column=1-4
-    const match = locationName.match(/A(\d+)\.B(\d+)/);
-    if (match) {
-        const row = parseInt(match[1]);
-        const column = parseInt(match[2]);
-        
-        // Calculate an ID based on row and column
-        // Assuming IDs start from 1 and go up to 12
-        const id = (row - 1) * 4 + column;
-        
-        return id.toString();
-    }
-    
-    // Fallback
-    return "1";
-}
-
 // Handle form submission
 function handleFormSubmission() {
     if (!validateCurrentStep()) return;
@@ -1124,47 +1174,54 @@ function handleFormSubmission() {
         hasSerialNumbers: document.getElementById('hasSerialNumbers')?.checked || false,
         other: document.querySelector('[name="other"]')?.value || '',
         
-        // Container functionality
-        createContainers: document.getElementById('createContainers')?.checked || false,
-        containerDescription: document.getElementById('containerDescription')?.value || '',
-        containerIsMixed: document.getElementById('containerIsMixed')?.checked || false,
-        
         // Identification
         serialNumbers: scannedItems || [],
-        
-        // Location - now from selected cell instead of dropdown
-        storageLocation: document.getElementById('selectedLocationInput')?.value || selectedLocation || ''
     };
     
-    // If we have selected location by clicking on a cell, convert locationName to an ID
-    if (formData.storageLocation && !formData.storageLocation.match(/^\d+$/)) {
-        formData.storageLocation = mapLocationNameToId(formData.storageLocation);
+    // Container functionality
+    const createContainersCheckbox = document.getElementById('createContainers');
+    if (createContainersCheckbox && createContainersCheckbox.checked) {
+        formData.createContainers = true;
+        
+        // Check if we're using existing container or creating new
+        const existingContainerOption = document.getElementById('existingContainerOption');
+        if (existingContainerOption && existingContainerOption.checked) {
+            // Use existing container
+            const containerId = document.getElementById('existingContainerSelect')?.value;
+            if (containerId) {
+                formData.useExistingContainer = true;
+                formData.existingContainerId = containerId;
+                
+                // If we have container location, use it
+                if (selectedContainerLocation) {
+                    formData.storageLocation = selectedContainerLocation.LocationID;
+                    console.log("Using existing container location:", selectedContainerLocation.LocationName);
+                }
+            }
+        } else {
+            // Create new container
+            formData.containerDescription = document.getElementById('containerDescription')?.value || '';
+            formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
+            
+            // Standard location, if we're not skipping it
+            if (!skipLocationSelection) {
+                formData.storageLocation = document.getElementById('selectedLocationInput')?.value || selectedLocation || '';
+            }
+        }
+    } else {
+        // Standard location without container
+        formData.storageLocation = document.getElementById('selectedLocationInput')?.value || selectedLocation || '';
     }
     
     // If PackageLocations module is available, get package data
     if (typeof PackageLocations !== 'undefined') {
         const packageLocationsData = PackageLocations.getData();
-        
-        // For each selected location name, convert to location ID
-        if (packageLocationsData.packageLocations) {
-            packageLocationsData.packageLocations = packageLocationsData.packageLocations.map(pkg => {
-                if (pkg.locationName && (!pkg.locationId || isNaN(pkg.locationId))) {
-                    // Convert locationName to locationId
-                    return {
-                        packageNumber: pkg.packageNumber,
-                        locationId: mapLocationNameToId(pkg.locationName)
-                    };
-                }
-                return pkg;
-            });
-        }
-        
         Object.assign(formData, packageLocationsData);
     }
     
     // If ContainerModule is available, get container data
     if (typeof ContainerModule !== 'undefined') {
-        // The ContainerModule will add its data to the formData object
+        // ContainerModule will add its data to the formData object
         ContainerModule.addToFormData(formData);
     }
     
@@ -1194,7 +1251,7 @@ function handleFormSubmission() {
             setTimeout(() => {
                 resetForm();
                 
-                // Send the user back to dashboard
+                // Redirect user back to dashboard
                 window.location.href = '/dashboard';
             }, 2000);
         } else {

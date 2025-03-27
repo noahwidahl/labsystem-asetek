@@ -64,6 +64,19 @@ def init_container(blueprint, mysql):
                                 container_types=[],
                                 available_samples=[])
     
+    @blueprint.route('/api/containers/<int:container_id>/location')
+    def get_container_location(container_id):
+        try:
+            # Hent containerens placering
+            location = container_service.get_container_location(container_id)
+            
+            return jsonify({'success': True, 'location': location})
+        except Exception as e:
+            print(f"API error ved hentning af containerplacering: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     @blueprint.route('/api/containers', methods=['POST'])
     def create_container():
         try:
@@ -84,6 +97,67 @@ def init_container(blueprint, mysql):
             
             # Opret container via service
             result = container_service.create_container(data, user_id)
+            
+            return jsonify(result)
+        except Exception as e:
+            print(f"API error: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @blueprint.route('/api/containers/available')
+    def get_available_containers():
+        try:
+            # Hent containere der kan indeholde prøver
+            containers = container_service.get_available_containers()
+            
+            return jsonify({'success': True, 'containers': containers})
+        except Exception as e:
+            print(f"API error ved hentning af tilgængelige containere: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+            
+    @blueprint.route('/api/containers/add-sample', methods=['POST'])
+    def add_sample_to_container():
+        try:
+            data = request.json
+            
+            # Validering af input
+            if not data.get('containerId'):
+                return jsonify({'success': False, 'error': 'Container ID mangler'}), 400
+                
+            if not data.get('sampleId'):
+                return jsonify({'success': False, 'error': 'Sample ID mangler'}), 400
+                
+            # Hent aktuel bruger
+            current_user = get_current_user()
+            user_id = current_user['UserID']
+            
+            # Tilføj prøve til container via service
+            result = container_service.add_sample_to_container(
+                data.get('containerId'),
+                data.get('sampleId'),
+                data.get('amount', 1),
+                user_id
+            )
+            
+            return jsonify(result)
+        except Exception as e:
+            print(f"API error: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @blueprint.route('/api/containers/<int:container_id>', methods=['DELETE'])
+    def delete_container(container_id):
+        try:
+            # Hent aktuel bruger
+            current_user = get_current_user()
+            user_id = current_user['UserID']
+            
+            # Slet container via service
+            result = container_service.delete_container(container_id, user_id)
             
             return jsonify(result)
         except Exception as e:

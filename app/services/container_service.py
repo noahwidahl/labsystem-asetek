@@ -70,6 +70,80 @@ class ContainerService:
             traceback.print_exc()
             return []
     
+    def get_available_containers(self):
+        """Henter containere der er tilgængelige for at tilføje prøver"""
+        print("DEBUG: Henter tilgængelige containere...")
+        try:
+            # Tjek tabelnavn
+            query = """
+                SELECT 
+                    c.ContainerID,
+                    c.Description,
+                    IFNULL(
+                        (SELECT COUNT(cs.ContainerSampleID) 
+                        FROM ContainerSample cs 
+                        WHERE cs.ContainerID = c.ContainerID), 
+                        0
+                    ) as sample_count,
+                    c.ContainerCapacity
+                FROM container c
+                WHERE c.IsMixed = 1 OR (
+                    SELECT IFNULL(SUM(cs.Amount), 0) 
+                    FROM containersample cs 
+                    WHERE cs.ContainerID = c.ContainerID
+                ) < IFNULL(c.ContainerCapacity, 999999) OR c.ContainerCapacity IS NULL
+            """
+            
+            result, _ = self.db.execute_query(query)
+            containers = []
+            
+            if result:
+                for row in result:
+                    containers.append({
+                        'ContainerID': row[0],
+                        'Description': row[1],
+                        'sample_count': row[2],
+                        'ContainerCapacity': row[3]
+                    })
+            
+            print(f"DEBUG: Fandt {len(containers)} tilgængelige containere")
+            return containers
+        except Exception as e:
+            print(f"DEBUG: Error in get_available_containers: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    def get_container_location(self, container_id):
+        """Henter placeringen for en container"""
+        print(f"DEBUG: Henter placering for container {container_id}")
+        try:
+            # Find ud af hvilken prøve containeren indeholder
+            query = """
+                SELECT DISTINCT ss.LocationID, sl.LocationName
+                FROM containersample cs
+                JOIN samplestorage ss ON cs.SampleStorageID = ss.StorageID
+                JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+                WHERE cs.ContainerID = %s
+                LIMIT 1
+            """
+            
+            result, _ = self.db.execute_query(query, (container_id,))
+            
+            if result and len(result) > 0:
+                return {
+                    'LocationID': result[0][0],
+                    'LocationName': result[0][1]
+                }
+            else:
+                print(f"DEBUG: Ingen placering fundet for container {container_id}")
+                return None
+        except Exception as e:
+            print(f"DEBUG: Error in get_container_location: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
     def _add_container_info(self, container):
         try:
             # Add type name

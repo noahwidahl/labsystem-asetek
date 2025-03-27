@@ -10,13 +10,16 @@ def _get_storage_locations(mysql):
             sl.LocationID,
             sl.LocationName,
             COUNT(ss.StorageID) as count,
-            CASE WHEN COUNT(ss.StorageID) > 0 THEN 'occupied' ELSE 'available' END as status,
-            IFNULL(l.LabName, 'Unknown') as LabName
+            'available' as status,
+            IFNULL(l.LabName, 'Unknown') as LabName,
+            sl.Reol,
+            sl.Sektion,
+            sl.Hylde
         FROM StorageLocation sl
         LEFT JOIN Lab l ON sl.LabID = l.LabID
         LEFT JOIN SampleStorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
-        GROUP BY sl.LocationID, sl.LocationName, l.LabName
-        ORDER BY sl.LocationName
+        GROUP BY sl.LocationID, sl.LocationName, l.LabName, sl.Reol, sl.Sektion, sl.Hylde
+        ORDER BY sl.Reol, sl.Sektion, sl.Hylde
     """)
     
     columns = [col[0] for col in cursor.description]
@@ -145,8 +148,25 @@ def init_dashboard(blueprint, mysql):
     @blueprint.route('/api/storage-locations')
     def get_storage_locations():
         try:
-            # Brug hjælpefunktionen til at hente lokationer
-            locations = _get_storage_locations(mysql)
+            cursor = mysql.connection.cursor()
+            cursor.execute("""
+                SELECT 
+                    sl.LocationID,
+                    sl.LocationName,
+                    COUNT(ss.StorageID) as count,
+                    'available' as status,
+                    IFNULL(l.LabName, 'Unknown') as LabName
+                FROM StorageLocation sl
+                LEFT JOIN Lab l ON sl.LabID = l.LabID
+                LEFT JOIN SampleStorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
+                GROUP BY sl.LocationID, sl.LocationName, l.LabName
+                ORDER BY sl.LocationName
+            """)
+            
+            columns = [col[0] for col in cursor.description]
+            locations = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+            cursor.close()
             return jsonify({'locations': locations})
         except Exception as e:
             print(f"API error ved hentning af lagerplaceringer: {e}")
