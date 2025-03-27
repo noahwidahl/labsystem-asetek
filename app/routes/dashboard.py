@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify
+from flask import Blueprint, render_template, jsonify, request
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -10,16 +10,13 @@ def _get_storage_locations(mysql):
             sl.LocationID,
             sl.LocationName,
             COUNT(ss.StorageID) as count,
-            'available' as status,
-            IFNULL(l.LabName, 'Unknown') as LabName,
-            sl.Reol,
-            sl.Sektion,
-            sl.Hylde
+            CASE WHEN COUNT(ss.StorageID) > 0 THEN 'occupied' ELSE 'available' END as status,
+            IFNULL(l.LabName, 'Unknown') as LabName
         FROM StorageLocation sl
         LEFT JOIN Lab l ON sl.LabID = l.LabID
         LEFT JOIN SampleStorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
-        GROUP BY sl.LocationID, sl.LocationName, l.LabName, sl.Reol, sl.Sektion, sl.Hylde
-        ORDER BY sl.Reol, sl.Sektion, sl.Hylde
+        GROUP BY sl.LocationID, sl.LocationName, l.LabName
+        ORDER BY sl.LocationName
     """)
     
     columns = [col[0] for col in cursor.description]
@@ -148,26 +145,119 @@ def init_dashboard(blueprint, mysql):
     @blueprint.route('/api/storage-locations')
     def get_storage_locations():
         try:
-            cursor = mysql.connection.cursor()
-            cursor.execute("""
-                SELECT 
-                    sl.LocationID,
-                    sl.LocationName,
-                    COUNT(ss.StorageID) as count,
-                    'available' as status,
-                    IFNULL(l.LabName, 'Unknown') as LabName
-                FROM StorageLocation sl
-                LEFT JOIN Lab l ON sl.LabID = l.LabID
-                LEFT JOIN SampleStorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
-                GROUP BY sl.LocationID, sl.LocationName, l.LabName
-                ORDER BY sl.LocationName
-            """)
-            
-            columns = [col[0] for col in cursor.description]
-            locations = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            
-            cursor.close()
+            # Brug hjælpefunktionen til at hente lokationer
+            locations = _get_storage_locations(mysql)
             return jsonify({'locations': locations})
         except Exception as e:
             print(f"API error ved hentning af lagerplaceringer: {e}")
             return jsonify({'error': str(e)}), 500
+            
+    # Tilføj nye ruter her inde i init_dashboard funktionen
+    @blueprint.route('/api/storage/add-section', methods=['POST'])
+    def add_storage_section():
+        try:
+            data = request.json
+            # Valider input
+            if not data.get('sectionName'):
+                return jsonify({'success': False, 'error': 'Sektionsnavn er påkrævet'}), 400
+            
+            if not data.get('labId'):
+                return jsonify({'success': False, 'error': 'Lab ID er påkrævet'}), 400
+            
+            # Opret ny sektion
+            cursor = mysql.connection.cursor()
+            cursor.execute("""
+                INSERT INTO StorageLocation (LocationName, LabID)
+                VALUES (%s, %s)
+            """, (
+                data.get('sectionName'), 
+                data.get('labId')
+            ))
+            
+            mysql.connection.commit()
+            location_id = cursor.lastrowid
+            cursor.close()
+            
+            return jsonify({
+                'success': True, 
+                'locationId': location_id, 
+                'message': 'Sektion oprettet'
+            })
+        except Exception as e:
+            print(f"Fejl ved oprettelse af sektion: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @blueprint.route('/api/storage/delete-section', methods=['POST'])
+    def delete_storage_section():
+        try:
+            data = request.json
+            
+            # Valider input
+            if not data.get('locationId'):
+                return jsonify({'success': False, 'error': 'Lokations ID er påkrævet'}), 400
+            
+            # Kontroller om der er prøver på lokationen
+            cursor = mysql.connection.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) FROM SampleStorage
+                WHERE LocationID = %s
+            """, (data.get('locationId'),))
+            
+            count = cursor.fetchone()[0]
+            if count > 0:
+                return jsonify({
+                    'success': False, 
+                    'error': f'Kan ikke slette lokation med {count} prøver'
+                }), 400
+            
+            # Slet lokationen
+            cursor.execute("""
+                DELETE FROM StorageLocation
+                WHERE LocationID = %s
+            """, (data.get('locationId'),))
+            
+            mysql.connection.commit()
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Lokation slettet'
+            })
+        except Exception as e:
+            print(f"Fejl ved sletning af lokation: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+            
+    @blueprint.route('/api/storage/add-lab', methods=['POST'])
+    def add_storage_lab():
+        try:
+            data = request.json
+            
+            # Valider input
+            if not data.get('labName'):
+                return jsonify({'success': False, 'error': 'Lab navn er påkrævet'}), 400
+            
+            # Opret nyt lab
+            cursor = mysql.connection.cursor()
+            cursor.execute("""
+                INSERT INTO Lab (LabName)
+                VALUES (%s)
+            """, (data.get('labName'),))
+            
+            mysql.connection.commit()
+            lab_id = cursor.lastrowid
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'labId': lab_id,
+                'message': 'Lab oprettet'
+            })
+        except Exception as e:
+            print(f"Fejl ved oprettelse af lab: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500

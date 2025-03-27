@@ -114,6 +114,75 @@ class ContainerService:
             traceback.print_exc()
             return []
 
+    def delete_container(self, container_id, user_id):
+        print(f"DEBUG: delete_container kaldt med container_id={container_id}, user_id={user_id}")
+        try:
+            with self.db.transaction() as cursor:
+                # Tjek først om containeren eksisterer
+                cursor.execute("SHOW TABLES LIKE 'container'")
+                lowercase_exists = cursor.fetchone() is not None
+                
+                cursor.execute("SHOW TABLES LIKE 'Container'")
+                uppercase_exists = cursor.fetchone() is not None
+                
+                if not lowercase_exists and not uppercase_exists:
+                    print("DEBUG: Ingen container tabel eksisterer!")
+                    return {
+                        'success': False,
+                        'error': 'Container tabel eksisterer ikke'
+                    }
+                
+                # Brug det tabelnavn der eksisterer
+                table_name = "container" if lowercase_exists else "Container"
+                
+                # Tjek om containeren har samples tilknyttet
+                cursor.execute("""
+                    SELECT COUNT(*) FROM ContainerSample 
+                    WHERE ContainerID = %s
+                """, (container_id,))
+                
+                sample_count = cursor.fetchone()[0]
+                if sample_count > 0:
+                    print(f"DEBUG: Container {container_id} har {sample_count} tilknyttede prøver og kan ikke slettes")
+                    return {
+                        'success': False,
+                        'error': f'Container har {sample_count} tilknyttede prøver og kan ikke slettes'
+                    }
+                
+                # Slet containeren
+                cursor.execute(f"""
+                    DELETE FROM {table_name}
+                    WHERE ContainerID = %s
+                """, (container_id,))
+                
+                # Log aktiviteten
+                cursor.execute("""
+                    INSERT INTO History (
+                        Timestamp, 
+                        ActionType, 
+                        UserID, 
+                        Notes
+                    )
+                    VALUES (NOW(), %s, %s, %s)
+                """, (
+                    'Container slettet',
+                    user_id,
+                    f"Container {container_id} slettet"
+                ))
+                
+                return {
+                    'success': True,
+                    'container_id': container_id
+                }
+        except Exception as e:
+            print(f"DEBUG: Fejl i delete_container: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
     def get_container_location(self, container_id):
         """Henter placeringen for en container"""
         print(f"DEBUG: Henter placering for container {container_id}")
