@@ -66,6 +66,7 @@ function updateStorageOverview(locations) {
         const rackBody = document.createElement('div');
         rackBody.className = 'card-body p-3';
         rackBody.id = `rack-body-${rackNum}`;
+        rackBody.style.display = 'block'; // Vis rackbody som standard
         
         const sectionsContainer = document.createElement('div');
         sectionsContainer.className = 'sections-container row g-3';
@@ -139,6 +140,8 @@ function updateStorageOverview(locations) {
         rackBody.appendChild(sectionsContainer);
         rackDiv.appendChild(rackBody);
         storageContainer.appendChild(rackDiv);
+
+        toggleRackView(rackNum);
     });
     
     // Add admin controls if user is admin
@@ -151,11 +154,13 @@ function toggleRackView(rackNum) {
     const toggleIcon = document.getElementById(`rack-toggle-${rackNum}`);
     
     if (rackBody.style.display === 'none') {
+        // Rack er foldet sammen og skal foldes ud
         rackBody.style.display = 'block';
-        toggleIcon.className = 'fas fa-chevron-down';
+        toggleIcon.className = 'fas fa-chevron-down'; // Pil ned når udfoldet
     } else {
+        // Rack er udfoldet og skal foldes sammen
         rackBody.style.display = 'none';
-        toggleIcon.className = 'fas fa-chevron-right';
+        toggleIcon.className = 'fas fa-chevron-right'; // Pil højre når foldet sammen
     }
 }
 
@@ -321,8 +326,18 @@ function addRack() {
         return;
     }
     
-    // Check if rack already exists
-    if (document.querySelector(`.rack-container:has(h5:contains("Rack ${rackNum}"))`)) {
+    // Check if rack already exists - using a different approach that doesn't use :has() selector
+    const rackContainers = document.querySelectorAll('.rack-container');
+    let rackExists = false;
+    
+    rackContainers.forEach(container => {
+        const header = container.querySelector('h5');
+        if (header && header.textContent.includes(`Rack ${rackNum}`)) {
+            rackExists = true;
+        }
+    });
+    
+    if (rackExists) {
         showErrorMessage(`Rack ${rackNum} already exists`);
         return;
     }
