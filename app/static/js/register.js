@@ -30,6 +30,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup container options
     setupContainerOptions();
     
+    // Initialize ContainerModule if available
+    if (typeof ContainerModule !== 'undefined') {
+        console.log('Initializing ContainerModule');
+        ContainerModule.init();
+    } else {
+        console.log('ContainerModule not available');
+    }
+    
     // Initialize first step
     showStep(1);
 });
@@ -87,6 +95,11 @@ function fetchContainerLocation(containerId) {
                 console.log("Container placering:", data.location);
                 // Gem containerens placering til senere brug
                 selectedContainerLocation = data.location;
+                
+                // Set skipLocationSelection to true since we'll use container's location
+                // This will make the location grid auto-select this location in step 4
+                skipLocationSelection = true;
+                console.log("Setting skipLocationSelection=true, will use container location:", data.location.LocationName);
             }
         })
         .catch(error => console.error("Fejl ved hentning af containerplacering:", error));
@@ -104,12 +117,14 @@ function fetchExistingContainers() {
     
     // Add a "loading..." option
     const loadingOption = document.createElement('option');
-    loadingOption.textContent = 'Indlæser containere...';
+    loadingOption.textContent = 'Loading containers...';
     loadingOption.disabled = true;
     existingContainerSelect.appendChild(loadingOption);
     
-    // Fetch containers from server
-    fetch('/api/containers/available')
+    // Fetch containers from server with cache-busting query parameter
+    // This ensures we get fresh data every time, not cached results
+    const timestamp = new Date().getTime();
+    fetch(`/api/containers/available?_=${timestamp}`)
         .then(response => response.json())
         .then(data => {
             // Remove "loading..." option
@@ -121,20 +136,47 @@ function fetchExistingContainers() {
                     option.value = container.ContainerID;
                     // Include location information in the dropdown for better identification
                     const locationInfo = container.LocationName ? ` - Location: ${container.LocationName}` : '';
-                    option.textContent = `${container.ContainerID}: ${container.Description}${locationInfo} (${container.sample_count || 0} prøver)`;
+                    
+                    // Add capacity information if available
+                    let capacityInfo = '';
+                    if (container.ContainerCapacity !== null) {
+                        const availableCapacity = container.available_capacity !== undefined 
+                            ? container.available_capacity 
+                            : (container.ContainerCapacity - (container.sample_count || 0));
+                        capacityInfo = ` (${container.sample_count || 0} samples, ${availableCapacity}/${container.ContainerCapacity} available)`;
+                    } else {
+                        capacityInfo = ` (${container.sample_count || 0} samples)`;
+                    }
+                    
+                    option.textContent = `${container.ContainerID}: ${container.Description}${locationInfo}${capacityInfo}`;
                     existingContainerSelect.appendChild(option);
                 });
+                
+                console.log(`Loaded ${data.containers.length} available containers`);
+                
+                // Enable the dropdown and select the first container by default
+                if (data.containers.length > 0) {
+                    existingContainerSelect.disabled = false;
+                    // If there's a container, select the first one to fetch its location 
+                    existingContainerSelect.selectedIndex = 1;
+                    
+                    // Trigger the change event to load the container's location
+                    const event = new Event('change');
+                    existingContainerSelect.dispatchEvent(event);
+                }
             } else {
                 const noContainersOption = document.createElement('option');
-                noContainersOption.textContent = 'Ingen tilgængelige containere fundet';
+                noContainersOption.textContent = 'No available containers found';
                 noContainersOption.disabled = true;
                 existingContainerSelect.appendChild(noContainersOption);
+                
+                console.log('No available containers found');
             }
         })
         .catch(error => {
-            console.error('Fejl ved hentning af containere:', error);
+            console.error('Error fetching containers:', error);
             const errorOption = document.createElement('option');
-            errorOption.textContent = 'Fejl ved hentning af containere';
+            errorOption.textContent = 'Error fetching containers';
             errorOption.disabled = true;
             existingContainerSelect.appendChild(errorOption);
         });
@@ -169,6 +211,16 @@ function showStep(step) {
         } else if (step === 3 && document.getElementById('hasSerialNumbers').checked) {
             setupBarcodeInput();
         } else if (step === 4) {
+            // Check if we need to use container location
+            const existingContainerOption = document.getElementById('existingContainerOption');
+            const useContainersFeature = document.getElementById('createContainers')?.checked || false;
+            
+            if (useContainersFeature && existingContainerOption && existingContainerOption.checked && selectedContainerLocation) {
+                console.log("Step 4: Will use container location for grid:", selectedContainerLocation.LocationName);
+                // Make sure the grid will use the container location
+                skipLocationSelection = true;
+            }
+            
             setupStorageGrid();
         }
         
@@ -325,8 +377,21 @@ function validateCurrentStep() {
             }
             return true;
         case 4:
-            // Skip location validation if we're using existing container
-            if (skipLocationSelection) {
+            // Check if we're using an existing container's location
+            const useContainers = document.getElementById('createContainers')?.checked || false;
+            const existingContainerOption = document.getElementById('existingContainerOption');
+            const useExistingContainer = useContainers && existingContainerOption && existingContainerOption.checked;
+            
+            // Skip location validation if we're using existing container with a location
+            if (skipLocationSelection || (useExistingContainer && selectedContainerLocation)) {
+                console.log("Skipping location validation as using container location:", 
+                    selectedContainerLocation ? selectedContainerLocation.LocationName : "Unknown");
+                
+                // If not already selected in the grid, use the container location
+                if (!selectedLocation && selectedContainerLocation) {
+                    selectedLocation = selectedContainerLocation.LocationID;
+                }
+                
                 return true;
             }
             
@@ -852,7 +917,39 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
             setTimeout(() => {
                 preSelectedCell.classList.remove('highlight-animation');
             }, 1500);
+            
+            // If using container location, show a message
+            if (selectedContainerLocation) {
+                showSuccessMessage(`Using container location: ${selectedContainerLocation.LocationName}`);
+            }
         }, 200);
+    } 
+    // If we have container location but couldn't find the cell, still store the ID
+    else if (selectedContainerLocation && selectedContainerLocation.LocationID) {
+        console.log("Container location exists but cell not found in grid. Using location ID:", selectedContainerLocation.LocationID);
+        selectedLocation = selectedContainerLocation.LocationID;
+        
+        // Show a location indicator even without a cell
+        let locationIndicator = document.querySelector('.selected-location-indicator');
+        if (!locationIndicator) {
+            locationIndicator = document.createElement('div');
+            locationIndicator.className = 'selected-location-indicator mt-3 p-2 bg-light rounded';
+            document.querySelector('.storage-selector').appendChild(locationIndicator);
+        }
+        
+        locationIndicator.innerHTML = `<strong>Selected location:</strong> ${selectedContainerLocation.LocationName} <span class="badge bg-info">Container Location</span>`;
+        
+        // Create hidden input
+        let locationInput = document.getElementById('selectedLocationInput');
+        if (!locationInput) {
+            locationInput = document.createElement('input');
+            locationInput.type = 'hidden';
+            locationInput.name = 'storageLocation';
+            locationInput.id = 'selectedLocationInput';
+            document.querySelector('.storage-selector').appendChild(locationInput);
+        }
+        
+        locationInput.value = selectedContainerLocation.LocationID;
     }
 }
 
@@ -905,9 +1002,15 @@ function setupStorageGrid() {
     const containerLocationSelect = document.getElementById('containerLocation');
     let selectedLocationId = null;
     
-    if (containerLocationSelect && containerLocationSelect.value) {
+    // First check if we have a selected container location from existing container
+    if (selectedContainerLocation && selectedContainerLocation.LocationID) {
+        selectedLocationId = selectedContainerLocation.LocationID;
+        console.log("Using location from existing container:", selectedLocationId, selectedContainerLocation.LocationName);
+    }
+    // Otherwise use the selected container location from the new container form
+    else if (containerLocationSelect && containerLocationSelect.value) {
         selectedLocationId = containerLocationSelect.value;
-        console.log("Using pre-selected location from container:", selectedLocationId);
+        console.log("Using pre-selected location from container form:", selectedLocationId);
     }
 
     // Fetch storage locations from API
@@ -1262,8 +1365,8 @@ function handleFormSubmission() {
     };
     
     // Container functionality
-    const createContainersCheckbox = document.getElementById('createContainers');
-    if (createContainersCheckbox && createContainersCheckbox.checked) {
+    const containersFeatureCheckbox = document.getElementById('createContainers');
+    if (containersFeatureCheckbox && containersFeatureCheckbox.checked) {
         formData.createContainers = true;
         
         // Check if we're using existing container or creating new
@@ -1285,8 +1388,24 @@ function handleFormSubmission() {
             // Create new container
             formData.containerDescription = document.getElementById('containerDescription')?.value || '';
             formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
-            formData.containerTypeId = document.getElementById('containerType')?.value || '';
-            formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
+            
+            // Check if we're creating a new container type
+            const createContainerType = document.getElementById('createContainerType')?.checked || false;
+            console.log("Creating container type?", createContainerType);
+            
+            if (createContainerType) {
+                // Creating a new container type
+                formData.newContainerType = {
+                    typeName: document.getElementById('newContainerTypeName')?.value || '',
+                    description: document.getElementById('newContainerTypeDescription')?.value || '',
+                    capacity: document.getElementById('newContainerTypeCapacity')?.value || ''
+                };
+                console.log("Creating new container type:", formData.newContainerType);
+            } else {
+                // Using existing container type
+                formData.containerTypeId = document.getElementById('containerType')?.value || '';
+                formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
+            }
             
             // Save container location separately from sample location
             const containerLocationSelect = document.getElementById('containerLocation');
@@ -1312,7 +1431,16 @@ function handleFormSubmission() {
     // If ContainerModule is available, get container data
     if (typeof ContainerModule !== 'undefined') {
         // ContainerModule will add its data to the formData object
-        ContainerModule.addToFormData(formData);
+        const containerData = ContainerModule.addToFormData(formData);
+        
+        // Check if we need to handle new container type separately
+        if (document.getElementById('createContainerType')?.checked) {
+            // Make sure newContainerType is transferred from ContainerModule data
+            if (!formData.newContainerType && containerData.newContainerType) {
+                formData.newContainerType = containerData.newContainerType;
+                console.log("Using container type from ContainerModule:", formData.newContainerType);
+            }
+        }
     }
     
     console.log("Sending form data:", formData);

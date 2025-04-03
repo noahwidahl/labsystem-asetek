@@ -256,6 +256,11 @@ class SampleService:
                                 container_type_id = cursor.lastrowid
                                 print(f"DEBUG: Created new container type with ID: {container_type_id}")
                                 
+                                # IMPORTANT: Get the capacity from the new container type
+                                # This ensures that when creating a new container type, we use its capacity
+                                capacity = new_type.get('capacity')
+                                print(f"DEBUG: Using capacity {capacity} from new container type {container_type_id}")
+                                
                                 # Log the container type creation
                                 cursor.execute("""
                                     INSERT INTO History (
@@ -282,7 +287,12 @@ class SampleService:
                                     container_type_id = default_type_result[0]
                             
                             # Get capacity from parameters or default to amount_per_package
-                            capacity = sample_data.get('containerCapacity') or amount_per_package
+                            # If creating a new container type, use its capacity value instead
+                            if sample_data.get('newContainerType'):
+                                capacity = sample_data.get('newContainerType').get('capacity') or amount_per_package
+                                print(f"DEBUG: Using capacity {capacity} from new container type for container")
+                            else:
+                                capacity = sample_data.get('containerCapacity') or amount_per_package
                             
                             # Get location from parameters or use the one already determined
                             container_location_id = sample_data.get('containerLocationId') or location_id

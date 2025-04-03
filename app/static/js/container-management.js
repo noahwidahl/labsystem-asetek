@@ -139,7 +139,8 @@ function addSampleToContainer() {
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        cache: 'no-store' // Ensure we don't use cached response
     })
     .then(response => response.json())
     .then(data => {

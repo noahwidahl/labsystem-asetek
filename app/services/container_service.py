@@ -81,7 +81,12 @@ class ContainerService:
                         0
                     ) as sample_count,
                     c.ContainerCapacity,
-                    sl.LocationName
+                    sl.LocationName,
+                    (
+                        SELECT IFNULL(SUM(cs.Amount), 0) 
+                        FROM containersample cs 
+                        WHERE cs.ContainerID = c.ContainerID
+                    ) as current_amount
                 FROM container c
                 LEFT JOIN storagelocation sl ON c.LocationID = sl.LocationID
                 WHERE c.IsMixed = 1 OR (
@@ -97,11 +102,17 @@ class ContainerService:
             
             if result:
                 for row in result:
+                    # Calculate available capacity
+                    capacity = row[3] if row[3] is not None else 999999
+                    current_amount = row[5] if len(row) > 5 else 0
+                    available_capacity = capacity - current_amount
+                    
                     containers.append({
                         'ContainerID': row[0],
                         'Description': row[1],
                         'sample_count': row[2],
                         'ContainerCapacity': row[3],
+                        'available_capacity': available_capacity,
                         'LocationName': row[4] if len(row) > 4 else 'Unknown'
                     })
             
