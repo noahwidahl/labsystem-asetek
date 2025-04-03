@@ -208,7 +208,7 @@ function updateNavigationButtons(step) {
     }
 
     if (nextButton) {
-        nextButton.textContent = step === totalSteps ? 'Gem' : 'Næste';
+        nextButton.textContent = step === totalSteps ? 'Save' : 'Next';
     }
 }
 
@@ -289,17 +289,17 @@ function validateCurrentStep() {
             let isValid = true;
             
             if (!description || !description.value.trim()) {
-                showErrorMessage('Indtast venligst en beskrivelse', 'description');
+                showErrorMessage('Please enter a sample name', 'description');
                 isValid = false;
             }
             
             if (!totalAmount || totalAmount.value <= 0) {
-                showErrorMessage('Indtast venligst et gyldigt antal', 'totalAmount');
+                showErrorMessage('Please enter a valid amount', 'totalAmount');
                 isValid = false;
             }
             
             if (!unit || !unit.value) {
-                showErrorMessage('Vælg venligst en enhed', 'unit');
+                showErrorMessage('Please select a unit', 'unit');
                 isValid = false;
             }
             
@@ -339,7 +339,7 @@ function validateCurrentStep() {
                 if (typeof PackageLocations !== 'undefined') {
                     const selectedLocations = PackageLocations.getSelectedLocations();
                     if (selectedLocations.length < packageCount) {
-                        showErrorMessage(`Du skal vælge ${packageCount} placeringer. Du har valgt ${selectedLocations.length}.`);
+                        showErrorMessage(`You need to select ${packageCount} locations. You have selected ${selectedLocations.length}.`);
                         return false;
                     }
                 }
@@ -347,7 +347,7 @@ function validateCurrentStep() {
             } else {
                 // Standard validation for one location
                 if (!selectedLocation) {
-                    showErrorMessage('Vælg venligst en placering ved at klikke på et tilgængeligt felt i grid\'et.');
+                    showErrorMessage('Please select a location by clicking on an available space in the grid.');
                     return false;
                 }
                 return true;
@@ -406,7 +406,7 @@ function setupBulkSampleHandling() {
             // Add empty option
             const emptyOption = document.createElement('option');
             emptyOption.value = '';
-            emptyOption.textContent = 'Vælg enhed';
+            emptyOption.textContent = 'Select unit';
             unitSelect.appendChild(emptyOption);
             
             if (isBulk) {
@@ -753,8 +753,8 @@ function setupBarcodeInput() {
     }
 }
 
-function createGridFromLocations(locations) {
-    console.log("createGridFromLocations med", locations.length, "placeringer");
+function createGridFromLocations(locations, preSelectedLocationId = null) {
+    console.log("createGridFromLocations with", locations.length, "locations", preSelectedLocationId ? `and pre-selected location ${preSelectedLocationId}` : "");
     
     const grid = document.querySelector('.storage-grid');
     if (!grid) return;
@@ -763,6 +763,9 @@ function createGridFromLocations(locations) {
     
     // Organize locations by rack, section, shelf
     const organizedLocations = organizeLocationsByStructure(locations);
+    
+    // Keep track of the cell for pre-selected location
+    let preSelectedCell = null;
     
     // Create rack sections
     Object.keys(organizedLocations).sort((a, b) => parseInt(a) - parseInt(b)).forEach(reolNum => {
@@ -818,6 +821,11 @@ function createGridFromLocations(locations) {
                 
                 // Add click event to the cell - always clickable regardless of content
                 cell.addEventListener('click', () => selectStorageCell(cell));
+                
+                // If this is the pre-selected location, save the cell reference
+                if (preSelectedLocationId && location.LocationID == preSelectedLocationId) {
+                    preSelectedCell = cell;
+                }
             });
             
             sektionDiv.appendChild(hyldeContainer);
@@ -827,6 +835,25 @@ function createGridFromLocations(locations) {
         reolSection.appendChild(sektionsContainer);
         grid.appendChild(reolSection);
     });
+    
+    // After the grid is created, auto-select the pre-selected location if any
+    if (preSelectedCell) {
+        console.log("Auto-selecting pre-selected location");
+        
+        // Scroll to make the location visible (with some delay to ensure DOM is ready)
+        setTimeout(() => {
+            preSelectedCell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Select the cell
+            selectStorageCell(preSelectedCell);
+            
+            // Add a highlight animation
+            preSelectedCell.classList.add('highlight-animation');
+            setTimeout(() => {
+                preSelectedCell.classList.remove('highlight-animation');
+            }, 1500);
+        }, 200);
+    }
 }
 
 // Organize locations by structure
@@ -874,32 +901,44 @@ function setupStorageGrid() {
 
     grid.innerHTML = '<div class="text-center p-3"><div class="spinner-border"></div><p>Loading storage locations...</p></div>';
 
+    // Check if there's a pre-selected location from container details
+    const containerLocationSelect = document.getElementById('containerLocation');
+    let selectedLocationId = null;
+    
+    if (containerLocationSelect && containerLocationSelect.value) {
+        selectedLocationId = containerLocationSelect.value;
+        console.log("Using pre-selected location from container:", selectedLocationId);
+    }
+
     // Fetch storage locations from API
     fetch('/api/storage-locations')
         .then(response => response.json())
         .then(data => {
             console.log("Received storage location data:", data);
             if (data.locations) {
-                createGridFromLocations(data.locations);
+                createGridFromLocations(data.locations, selectedLocationId);
             } else {
                 console.error("No locations in response");
                 // Fallback to rack.section.shelf format
-                createDefaultStorageGrid();
+                createDefaultStorageGrid(selectedLocationId);
             }
         })
         .catch(error => {
             console.error('Error fetching storage locations:', error);
             // Fallback to rack.section.shelf format
-            createDefaultStorageGrid();
+            createDefaultStorageGrid(selectedLocationId);
         });
 }
 
 // We maintain our grid creation function with updated format
-function createDefaultStorageGrid() {
+function createDefaultStorageGrid(preSelectedLocationId = null) {
     const grid = document.querySelector('.storage-grid');
     if (!grid) return;
 
     grid.innerHTML = '';
+    
+    // Keep track of the cell for pre-selected location
+    let preSelectedCell = null;
     
     // Create default storage grid with rack.section.shelf format
     for (let rack = 1; rack <= 3; rack++) {
@@ -932,7 +971,10 @@ function createDefaultStorageGrid() {
                 
                 const locationName = `${rack}.${section}.${shelf}`;
                 cell.dataset.locationName = locationName;
-                cell.dataset.locationId = `${rack}${section}${shelf}`; // Simulated ID
+                
+                // Generate a simulated ID matching format in DB (LocationID)
+                const simulatedId = `${rack}${section}${shelf}`;
+                cell.dataset.locationId = simulatedId;
                 
                 const locationEl = document.createElement('div');
                 locationEl.className = 'location fw-bold';
@@ -948,6 +990,11 @@ function createDefaultStorageGrid() {
                 
                 // Add click event to the cell
                 cell.addEventListener('click', () => selectStorageCell(cell));
+                
+                // If this is the pre-selected location, save the cell reference
+                if (preSelectedLocationId && simulatedId == preSelectedLocationId) {
+                    preSelectedCell = cell;
+                }
             }
             
             sektionDiv.appendChild(hyldeContainer);
@@ -956,6 +1003,25 @@ function createDefaultStorageGrid() {
         
         reolSection.appendChild(sektionsContainer);
         grid.appendChild(reolSection);
+    }
+    
+    // After the grid is created, auto-select the pre-selected location if any
+    if (preSelectedCell) {
+        console.log("Auto-selecting pre-selected location in default grid");
+        
+        // Scroll to make the location visible (with some delay to ensure DOM is ready)
+        setTimeout(() => {
+            preSelectedCell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Select the cell
+            selectStorageCell(preSelectedCell);
+            
+            // Add a highlight animation
+            preSelectedCell.classList.add('highlight-animation');
+            setTimeout(() => {
+                preSelectedCell.classList.remove('highlight-animation');
+            }, 1500);
+        }, 200);
     }
 }
 

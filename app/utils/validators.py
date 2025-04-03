@@ -62,21 +62,16 @@ def validate_container_data(data):
             'field': 'containerType'
         }
     
-    # Capacity is required
-    if not data.get('capacity'):
-        return {
-            'valid': False,
-            'error': 'Container capacity is required',
-            'field': 'containerCapacity'
-        }
-    
-    # Validate capacity format
-    if not str(data.get('capacity')).isdigit():
+    # Capacity is not required, but if provided it must be a number
+    if data.get('capacity') and not str(data.get('capacity')).isdigit():
         return {
             'valid': False, 
             'error': 'Capacity must be a number',
             'field': 'containerCapacity'
         }
+        
+    # If creating a new container type, capacity is not required for the container
+    # as it will use the new type's capacity
     
     # Validate new container type if provided
     if data.get('newContainerType'):

@@ -56,20 +56,31 @@ const ContainerModule = (function() {
         createTypeCheckbox.addEventListener('change', function() {
             const createNew = this.checked;
             
+            // Disable both container type dropdown and capacity input when creating new type
             containerTypeSelect.disabled = createNew;
+            capacityInput.disabled = createNew; // Disable capacity input as we'll use the new type's capacity instead
+            
             newTypeSection.classList.toggle('d-none', !createNew);
             
             // Clear validation errors on toggle
             if (createNew) {
-                // We're creating a new type, clear validation on select
+                // We're creating a new type, clear validation on select and capacity
                 containerTypeSelect.classList.remove('is-invalid');
+                capacityInput.classList.remove('is-invalid');
+                
                 const selectFeedback = containerTypeSelect.nextElementSibling;
                 if (selectFeedback && selectFeedback.classList.contains('invalid-feedback')) {
                     selectFeedback.remove();
                 }
                 
-                // Clear container type selection
+                const capacityFeedback = capacityInput.nextElementSibling;
+                if (capacityFeedback && capacityFeedback.classList.contains('invalid-feedback')) {
+                    capacityFeedback.remove();
+                }
+                
+                // Clear container type selection and capacity
                 containerTypeSelect.value = '';
+                capacityInput.value = ''; // Clear capacity as it will come from the new type
                 
                 // Focus on new type name field
                 setTimeout(() => {
@@ -82,6 +93,9 @@ const ContainerModule = (function() {
                 if (typeFeedback && typeFeedback.classList.contains('invalid-feedback')) {
                     typeFeedback.remove();
                 }
+                
+                // Enable capacity input again
+                capacityInput.disabled = false;
                 
                 // If container type is already selected, update the capacity
                 if (containerTypeSelect.value) {
@@ -221,70 +235,10 @@ const ContainerModule = (function() {
             });
     }
     
-    // Validate container data
+    // Validate container data - this is now a helper function only used externally
     function _validateContainerData() {
-        // Clear previous validation errors
-        _clearValidationErrors();
-        
-        // Check if using existing container
-        const existingContainerOption = document.getElementById('existingContainerOption');
-        if (existingContainerOption && existingContainerOption.checked) {
-            // Validate existing container selection
-            const existingContainerSelect = document.getElementById('existingContainerSelect');
-            if (!existingContainerSelect.value) {
-                _showFieldError(existingContainerSelect, 'Please select a container');
-                return false;
-            }
-            return true;
-        }
-        
-        // Validate new container fields
-        const description = document.getElementById('containerDescription');
-        if (!description.value) {
-            _showFieldError(description, 'Container description is required');
-            return false;
-        }
-        
-        const createNewType = document.getElementById('createContainerType').checked;
-        let isValid = true;
-        
-        if (createNewType) {
-            // Validate new container type
-            const typeName = document.getElementById('newContainerTypeName');
-            if (!typeName.value) {
-                _showFieldError(typeName, 'Container type name is required');
-                isValid = false;
-            }
-            
-            const typeCapacity = document.getElementById('newContainerTypeCapacity');
-            if (!typeCapacity.value) {
-                _showFieldError(typeCapacity, 'Container type capacity is required');
-                isValid = false;
-            }
-        } else {
-            // Validate container type selection
-            const containerType = document.getElementById('containerType');
-            if (!containerType.value) {
-                _showFieldError(containerType, 'Please select a container type');
-                isValid = false;
-            }
-        }
-        
-        // Validate capacity
-        const capacity = document.getElementById('containerCapacity');
-        if (!capacity.value) {
-            _showFieldError(capacity, 'Container capacity is required');
-            isValid = false;
-        }
-        
-        // Validate location
-        const location = document.getElementById('containerLocation');
-        if (!location.value) {
-            _showFieldError(location, 'Storage location is required');
-            isValid = false;
-        }
-        
-        return isValid;
+        // This function is deprecated - validation is done directly in the validate method
+        return ContainerModule.validate();
     }
     
     // Show field-specific errors
@@ -370,9 +324,60 @@ const ContainerModule = (function() {
                 }
                 return true;
             }
+
+            // Clear previous validation errors
+            _clearValidationErrors();
             
-            // Otherwise validate the new container data
-            return _validateContainerData();
+            // Validate new container fields
+            const description = document.getElementById('containerDescription');
+            if (!description.value) {
+                _showFieldError(description, 'Container description is required');
+                return false;
+            }
+            
+            const createNewType = document.getElementById('createContainerType').checked;
+            let isValid = true;
+            
+            if (createNewType) {
+                // Validate new container type
+                const typeName = document.getElementById('newContainerTypeName');
+                if (!typeName.value) {
+                    _showFieldError(typeName, 'Container type name is required');
+                    isValid = false;
+                }
+                
+                const typeCapacity = document.getElementById('newContainerTypeCapacity');
+                if (!typeCapacity.value) {
+                    _showFieldError(typeCapacity, 'Container type capacity is required');
+                    isValid = false;
+                }
+                
+                // When creating a new type, capacity validation is not needed for the container
+                // as it will use the new type's capacity
+            } else {
+                // Validate container type selection
+                const containerType = document.getElementById('containerType');
+                if (!containerType.value) {
+                    _showFieldError(containerType, 'Please select a container type');
+                    isValid = false;
+                }
+                
+                // Only validate capacity if not creating a new type
+                const capacity = document.getElementById('containerCapacity');
+                if (!capacity.value) {
+                    _showFieldError(capacity, 'Container capacity is required');
+                    isValid = false;
+                }
+            }
+            
+            // Validate location
+            const location = document.getElementById('containerLocation');
+            if (!location.value) {
+                _showFieldError(location, 'Storage location is required');
+                isValid = false;
+            }
+            
+            return isValid;
         },
         
         // Add to form data before submission

@@ -193,8 +193,8 @@ function createContainer() {
         isValid = false;
     }
     
-    // Capacity is required
-    if (!capacity) {
+    // Only validate capacity if not creating a new container type
+    if (!createNewType && !capacity) {
         showFieldError('containerCapacity', 'Container capacity is required');
         isValid = false;
     }
@@ -449,6 +449,7 @@ function setupContainerTypeToggle() {
         const createNew = this.checked;
         
         containerTypeSelect.disabled = createNew;
+        capacityInput.disabled = createNew; // Also disable capacity when creating new type
         newTypeSection.classList.toggle('d-none', !createNew);
         
         // Clear validation errors on toggle
@@ -474,6 +475,9 @@ function setupContainerTypeToggle() {
             if (typeFeedback && typeFeedback.classList.contains('invalid-feedback')) {
                 typeFeedback.remove();
             }
+            
+            // Re-enable capacity input
+            capacityInput.disabled = false;
             
             // If container type is already selected, update the capacity
             if (containerTypeSelect.value) {

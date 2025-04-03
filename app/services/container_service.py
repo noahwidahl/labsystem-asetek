@@ -239,6 +239,25 @@ class ContainerService:
             else:
                 container.type_name = 'Standard'
             
+            # Get container location
+            try:
+                # Get location information
+                query = """
+                    SELECT sl.LocationName 
+                    FROM container c
+                    LEFT JOIN storagelocation sl ON c.LocationID = sl.LocationID
+                    WHERE c.ContainerID = %s
+                """
+                result, _ = self.db.execute_query(query, (container.id,))
+                
+                if result and len(result) > 0 and result[0][0]:
+                    container.location_name = result[0][0]
+                else:
+                    container.location_name = 'Unknown'
+            except Exception as e:
+                print(f"DEBUG: Error getting container location: {e}")
+                container.location_name = 'Unknown'
+            
             # Count number of samples - check both table names
             try:
                 cursor = self.mysql.connection.cursor()
@@ -338,9 +357,10 @@ class ContainerService:
                     # Update the container object with the new type ID
                     container.container_type_id = container_type_id
                     
-                    # If container capacity not set, use the new type's capacity
-                    if not container.capacity and new_container_type.get('capacity'):
-                        container.capacity = new_container_type.get('capacity')
+                    # IMPORTANT: Always use the new container type's capacity for the container
+                    # This fixes the issue where capacity validation was preventing progression
+                    container.capacity = new_container_type.get('capacity')
+                    print(f"DEBUG: Using capacity {container.capacity} from new container type")
                     
                     # Log the activity
                     cursor.execute("""
@@ -359,6 +379,21 @@ class ContainerService:
                 
                 # Add the location_id to the insert query
                 if container.container_type_id:
+                    # If no capacity provided and we're not creating a new type, get default from existing container type
+                    capacity = container.capacity
+                    if not capacity and not new_container_type:
+                        # Get default capacity from container type
+                        cursor.execute("""
+                            SELECT DefaultCapacity 
+                            FROM ContainerType 
+                            WHERE ContainerTypeID = %s
+                        """, (container.container_type_id,))
+                        
+                        type_result = cursor.fetchone()
+                        if type_result and type_result[0]:
+                            capacity = type_result[0]
+                            print(f"DEBUG: Using default capacity {capacity} from existing container type {container.container_type_id}")
+                    
                     query = f"""
                         INSERT INTO {table_name} (
                             Description, 
@@ -374,7 +409,7 @@ class ContainerService:
                         container.description,
                         container.container_type_id,
                         1 if container.is_mixed else 0,
-                        container.capacity,
+                        capacity,
                         location_id
                     ))
                 else:
@@ -426,22 +461,44 @@ class ContainerService:
                 'error': str(e)
             }
             
-    def add_sample_to_container(self, container_id, sample_id, amount=1, user_id=None):
-        print(f"DEBUG: add_sample_to_container called with container_id={container_id}, sample_id={sample_id}, amount={amount}")
+    def add_sample_to_container(self, container_id, sample_id, amount=1, user_id=None, force_add=False):
+        print(f"DEBUG: add_sample_to_container called with container_id={container_id}, sample_id={sample_id}, amount={amount}, force_add={force_add}")
         try:
             with self.db.transaction() as cursor:
                 # Container table is just named 'container' in this database
                 container_table = "container"
                 
-                # Check if container exists
-                cursor.execute(f"SELECT * FROM {container_table} WHERE ContainerID = %s", (container_id,))
-                container_exists = cursor.fetchone() is not None
+                # Check if container exists and get its capacity
+                cursor.execute(f"""
+                    SELECT c.ContainerID, c.ContainerCapacity, 
+                           IFNULL((SELECT SUM(cs.Amount) FROM ContainerSample cs WHERE cs.ContainerID = c.ContainerID), 0) as CurrentAmount 
+                    FROM {container_table} c
+                    WHERE c.ContainerID = %s
+                """, (container_id,))
                 
-                if not container_exists:
+                container_data = cursor.fetchone()
+                if not container_data:
                     return {
                         'success': False,
                         'error': f'Container with ID {container_id} does not exist'
                     }
+                
+                container_capacity = container_data[1] 
+                current_amount = container_data[2]
+                
+                # Check if adding this sample would exceed the container's capacity
+                if container_capacity and not force_add:
+                    new_total = current_amount + amount
+                    if new_total > container_capacity:
+                        return {
+                            'success': False,
+                            'warning': True,
+                            'capacity_exceeded': True,
+                            'error': f'Adding {amount} samples would exceed the container capacity of {container_capacity}. Current amount: {current_amount}',
+                            'current_amount': current_amount,
+                            'new_amount': new_total,
+                            'capacity': container_capacity
+                        }
                 
                 # Check if sample exists and is available
                 cursor.execute("""
@@ -512,6 +569,11 @@ class ContainerService:
                 
                 # Log the activity
                 if user_id:
+                    # Add a note if we're exceeding capacity
+                    capacity_note = ""
+                    if container_capacity and current_amount + amount > container_capacity:
+                        capacity_note = f" (Container capacity exceeded: {current_amount + amount}/{container_capacity})"
+                    
                     cursor.execute("""
                         INSERT INTO History (
                             Timestamp, 
@@ -525,12 +587,13 @@ class ContainerService:
                         'Sample added to container',
                         user_id,
                         sample_id,
-                        f"Sample {sample_id} added to Container {container_id}, amount: {amount}"
+                        f"Sample {sample_id} added to Container {container_id}, amount: {amount}{capacity_note}"
                     ))
                 
                 return {
                     'success': True,
-                    'container_sample_id': container_sample_id
+                    'container_sample_id': container_sample_id,
+                    'capacity_warning': container_capacity and current_amount + amount > container_capacity
                 }
                 
         except Exception as e:

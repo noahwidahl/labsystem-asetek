@@ -21,6 +21,7 @@ def init_container(blueprint, mysql):
                 container_dict['TypeName'] = getattr(container, 'type_name', 'Standard')
                 container_dict['SampleCount'] = getattr(container, 'sample_count', 0)
                 container_dict['TotalItems'] = getattr(container, 'total_items', 0)
+                container_dict['LocationName'] = getattr(container, 'location_name', 'Unknown')
                 containers_for_template.append(container_dict)
             
             cursor = mysql.connection.cursor()
@@ -170,7 +171,8 @@ def init_container(blueprint, mysql):
                 data.get('containerId'),
                 data.get('sampleId'),
                 data.get('amount', 1),
-                user_id
+                user_id,
+                data.get('force_add', False)  # Added force_add parameter to bypass capacity check
             )
             
             return jsonify(result)

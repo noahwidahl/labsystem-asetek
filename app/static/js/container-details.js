@@ -156,7 +156,7 @@ function setupSampleSelect() {
 }
 
 // Add sample to container
-function addSampleToContainer() {
+function addSampleToContainer(forceAdd = false) {
     const containerId = document.getElementById('targetContainerId').value;
     const sampleId = document.getElementById('sampleSelect').value;
     const amount = parseInt(document.getElementById('sampleAmount').value) || 1;
@@ -179,6 +179,11 @@ function addSampleToContainer() {
         amount: amount
     };
     
+    // If forceAdd is true, add that to the request
+    if (forceAdd) {
+        data.force_add = true;
+    }
+    
     // Send to server
     fetch('/api/containers/add-sample', {
         method: 'POST',
@@ -192,13 +197,30 @@ function addSampleToContainer() {
         if (data.success) {
             showSuccessMessage('Sample added to container!');
             
+            // Check if there's a capacity warning
+            if (data.capacity_warning) {
+                showWarningMessage('Container capacity has been exceeded but sample was added anyway.');
+            }
+            
             // Close modal and reload page
             const modal = bootstrap.Modal.getInstance(document.getElementById('addSampleToContainerModal'));
             if (modal) modal.hide();
             
             setTimeout(() => {
                 window.location.reload();
-            }, 1000);
+            }, 1500);  // Give a bit more time to see the messages
+        } else if (data.warning && data.capacity_exceeded) {
+            // Show capacity warning and ask if user wants to continue
+            showCapacityWarningConfirm(
+                data.error, 
+                data.current_amount, 
+                data.new_amount, 
+                data.capacity,
+                () => {
+                    // User clicked 'Yes', force add the sample
+                    addSampleToContainer(true);
+                }
+            );
         } else {
             showErrorMessage(`Error adding sample: ${data.error}`);
         }
@@ -206,6 +228,76 @@ function addSampleToContainer() {
     .catch(error => {
         showErrorMessage(`An error occurred: ${error}`);
     });
+}
+
+// Function to show capacity warning with confirmation
+function showCapacityWarningConfirm(message, currentAmount, newAmount, capacity, onConfirm) {
+    // Create a modal for confirmation
+    const confirmModal = document.createElement('div');
+    confirmModal.className = 'modal fade';
+    confirmModal.id = 'capacityWarningModal';
+    confirmModal.setAttribute('tabindex', '-1');
+    confirmModal.setAttribute('aria-hidden', 'true');
+    
+    confirmModal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">Container Capacity Warning</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> ${message}
+                    </div>
+                    <div class="progress mb-3">
+                        <div class="progress-bar bg-warning" role="progressbar" style="width: ${(newAmount / capacity) * 100}%"></div>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span>Current: ${currentAmount}</span>
+                        <span>New: ${newAmount}</span>
+                        <span>Capacity: ${capacity}</span>
+                    </div>
+                    <p>Do you want to continue adding the sample anyway?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="confirmExceedCapacity">Yes, add anyway</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(confirmModal);
+    
+    // Initialize the modal
+    const modal = new bootstrap.Modal(confirmModal);
+    modal.show();
+    
+    // Add event listener to confirm button
+    document.getElementById('confirmExceedCapacity').addEventListener('click', function() {
+        modal.hide();
+        
+        // Call the callback
+        if (typeof onConfirm === 'function') {
+            onConfirm();
+        }
+        
+        // Remove the modal from DOM after it's hidden
+        confirmModal.addEventListener('hidden.bs.modal', function() {
+            confirmModal.remove();
+        });
+    });
+    
+    // Ensure modal is removed when closed
+    confirmModal.addEventListener('hidden.bs.modal', function() {
+        setTimeout(() => {
+            if (document.body.contains(confirmModal)) {
+                confirmModal.remove();
+            }
+        }, 300);
+    });
+}
 }
 
 // Remove sample from container
@@ -271,6 +363,33 @@ function showSuccessMessage(message) {
         successToast.classList.remove('show');
         setTimeout(() => successToast.remove(), 300);
     }, 3000);
+}
+
+function showWarningMessage(message) {
+    const warningToast = document.createElement('div');
+    warningToast.className = 'custom-toast warning-toast';
+    warningToast.innerHTML = `
+        <div class="toast-icon">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="toast-content">
+            <div class="toast-title">Warning</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    document.body.appendChild(warningToast);
+
+    // Add 'show' class after a short delay (for animation effect)
+    setTimeout(() => warningToast.classList.add('show'), 10);
+
+    // Remove automatically after 4 seconds
+    setTimeout(() => {
+        warningToast.classList.remove('show');
+        setTimeout(() => warningToast.remove(), 300);
+    }, 4000);
 }
 
 function showErrorMessage(message) {
