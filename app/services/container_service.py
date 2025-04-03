@@ -9,24 +9,19 @@ class ContainerService:
     def get_all_containers(self):
         print("DEBUG: Fetching containers...")
         try:
-            # First: Check both possible table names (container and Container)
+            # Table name is already known to be 'container'
             cursor = self.mysql.connection.cursor()
             cursor.execute("SHOW TABLES LIKE 'container'")
-            lowercase_exists = cursor.fetchone() is not None
+            table_exists = cursor.fetchone() is not None
             
-            cursor.execute("SHOW TABLES LIKE 'Container'")
-            uppercase_exists = cursor.fetchone() is not None
+            print(f"DEBUG: container table exists: {table_exists}")
             
-            print(f"DEBUG: lowercase container table exists: {lowercase_exists}")
-            print(f"DEBUG: uppercase Container table exists: {uppercase_exists}")
-            
-            if not lowercase_exists and not uppercase_exists:
+            if not table_exists:
                 print("DEBUG: No container table exists!")
                 cursor.close()
                 return []
             
-            # Use the table name that exists
-            table_name = "container" if lowercase_exists else "Container"
+            table_name = "container"
             cursor.close()
             
             # If table exists, continue fetching data
@@ -118,22 +113,18 @@ class ContainerService:
         print(f"DEBUG: delete_container called with container_id={container_id}, user_id={user_id}")
         try:
             with self.db.transaction() as cursor:
-                # First check if the container exists
+                # Table name is already known to be 'container'
                 cursor.execute("SHOW TABLES LIKE 'container'")
-                lowercase_exists = cursor.fetchone() is not None
+                table_exists = cursor.fetchone() is not None
                 
-                cursor.execute("SHOW TABLES LIKE 'Container'")
-                uppercase_exists = cursor.fetchone() is not None
-                
-                if not lowercase_exists and not uppercase_exists:
+                if not table_exists:
                     print("DEBUG: No container table exists!")
                     return {
                         'success': False,
                         'error': 'Container table does not exist'
                     }
                 
-                # Use the table name that exists
-                table_name = "container" if lowercase_exists else "Container"
+                table_name = "container"
                 
                 # Check if the container has associated samples
                 cursor.execute("""
@@ -267,29 +258,16 @@ class ContainerService:
         print(f"DEBUG: create_container called with data: {container_data}")
         try:
             with self.db.transaction() as cursor:
-                # Check both possible table names
+                # Use 'container' table
+                table_name = "container"
+                
+                # Verify the table exists
                 cursor.execute("SHOW TABLES LIKE 'container'")
-                lowercase_exists = cursor.fetchone() is not None
-                
-                cursor.execute("SHOW TABLES LIKE 'Container'")
-                uppercase_exists = cursor.fetchone() is not None
-                
-                if not lowercase_exists and not uppercase_exists:
-                    # No container table exists - create it
-                    print("DEBUG: Creating container table")
-                    cursor.execute("""
-                        CREATE TABLE container (
-                            ContainerID INT AUTO_INCREMENT PRIMARY KEY,
-                            Description VARCHAR(255) NOT NULL,
-                            ContainerTypeID INT NULL,
-                            IsMixed TINYINT(1) DEFAULT 0,
-                            ContainerCapacity INT NULL
-                        )
-                    """)
-                    table_name = "container"
-                else:
-                    # Use the table name that exists
-                    table_name = "container" if lowercase_exists else "Container"
+                if cursor.fetchone() is None:
+                    return {
+                        'success': False,
+                        'error': 'Container table does not exist'
+                    }
                 
                 print(f"DEBUG: Using table name: {table_name}")
                 container = Container.from_dict(container_data)
@@ -354,6 +332,108 @@ class ContainerService:
                 }
         except Exception as e:
             print(f"DEBUG: Error in create_container: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'error': str(e)
+            }
+            
+    def add_sample_to_container(self, container_id, sample_id, amount=1, user_id=None):
+        print(f"DEBUG: add_sample_to_container called with container_id={container_id}, sample_id={sample_id}, amount={amount}")
+        try:
+            with self.db.transaction() as cursor:
+                # Container table is just named 'container' in this database
+                container_table = "container"
+                
+                # Check if container exists
+                cursor.execute(f"SELECT * FROM {container_table} WHERE ContainerID = %s", (container_id,))
+                container_exists = cursor.fetchone() is not None
+                
+                if not container_exists:
+                    return {
+                        'success': False,
+                        'error': f'Container with ID {container_id} does not exist'
+                    }
+                
+                # Check if sample exists and is available
+                cursor.execute("""
+                    SELECT s.SampleID, ss.StorageID, ss.AmountRemaining 
+                    FROM Sample s
+                    JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+                    WHERE s.SampleID = %s AND ss.AmountRemaining >= %s
+                """, (sample_id, amount))
+                
+                sample_data = cursor.fetchone()
+                if not sample_data:
+                    return {
+                        'success': False,
+                        'error': f'Sample with ID {sample_id} does not exist or has insufficient quantity'
+                    }
+                
+                storage_id = sample_data[1]
+                
+                # Check if ContainerSample table exists, create if it doesn't
+                cursor.execute("SHOW TABLES LIKE 'ContainerSample'")
+                if cursor.fetchone() is None:
+                    print("DEBUG: Creating ContainerSample table")
+                    cursor.execute("""
+                        CREATE TABLE ContainerSample (
+                            ContainerSampleID INT AUTO_INCREMENT PRIMARY KEY,
+                            SampleStorageID INT NOT NULL,
+                            ContainerID INT NOT NULL,
+                            Amount INT NOT NULL DEFAULT 1
+                        )
+                    """)
+                
+                # Add the sample to the container
+                cursor.execute("""
+                    INSERT INTO ContainerSample (
+                        SampleStorageID,
+                        ContainerID,
+                        Amount
+                    )
+                    VALUES (%s, %s, %s)
+                """, (
+                    storage_id,
+                    container_id,
+                    amount
+                ))
+                
+                container_sample_id = cursor.lastrowid
+                
+                # Reduce the amount in storage
+                cursor.execute("""
+                    UPDATE SampleStorage 
+                    SET AmountRemaining = AmountRemaining - %s
+                    WHERE StorageID = %s AND AmountRemaining >= %s
+                """, (amount, storage_id, amount))
+                
+                # Log the activity
+                if user_id:
+                    cursor.execute("""
+                        INSERT INTO History (
+                            Timestamp, 
+                            ActionType, 
+                            UserID, 
+                            SampleID,
+                            Notes
+                        )
+                        VALUES (NOW(), %s, %s, %s, %s)
+                    """, (
+                        'Sample added to container',
+                        user_id,
+                        sample_id,
+                        f"Sample {sample_id} added to Container {container_id}, amount: {amount}"
+                    ))
+                
+                return {
+                    'success': True,
+                    'container_sample_id': container_sample_id
+                }
+                
+        except Exception as e:
+            print(f"DEBUG: Error in add_sample_to_container: {e}")
             import traceback
             traceback.print_exc()
             return {

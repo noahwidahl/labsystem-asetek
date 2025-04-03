@@ -54,6 +54,7 @@
                                     <td><span class="badge bg-primary">{{ container.Status|default('Active') }}</span></td>
                                     <td>
                                         <button class="btn btn-sm btn-secondary">Details</button>
+                                        <button class="btn btn-sm btn-success add-sample-btn" data-container-id="{{ container.ContainerID }}" data-bs-toggle="modal" data-bs-target="#addSampleToContainerModal">Add Sample</button>
                                         <button class="btn btn-sm btn-outline-danger delete-container-btn" data-container-id="{{ container.ContainerID }}">Delete</button>
                                     </td>
                                 </tr>
