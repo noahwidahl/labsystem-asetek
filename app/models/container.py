@@ -1,6 +1,6 @@
 class Container:
     def __init__(self, id=None, description=None, container_type_id=None, 
-                 is_mixed=False, capacity=None, status='Aktiv'):
+                 is_mixed=False, capacity=None, status='Active'):
         self.id = id
         self.description = description
         self.container_type_id = container_type_id
@@ -25,7 +25,7 @@ class Container:
             container_type_id=row[2] if len(row) > 2 else None,
             is_mixed=bool(row[3]) if len(row) > 3 else False,
             capacity=row[4] if len(row) > 4 else None,
-            status=row[5] if len(row) > 5 else 'Aktiv'
+            status=row[5] if len(row) > 5 else 'Active'
         )
     
     def to_dict(self):

@@ -7,11 +7,11 @@ class DatabaseManager:
     @contextmanager
     def transaction(self, isolation_level=None):
         """
-        Context manager til håndtering af database-transaktioner.
+        Context manager for handling database transactions.
         
         Usage:
             with db_manager.transaction():
-                # database operationer her
+                # database operations here
         """
         cursor = self.mysql.connection.cursor()
         try:

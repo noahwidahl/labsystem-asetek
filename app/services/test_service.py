@@ -22,7 +22,7 @@ class TestService:
             WHERE t.CreatedDate > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
             AND NOT EXISTS (
                 SELECT 1 FROM History h 
-                WHERE h.TestID = t.TestID AND h.ActionType = 'Test afsluttet'
+                WHERE h.TestID = t.TestID AND h.ActionType = 'Test completed'
             )
             GROUP BY t.TestID
             ORDER BY t.CreatedDate DESC
@@ -35,13 +35,13 @@ class TestService:
             test = Test.from_db_row(row)
             test.sample_count = row[6] if len(row) > 6 else 0
             
-            # Hent brugernavn
+            # Get username
             user_query = "SELECT Name FROM User WHERE UserID = %s"
             user_result, _ = self.db.execute_query(user_query, (test.user_id,))
             if user_result and len(user_result) > 0:
                 test.user_name = user_result[0][0]
             else:
-                test.user_name = "Ukendt"
+                test.user_name = "Unknown"
             
             tests.append(test)
         
@@ -52,7 +52,7 @@ class TestService:
             test = Test.from_dict(test_data)
             test.user_id = user_id
             
-            # Opret testen
+            # Create the test
             cursor.execute("""
                 INSERT INTO Test (TestNo, TestName, Description, CreatedDate, UserID)
                 VALUES (%s, %s, %s, NOW(), %s)
@@ -65,7 +65,7 @@ class TestService:
             
             test_id = cursor.lastrowid
             
-            # Tilføj prøver til testen
+            # Add samples to the test
             if test_data.get('samples'):
                 samples_added = 0
                 
@@ -74,11 +74,11 @@ class TestService:
                     amount = int(sample_data.get('amount', 1))
                     
                     for i in range(amount):
-                        # Generer identifikations-id for test sample
+                        # Generate identification ID for test sample
                         base_identifier = f"{test.test_no}_{samples_added + 1}"
                         test_sample_id = base_identifier
                         
-                        # Tjek om denne identifier allerede eksisterer
+                        # Check if this identifier already exists
                         cursor.execute("""
                             SELECT COUNT(*) FROM TestSample 
                             WHERE GeneratedIdentifier = %s
@@ -86,7 +86,7 @@ class TestService:
                         
                         count = cursor.fetchone()[0]
                         
-                        # Hvis den allerede eksisterer, tilføj et unikt suffix
+                        # If it already exists, add a unique suffix
                         if count > 0:
                             timestamp = int(datetime.now().timestamp() * 1000)
                             test_sample_id = f"{base_identifier}_{timestamp % 1000}"
@@ -101,7 +101,7 @@ class TestService:
                             test_sample_id
                         ))
                         
-                        # Reducer mængden på lager
+                        # Reduce the amount in storage
                         cursor.execute("""
                             UPDATE SampleStorage 
                             SET AmountRemaining = AmountRemaining - 1
@@ -111,15 +111,15 @@ class TestService:
                         
                         samples_added += 1
             
-            # Log aktiviteten
+            # Log the activity
             cursor.execute("""
                 INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
                 VALUES (NOW(), %s, %s, %s, %s)
             """, (
-                'Test oprettet',
+                'Test created',
                 user_id,
                 test_id,
-                f"Test {test.test_no} oprettet"
+                f"Test {test.test_no} created"
             ))
             
             return {
@@ -128,35 +128,35 @@ class TestService:
             }
     
     def complete_test(self, test_id, user_id):
-        # Tjek om test_id er et heltal eller en streng
+        # Check if test_id is an integer or a string
         try:
             test_id_int = int(test_id)
-            # Hvis det er et heltal, søg på TestID
+            # If it's an integer, search by TestID
             query = "SELECT TestID, TestNo FROM Test WHERE TestID = %s"
             params = (test_id_int,)
         except ValueError:
-            # Hvis det ikke er et heltal, søg på TestNo
+            # If it's not an integer, search by TestNo
             query = "SELECT TestID, TestNo FROM Test WHERE TestNo = %s"
             params = (test_id,)
         
         result, _ = self.db.execute_query(query, params)
         
         if not result or len(result) == 0:
-            raise ValueError('Test ikke fundet')
+            raise ValueError('Test not found')
         
         actual_test_id = result[0][0]
         test_no = result[0][1]
         
-        # Log afslutning af test
+        # Log test completion
         with self.db.transaction() as cursor:
             cursor.execute("""
                 INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
                 VALUES (NOW(), %s, %s, %s, %s)
             """, (
-                'Test afsluttet',
+                'Test completed',
                 user_id,
                 actual_test_id,
-                f"Test {test_no} afsluttet"
+                f"Test {test_no} completed"
             ))
             
             return {

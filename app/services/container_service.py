@@ -71,10 +71,10 @@ class ContainerService:
             return []
     
     def get_available_containers(self):
-        """Henter containere der er tilgængelige for at tilføje prøver"""
-        print("DEBUG: Henter tilgængelige containere...")
+        """Gets containers that are available for adding samples"""
+        print("DEBUG: Getting available containers...")
         try:
-            # Tjek tabelnavn
+            # Check table name
             query = """
                 SELECT 
                     c.ContainerID,
@@ -106,7 +106,7 @@ class ContainerService:
                         'ContainerCapacity': row[3]
                     })
             
-            print(f"DEBUG: Fandt {len(containers)} tilgængelige containere")
+            print(f"DEBUG: Found {len(containers)} available containers")
             return containers
         except Exception as e:
             print(f"DEBUG: Error in get_available_containers: {e}")
@@ -115,10 +115,10 @@ class ContainerService:
             return []
 
     def delete_container(self, container_id, user_id):
-        print(f"DEBUG: delete_container kaldt med container_id={container_id}, user_id={user_id}")
+        print(f"DEBUG: delete_container called with container_id={container_id}, user_id={user_id}")
         try:
             with self.db.transaction() as cursor:
-                # Tjek først om containeren eksisterer
+                # First check if the container exists
                 cursor.execute("SHOW TABLES LIKE 'container'")
                 lowercase_exists = cursor.fetchone() is not None
                 
@@ -126,16 +126,16 @@ class ContainerService:
                 uppercase_exists = cursor.fetchone() is not None
                 
                 if not lowercase_exists and not uppercase_exists:
-                    print("DEBUG: Ingen container tabel eksisterer!")
+                    print("DEBUG: No container table exists!")
                     return {
                         'success': False,
-                        'error': 'Container tabel eksisterer ikke'
+                        'error': 'Container table does not exist'
                     }
                 
-                # Brug det tabelnavn der eksisterer
+                # Use the table name that exists
                 table_name = "container" if lowercase_exists else "Container"
                 
-                # Tjek om containeren har samples tilknyttet
+                # Check if the container has associated samples
                 cursor.execute("""
                     SELECT COUNT(*) FROM ContainerSample 
                     WHERE ContainerID = %s
@@ -143,19 +143,19 @@ class ContainerService:
                 
                 sample_count = cursor.fetchone()[0]
                 if sample_count > 0:
-                    print(f"DEBUG: Container {container_id} har {sample_count} tilknyttede prøver og kan ikke slettes")
+                    print(f"DEBUG: Container {container_id} has {sample_count} associated samples and cannot be deleted")
                     return {
                         'success': False,
-                        'error': f'Container har {sample_count} tilknyttede prøver og kan ikke slettes'
+                        'error': f'Container has {sample_count} associated samples and cannot be deleted'
                     }
                 
-                # Slet containeren
+                # Delete the container
                 cursor.execute(f"""
                     DELETE FROM {table_name}
                     WHERE ContainerID = %s
                 """, (container_id,))
                 
-                # Log aktiviteten
+                # Log the activity
                 cursor.execute("""
                     INSERT INTO History (
                         Timestamp, 
@@ -165,9 +165,9 @@ class ContainerService:
                     )
                     VALUES (NOW(), %s, %s, %s)
                 """, (
-                    'Container slettet',
+                    'Container deleted',
                     user_id,
-                    f"Container {container_id} slettet"
+                    f"Container {container_id} deleted"
                 ))
                 
                 return {
@@ -175,7 +175,7 @@ class ContainerService:
                     'container_id': container_id
                 }
         except Exception as e:
-            print(f"DEBUG: Fejl i delete_container: {e}")
+            print(f"DEBUG: Error in delete_container: {e}")
             import traceback
             traceback.print_exc()
             return {
@@ -184,10 +184,10 @@ class ContainerService:
             }
 
     def get_container_location(self, container_id):
-        """Henter placeringen for en container"""
-        print(f"DEBUG: Henter placering for container {container_id}")
+        """Gets the location for a container"""
+        print(f"DEBUG: Getting location for container {container_id}")
         try:
-            # Find ud af hvilken prøve containeren indeholder
+            # Find out which sample the container contains
             query = """
                 SELECT DISTINCT ss.LocationID, sl.LocationName
                 FROM containersample cs
@@ -205,7 +205,7 @@ class ContainerService:
                     'LocationName': result[0][1]
                 }
             else:
-                print(f"DEBUG: Ingen placering fundet for container {container_id}")
+                print(f"DEBUG: No location found for container {container_id}")
                 return None
         except Exception as e:
             print(f"DEBUG: Error in get_container_location: {e}")

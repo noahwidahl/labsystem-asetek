@@ -11,10 +11,10 @@ def init_test(blueprint, mysql):
     @blueprint.route('/testing')
     def testing():
         try:
-            # Hent aktive tests
+            # Get active tests
             active_tests = test_service.get_active_tests()
             
-            # Konverter til format anvendt af template
+            # Convert to format used by template
             active_tests_for_template = []
             for test in active_tests:
                 active_tests_for_template.append({
@@ -22,12 +22,12 @@ def init_test(blueprint, mysql):
                     "TestNo": test.test_no,
                     "TestName": test.test_name or f"Test {test.id}",
                     "Description": test.description or "",
-                    "UserName": getattr(test, 'user_name', 'Ukendt'),
-                    "CreatedDate": test.created_date.strftime('%d. %B %Y') if test.created_date else "Ukendt",
+                    "UserName": getattr(test, 'user_name', 'Unknown'),
+                    "CreatedDate": test.created_date.strftime('%d. %B %Y') if test.created_date else "Unknown",
                     "sample_count": getattr(test, 'sample_count', 0)
                 })
             
-            # Hent tilgængelige prøver
+            # Get available samples
             cursor = mysql.connection.cursor()
             cursor.execute("""
                 SELECT 
@@ -39,7 +39,7 @@ def init_test(blueprint, mysql):
                 JOIN SampleStorage ss ON s.SampleID = ss.SampleID
                 JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
                 WHERE ss.AmountRemaining > 0
-                AND s.Status = 'På lager'
+                AND s.Status = 'In Storage'
             """)
             
             samples_data = cursor.fetchall()
@@ -53,7 +53,7 @@ def init_test(blueprint, mysql):
                     "LocationName": sample[3]
                 })
             
-            # Hent brugere
+            # Get users
             cursor.execute("SELECT UserID, Name FROM User")
             users = [dict(UserID=row[0], Name=row[1]) for row in cursor.fetchall()]
             
@@ -65,14 +65,14 @@ def init_test(blueprint, mysql):
                                 users=users)
         except Exception as e:
             print(f"Error loading testing: {e}")
-            return render_template('sections/testing.html', error="Fejl ved indlæsning af test administration")
+            return render_template('sections/testing.html', error="Error loading test administration")
     
     @blueprint.route('/api/createTest', methods=['POST'])
     def create_test():
         try:
             data = request.json
             
-            # Validering af input
+            # Validation of input
             validation_result = validate_test_data(data)
             if not validation_result.get('valid', False):
                 return jsonify({
@@ -81,11 +81,11 @@ def init_test(blueprint, mysql):
                     'field': validation_result.get('field')
                 }), 400
             
-            # Hent aktuel bruger
+            # Get current user
             current_user = get_current_user()
             user_id = current_user['UserID']
             
-            # Opret test via service
+            # Create test via service
             result = test_service.create_test(data, user_id)
             
             return jsonify(result)
@@ -98,11 +98,11 @@ def init_test(blueprint, mysql):
     @blueprint.route('/api/completeTest/<test_id>', methods=['POST'])
     def complete_test(test_id):
         try:
-            # Hent aktuel bruger
+            # Get current user
             current_user = get_current_user()
             user_id = current_user['UserID']
             
-            # Afslut test via service
+            # Complete test via service
             result = test_service.complete_test(test_id, user_id)
             
             return jsonify(result)

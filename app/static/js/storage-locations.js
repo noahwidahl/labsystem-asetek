@@ -371,6 +371,53 @@ function addRack() {
     });
 }
 
+function updateSectionShelves(rackNum, sectionNum) {
+    // Prompt user for the new shelf count
+    const newShelfCount = prompt(`Enter the number of shelves for section ${sectionNum} on rack ${rackNum}:`, "5");
+    
+    // Validate input
+    const shelfCount = parseInt(newShelfCount);
+    if (isNaN(shelfCount) || shelfCount < 1) {
+        showErrorMessage("Please enter a valid positive number");
+        return;
+    }
+    
+    // Show loading indicator
+    showLoadingOverlay();
+    
+    // Call the API
+    fetch('/api/storage/update-section-shelves', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            rackNum: rackNum,
+            sectionNum: sectionNum,
+            shelfCount: shelfCount
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Hide loading indicator
+        hideLoadingOverlay();
+        
+        if (data.success) {
+            showSuccessMessage(data.message);
+            
+            // Reload storage display
+            loadStorageLocations();
+        } else {
+            showErrorMessage(`Failed to update shelves: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        // Hide loading indicator
+        hideLoadingOverlay();
+        showErrorMessage(`Error: ${error.message}`);
+    });
+}
+
 // Load storage locations from API
 function loadStorageLocations() {
     fetch('/api/storage-locations')

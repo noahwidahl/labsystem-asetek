@@ -2,12 +2,12 @@
 
 ## Installation
 
-1. Klon dette repository
-2. Opret et virtuelt miljø: `python -m venv venv`
-3. Aktiver miljøet: 
+1. Clone this repository
+2. Create a virtual environment: `python -m venv venv`
+3. Activate the environment: 
    - Windows: `venv\Scripts\activate`
    - macOS/Linux: `source venv/bin/activate`
-4. Installer afhængigheder: `pip install -r requirements.txt`
-5. Udfyld .env med database-oplysninger
-6. Kør database setup: `python setup_database.py`
-7. Start applikationen: `cd app && python app.py`
+4. Install dependencies: `pip install -r requirements.txt`
+5. Fill in .env with database information
+6. Run database setup: `python setup_database.py`
+7. Start the application: `python run.py`

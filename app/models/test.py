@@ -16,14 +16,14 @@ class Test:
         test_type = data.get('type', '')
         test_number = f"T{test_type}"
         
-        # Generer test-navn baseret på type
+        # Generate test name based on type
         test_name = ""
         if "1234.5" in test_type:
-            test_name = "Tryk Test"
+            test_name = "Pressure Test"
         elif "2345.6" in test_type:
-            test_name = "Termisk Test"
+            test_name = "Thermal Test"
         elif "3456.7" in test_type:
-            test_name = "Holdbarhed Test"
+            test_name = "Durability Test"
         else:
             test_name = f"Test {test_type.upper()}"
         

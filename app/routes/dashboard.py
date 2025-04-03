@@ -11,16 +11,31 @@ def _get_storage_locations(mysql):
             sl.LocationName,
             COUNT(ss.StorageID) as count,
             CASE WHEN COUNT(ss.StorageID) > 0 THEN 'occupied' ELSE 'available' END as status,
-            IFNULL(l.LabName, 'Unknown') as LabName
+            IFNULL(l.LabName, 'Unknown') as LabName,
+            sl.Reol,
+            sl.Sektion,
+            sl.Hylde
         FROM StorageLocation sl
         LEFT JOIN Lab l ON sl.LabID = l.LabID
         LEFT JOIN SampleStorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
-        GROUP BY sl.LocationID, sl.LocationName, l.LabName
-        ORDER BY sl.LocationName
+        GROUP BY sl.LocationID, sl.LocationName, l.LabName, sl.Reol, sl.Sektion, sl.Hylde
+        ORDER BY 
+            COALESCE(sl.Reol, 999),
+            COALESCE(sl.Sektion, 999),
+            COALESCE(sl.Hylde, 999)
     """)
     
     columns = [col[0] for col in cursor.description]
     locations = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    
+    # For locations where Reol, Sektion, Hylde are NULL, extract them from LocationName
+    for loc in locations:
+        if loc.get('Reol') is None or loc.get('Sektion') is None or loc.get('Hylde') is None:
+            parts = loc.get('LocationName', '').split('.')
+            if len(parts) == 3:
+                loc['Reol'] = int(parts[0]) if parts[0].isdigit() else None
+                loc['Sektion'] = int(parts[1]) if parts[1].isdigit() else None
+                loc['Hylde'] = int(parts[2]) if parts[2].isdigit() else None
     
     cursor.close()
     return locations
@@ -203,17 +218,23 @@ def init_dashboard(blueprint, mysql):
             if not data.get('rackNum') or not data.get('sectionNum'):
                 return jsonify({'success': False, 'error': 'Rack and section number are required'}), 400
             
-            rack_num = data.get('rackNum')
-            section_num = data.get('sectionNum')
+            rack_num = str(data.get('rackNum'))
+            section_num = str(data.get('sectionNum'))
+            
+            # Log the values for debugging
+            print(f"Attempting to delete section with rack={rack_num}, section={section_num}")
             
             # Check if there are samples at the locations
             cursor = mysql.connection.cursor()
+            pattern = f"{rack_num}.{section_num}.%"
+            print(f"Using pattern for deletion: {pattern}")
+            
             cursor.execute("""
                 SELECT COUNT(*) FROM SampleStorage ss
                 JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
                 WHERE sl.LocationName LIKE %s
                 AND ss.AmountRemaining > 0
-            """, (f"{rack_num}.{section_num}.%",))
+            """, (pattern,))
             
             count = cursor.fetchone()[0]
             if count > 0:
@@ -222,22 +243,142 @@ def init_dashboard(blueprint, mysql):
                     'error': f'Cannot delete section with {count} samples'
                 }), 400
             
+            # Get the locations before deleting them (for the response)
+            cursor.execute("""
+                SELECT LocationID, LocationName FROM StorageLocation
+                WHERE LocationName LIKE %s
+            """, (pattern,))
+            locations_to_delete = cursor.fetchall()
+            
+            if not locations_to_delete:
+                return jsonify({
+                    'success': False,
+                    'error': f'No locations found matching pattern {pattern}'
+                }), 404
+            
+            # Print debug info
+            location_ids = [row[0] for row in locations_to_delete]
+            location_names = [row[1] for row in locations_to_delete]
+            print(f"Found {len(location_ids)} locations to delete: {location_names}")
+            
             # Delete the locations for this rack and section
             cursor.execute("""
                 DELETE FROM StorageLocation
                 WHERE LocationName LIKE %s
-            """, (f"{rack_num}.{section_num}.%",))
+            """, (pattern,))
             
             mysql.connection.commit()
             affected_rows = cursor.rowcount
             cursor.close()
             
+            if affected_rows == 0:
+                return jsonify({
+                    'success': False,
+                    'error': f'No locations were deleted. Pattern: {pattern}'
+                }), 400
+            
             return jsonify({
                 'success': True,
-                'message': f'Section {section_num} on rack {rack_num} deleted ({affected_rows} locations)'
+                'message': f'Section {section_num} on rack {rack_num} deleted ({affected_rows} locations)',
+                'deleted_locations': location_names
             })
         except Exception as e:
             print(f"Error deleting section: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+        
+    @blueprint.route('/api/storage/update-section-shelves', methods=['POST'])
+    def update_section_shelves():
+        try:
+            data = request.json
+            
+            # Validate input
+            if not data.get('rackNum') or not data.get('sectionNum'):
+                return jsonify({'success': False, 'error': 'Rack and section number are required'}), 400
+            
+            if not data.get('shelfCount') or not isinstance(data.get('shelfCount'), int) or data.get('shelfCount') < 1:
+                return jsonify({'success': False, 'error': 'Shelf count must be a positive integer'}), 400
+            
+            rack_num = str(data.get('rackNum'))
+            section_num = str(data.get('sectionNum'))
+            shelf_count = int(data.get('shelfCount'))
+            
+            cursor = mysql.connection.cursor()
+            
+            # Get lab ID
+            cursor.execute("SELECT LabID FROM Lab LIMIT 1")
+            lab_result = cursor.fetchone()
+            lab_id = lab_result[0] if lab_result else 1
+            
+            # Check existing shelves
+            cursor.execute("""
+                SELECT LocationID, LocationName, Hylde FROM StorageLocation
+                WHERE LocationName LIKE %s
+                ORDER BY Hylde
+            """, (f"{rack_num}.{section_num}.%",))
+            
+            existing_shelves = cursor.fetchall()
+            existing_count = len(existing_shelves)
+            
+            # If we need to add shelves
+            if shelf_count > existing_count:
+                # Get the highest existing shelf number
+                max_shelf = 0
+                if existing_shelves:
+                    for shelf in existing_shelves:
+                        shelf_num = shelf[2] if shelf[2] is not None else int(shelf[1].split('.')[-1])
+                        max_shelf = max(max_shelf, shelf_num)
+                
+                # Add new shelves
+                for shelf_num in range(max_shelf + 1, max_shelf + 1 + (shelf_count - existing_count)):
+                    location_name = f"{rack_num}.{section_num}.{shelf_num}"
+                    cursor.execute("""
+                        INSERT INTO StorageLocation (LocationName, LabID, Reol, Sektion, Hylde)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (location_name, lab_id, rack_num, section_num, shelf_num))
+                
+                message = f"Added {shelf_count - existing_count} new shelves to section {section_num} on rack {rack_num}"
+            
+            # If we need to remove shelves
+            elif shelf_count < existing_count:
+                # Sort shelves by shelf number descending to remove from the end
+                shelves_to_remove = sorted(existing_shelves, key=lambda x: x[2] if x[2] is not None else int(x[1].split('.')[-1]), reverse=True)
+                shelves_to_remove = shelves_to_remove[:existing_count - shelf_count]
+                
+                # Check if any shelves have samples
+                for shelf in shelves_to_remove:
+                    location_id = shelf[0]
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM SampleStorage
+                        WHERE LocationID = %s AND AmountRemaining > 0
+                    """, (location_id,))
+                    
+                    count = cursor.fetchone()[0]
+                    if count > 0:
+                        return jsonify({
+                            'success': False,
+                            'error': f"Cannot remove shelf {shelf[1]} with {count} samples"
+                        }), 400
+                
+                # Remove shelves
+                for shelf in shelves_to_remove:
+                    location_id = shelf[0]
+                    cursor.execute("DELETE FROM StorageLocation WHERE LocationID = %s", (location_id,))
+                
+                message = f"Removed {existing_count - shelf_count} shelves from section {section_num} on rack {rack_num}"
+            else:
+                message = f"No changes needed, section {section_num} on rack {rack_num} already has {shelf_count} shelves"
+            
+            mysql.connection.commit()
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'message': message
+            })
+        except Exception as e:
+            print(f"Error updating section shelves: {e}")
             import traceback
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500
@@ -297,9 +438,9 @@ def init_dashboard(blueprint, mysql):
                 for shelf in range(1, 6):  # 5 shelves per section
                     location_name = f"{rack_num}.{section}.{shelf}"
                     cursor.execute("""
-                        INSERT INTO StorageLocation (LocationName, LabID)
-                        VALUES (%s, %s)
-                    """, (location_name, lab_id))
+                        INSERT INTO StorageLocation (LocationName, LabID, Reol, Sektion, Hylde)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (location_name, lab_id, rack_num, section, shelf))
             
             mysql.connection.commit()
             cursor.close()

@@ -2,7 +2,7 @@ from datetime import datetime
 
 class Sample:
     def __init__(self, id=None, description=None, barcode=None, is_unique=False, 
-                 type='Standard', status="På lager", amount=0, unit_id=None, 
+                 type='Standard', status="In Storage", amount=0, unit_id=None, 
                  owner_id=None, reception_id=None):
         self.id = id
         self.description = description
@@ -22,7 +22,7 @@ class Sample:
             barcode=data.get('barcode'),
             is_unique=data.get('hasSerialNumbers', False),
             type=data.get('sampleType', 'Standard'),
-            status="På lager",
+            status="In Storage",
             amount=data.get('totalAmount', 0),
             unit_id=data.get('unit'),
             owner_id=data.get('owner')
@@ -36,7 +36,7 @@ class Sample:
             is_unique=bool(row[2]),
             type=row[3] if len(row) > 3 else 'Standard',
             description=row[4] if len(row) > 4 else None,
-            status=row[5] if len(row) > 5 else "På lager",
+            status=row[5] if len(row) > 5 else "In Storage",
             amount=row[6] if len(row) > 6 else 0,
             unit_id=row[7] if len(row) > 7 else None,
             owner_id=row[8] if len(row) > 8 else None,

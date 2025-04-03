@@ -1,25 +1,25 @@
 def validate_sample_data(data):
     """
-    Validerer data for oprettelse af en prøve.
+    Validates data for creating a sample.
     """
     if not data.get('description'):
         return {
             'valid': False,
-            'error': 'Beskrivelse er påkrævet',
+            'error': 'Description is required',
             'field': 'description'
         }
     
     if not data.get('totalAmount') or int(data.get('totalAmount', 0)) <= 0:
         return {
             'valid': False,
-            'error': 'Antal skal være større end 0',
+            'error': 'Amount must be greater than 0',
             'field': 'totalAmount'
         }
     
     if not data.get('unit'):
         return {
             'valid': False,
-            'error': 'Enhed skal vælges',
+            'error': 'Unit must be selected',
             'field': 'unit'
         }
     
@@ -29,12 +29,12 @@ def validate_sample_data(data):
 
 def validate_container_data(data):
     """
-    Validerer data for oprettelse af en container.
+    Validates data for creating a container.
     """
     if not data.get('description'):
         return {
             'valid': False,
-            'error': 'Beskrivelse er påkrævet',
+            'error': 'Description is required',
             'field': 'description'
         }
     
@@ -44,19 +44,19 @@ def validate_container_data(data):
 
 def validate_test_data(data):
     """
-    Validerer data for oprettelse af en test.
+    Validates data for creating a test.
     """
     if not data.get('type'):
         return {
             'valid': False,
-            'error': 'Testtype er påkrævet',
+            'error': 'Test type is required',
             'field': 'type'
         }
     
     if not data.get('samples') or len(data.get('samples', [])) == 0:
         return {
             'valid': False,
-            'error': 'Mindst én prøve skal vælges',
+            'error': 'At least one sample must be selected',
             'field': 'samples'
         }
     
