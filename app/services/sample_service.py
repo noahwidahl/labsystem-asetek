@@ -12,6 +12,7 @@ class SampleService:
             SELECT 
                 s.SampleID, 
                 s.Barcode, 
+                s.PartNumber,
                 s.IsUnique,
                 s.Type,
                 s.Description, 
@@ -39,6 +40,7 @@ class SampleService:
             SELECT 
                 s.SampleID, 
                 s.Barcode, 
+                s.PartNumber,
                 s.IsUnique,
                 s.Type,
                 s.Description, 
@@ -147,6 +149,7 @@ class SampleService:
                 cursor.execute("""
                     INSERT INTO Sample (
                         Barcode, 
+                        PartNumber,
                         IsUnique, 
                         Type, 
                         Description, 
@@ -156,9 +159,10 @@ class SampleService:
                         OwnerID, 
                         ReceptionID
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     barcode,
+                    sample_data.get('partNumber', ''),
                     1 if sample_data.get('hasSerialNumbers') else 0,
                     sample_data.get('sampleType', 'Standard'),
                     sample_data.get('description') + (f" (Package {i+1})" if is_multi_package and package_count > 1 else ""),

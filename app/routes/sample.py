@@ -101,6 +101,7 @@ def init_sample(blueprint, mysql):
                 
                 samples_for_template.append({
                     "ID": f"SMP-{sample.id}",
+                    "PartNumber": sample.part_number,
                     "Description": sample.description,
                     "Reception": reception_date.strftime('%Y-%m-%d') if reception_date else "Unknown",
                     "Amount": f"{sample.amount} {unit}",

@@ -31,6 +31,7 @@
                         <thead>
                             <tr>
                                 <th>ID</th>
+                                <th>Part Number</th>
                                 <th>Description</th>
                                 <th>Reception</th>
                                 <th>Amount</th>
@@ -45,6 +46,7 @@
                                 {% for sample in samples %}
                                 <tr>
                                     <td>{{ sample.ID }}</td>
+                                    <td>{{ sample.PartNumber or "-" }}</td>
                                     <td>{{ sample.Description }}</td>
                                     <td>{{ sample.Reception }}</td>
                                     <td>{{ sample.Amount }}</td>
