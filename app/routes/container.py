@@ -165,3 +165,83 @@ def init_container(blueprint, mysql):
             import traceback
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500
+            
+    @blueprint.route('/api/containers/<int:container_id>', methods=['GET'])
+    def get_container_details(container_id):
+        try:
+            # Connect to database directly for this complex query
+            cursor = mysql.connection.cursor()
+            
+            # Get container details
+            cursor.execute("""
+                SELECT 
+                    c.ContainerID,
+                    c.Description,
+                    c.ContainerTypeID,
+                    c.IsMixed,
+                    c.ContainerCapacity,
+                    ct.TypeName,
+                    'Active' as Status
+                FROM container c
+                LEFT JOIN containertype ct ON c.ContainerTypeID = ct.ContainerTypeID
+                WHERE c.ContainerID = %s
+            """, (container_id,))
+            
+            container_result = cursor.fetchone()
+            if not container_result:
+                return jsonify({'success': False, 'error': 'Container not found'}), 404
+            
+            # Convert to dict with column names
+            container_cols = [col[0] for col in cursor.description]
+            container = dict(zip(container_cols, container_result))
+            
+            # Get samples in this container
+            cursor.execute("""
+                SELECT 
+                    s.SampleID,
+                    s.Description,
+                    cs.Amount,
+                    sl.LocationName,
+                    ss.ExpireDate
+                FROM containersample cs
+                JOIN samplestorage ss ON cs.SampleStorageID = ss.StorageID
+                JOIN sample s ON ss.SampleID = s.SampleID
+                LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+                WHERE cs.ContainerID = %s
+            """, (container_id,))
+            
+            samples_result = cursor.fetchall()
+            samples_cols = [col[0] for col in cursor.description]
+            samples = [dict(zip(samples_cols, row)) for row in samples_result]
+            
+            # Get container history
+            cursor.execute("""
+                SELECT 
+                    h.Timestamp,
+                    h.ActionType,
+                    h.Notes,
+                    u.Name as UserName
+                FROM history h
+                LEFT JOIN user u ON h.UserID = u.UserID
+                WHERE h.Notes LIKE %s
+                ORDER BY h.Timestamp DESC
+                LIMIT 20
+            """, (f"%Container {container_id}%",))
+            
+            history_result = cursor.fetchall()
+            history_cols = [col[0] for col in cursor.description]
+            history = [dict(zip(history_cols, row)) for row in history_result]
+            
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'container': container,
+                'samples': samples,
+                'history': history
+            })
+        except Exception as e:
+            print(f"API error getting container details: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500

@@ -1,155 +1,82 @@
-<!-- app/templates/sections/container_details.html -->
-{% extends "base.html" %}
-
-{% block title %}Container {{ container.ContainerID }} - Laboratory Sample System{% endblock %}
-
-{% block content %}
-<section id="container-details" class="content-section">
-    <div class="container">
-        <div class="row mb-4">
-            <div class="col-12">
-                <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="{{ url_for('containers') }}">Containers</a></li>
-                        <li class="breadcrumb-item active">Container {{ container.ContainerID }}</li>
-                    </ol>
-                </nav>
-                
-                <div class="d-flex justify-content-between align-items-center">
-                    <h2>Container: {{ container.Description }}</h2>
-                    <div>
-                        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addSampleToContainerModal">
-                            <i class="fas fa-plus"></i> Add sample
-                        </button>
-                        <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#moveContainerModal">
-                            <i class="fas fa-arrow-right"></i> Move container
-                        </button>
-                    </div>
-                </div>
+<!-- app/templates/modals/container_details.html -->
+<div class="modal fade" id="containerDetailsModal" tabindex="-1" aria-labelledby="containerDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="containerDetailsModalLabel">Container Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-        </div>
-        
-        <!-- Container info card -->
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <div class<div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Container information</h5>
-                    </div>
-                    <div class="card-body">
-                        <table class="table table-sm">
-                            <tr>
-                                <th>ID:</th>
-                                <td>{{ container.ContainerID }}</td>
-                            </tr>
-                            <tr>
-                                <th>Description:</th>
-                                <td>{{ container.Description }}</td>
-                            </tr>
-                            <tr>
-                                <th>Type:</th>
-                                <td>{{ container.TypeName }}</td>
-                            </tr>
-                            <tr>
-                                <th>Status:</th>
-                                <td><span class="badge bg-primary">{{ container.Status }}</span></td>
-                            </tr>
-                            <tr>
-                                <th>Mixed samples:</th>
-                                <td>{{ "Yes" if container.IsMixed else "No" }}</td>
-                            </tr>
-                            <tr>
-                                <th>Capacity:</th>
-                                <td>{{ container.Capacity|default('Unlimited') }}</td>
-                            </tr>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Contents</h5>
-                    </div>
-                    <div class="card-body">
-                        {% if container_samples %}
-                            <ul class="list-group">
-                            {% for sample in container_samples %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <strong>{{ sample.SampleID }}</strong>: {{ sample.Description }}
-                                        <div class="text-muted small">Location: {{ sample.LocationName }}</div>
-                                        {% if sample.ExpireDate %}
-                                            <div class="text-{{ 'danger' if sample.days_until_expiry < 14 else 'muted' }} small">
-                                                Expires: {{ sample.ExpireDate }} 
-                                                {% if sample.days_until_expiry < 14 %}
-                                                ({{ sample.days_until_expiry }} days)
-                                                {% endif %}
-                                            </div>
-                                        {% endif %}
+            <div class="modal-body">
+                <div class="container-fluid" id="container-details-content">
+                    <!-- Container info section -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Container Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <th>ID:</th>
+                                            <td id="container-id">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Description:</th>
+                                            <td id="container-description">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Type:</th>
+                                            <td id="container-type">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Status:</th>
+                                            <td id="container-status">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Mixed samples:</th>
+                                            <td id="container-mixed">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Location:</th>
+                                            <td id="container-location">-</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Contents</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="container-samples-list">
+                                        <p class="text-center text-muted">Loading samples...</p>
                                     </div>
-                                    <div>
-                                        <span class="badge bg-primary rounded-pill">{{ sample.Amount }}</span>
-                                        <button class="btn btn-sm btn-outline-danger ms-2 remove-sample-btn" 
-                                                data-container-id="{{ container.ContainerID }}"
-                                                data-sample-id="{{ sample.SampleID|replace('PRV-', '') }}">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </li>
-                            {% endfor %}
-                            </ul>
-                        {% else %}
-                            <p class="text-center text-muted">No samples in this container</p>
-                        {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Container history section -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Container History</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="container-history-list">
+                                <p class="text-center text-muted">Loading history...</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        
-        <!-- Container history -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">Container history</h5>
-            </div>
-            <div class="card-body">
-                {% if container_history %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Action</th>
-                                    <th>User</th>
-                                    <th>Notes</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in container_history %}
-                                    <tr>
-                                        <td>{{ item.Timestamp }}</td>
-                                        <td>{{ item.ActionType }}</td>
-                                        <td>{{ item.UserName }}</td>
-                                        <td>{{ item.Notes }}</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <p class="text-center text-muted">No history found for this container</p>
-                {% endif %}
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" id="add-sample-to-container-btn">Add Sample</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
-</section>
-
-<!-- Include modals -->
-{% include "modals/add_sample_to_container_modal.html" %}
-{% include "modals/move_container_modal.html" %}
-{% endblock %}
-
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/container-details.js') }}"></script>
-{% endblock %}
+</div>

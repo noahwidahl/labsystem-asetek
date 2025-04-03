@@ -206,61 +206,45 @@ class SampleService:
                 if first_storage_id is None:
                     first_storage_id = storage_id
                 
-                # Create container if create_containers is true
+                # Handle container functionality
                 if create_containers:
                     try:
-                        print(f"DEBUG: Creating container for package {i+1}")
-                        # Use container description or sample description if not provided
-                        container_desc = sample_data.get('containerDescription') or sample_data.get('description', 'Container')
-                        if package_count > 1:
-                            container_desc += f" (Package {i+1})"
-                        
-                        # Check both possible table names
-                        cursor.execute("SHOW TABLES LIKE 'container'")
-                        lowercase_exists = cursor.fetchone() is not None
-                        
-                        cursor.execute("SHOW TABLES LIKE 'Container'")
-                        uppercase_exists = cursor.fetchone() is not None
-                        
-                        # Use the table name that exists, or create it if needed
-                        if not lowercase_exists and not uppercase_exists:
-                            # No container table exists - create it
-                            print("DEBUG: Creating container table")
-                            cursor.execute("""
-                                CREATE TABLE container (
-                                    ContainerID INT AUTO_INCREMENT PRIMARY KEY,
-                                    Description VARCHAR(255) NOT NULL,
-                                    ContainerTypeID INT NULL,
-                                    IsMixed TINYINT(1) DEFAULT 0,
-                                    ContainerCapacity INT NULL
-                                )
-                            """)
-                            table_name = "container"
+                        # Check if we should use existing container
+                        if sample_data.get('useExistingContainer') and sample_data.get('existingContainerId'):
+                            # Use existing container
+                            container_id = sample_data.get('existingContainerId')
+                            print(f"DEBUG: Using existing container with ID: {container_id}")
+                            container_ids.append(container_id)
                         else:
-                            # Use the table name that exists
-                            table_name = "container" if lowercase_exists else "Container"
-                        
-                        print(f"DEBUG: Using container table name: {table_name}")
-                        
-                        # Create container
-                        query = f"""
-                            INSERT INTO {table_name} (
-                                Description,
-                                IsMixed,
-                                ContainerCapacity
-                            )
-                            VALUES (%s, %s, %s)
-                        """
-                        
-                        cursor.execute(query, (
-                            container_desc,
-                            1 if sample_data.get('containerIsMixed', False) else 0,
-                            amount_per_package  # Set capacity to the amount of samples in the package
-                        ))
-                        
-                        container_id = cursor.lastrowid
-                        print(f"DEBUG: Created container with ID: {container_id}")
-                        container_ids.append(container_id)
+                            # Create new container
+                            print(f"DEBUG: Creating container for package {i+1}")
+                            # Use container description or sample description if not provided
+                            container_desc = sample_data.get('containerDescription') or sample_data.get('description', 'Container')
+                            if package_count > 1:
+                                container_desc += f" (Package {i+1})"
+                            
+                            # Use 'container' table directly
+                            table_name = "container"
+                            
+                            # Create container
+                            query = f"""
+                                INSERT INTO {table_name} (
+                                    Description,
+                                    IsMixed,
+                                    ContainerCapacity
+                                )
+                                VALUES (%s, %s, %s)
+                            """
+                            
+                            cursor.execute(query, (
+                                container_desc,
+                                1 if sample_data.get('containerIsMixed', False) else 0,
+                                amount_per_package  # Set capacity to the amount of samples in the package
+                            ))
+                            
+                            container_id = cursor.lastrowid
+                            print(f"DEBUG: Created container with ID: {container_id}")
+                            container_ids.append(container_id)
                         
                         # Check if ContainerSample table exists, create if it doesn't
                         cursor.execute("SHOW TABLES LIKE 'ContainerSample'")
