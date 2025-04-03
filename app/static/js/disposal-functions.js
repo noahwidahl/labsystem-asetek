@@ -7,16 +7,16 @@ function showDisposalModal(event) {
     
     // Tjek om Bootstrap er tilgængeligt
     if (typeof bootstrap === 'undefined') {
-        console.error('Bootstrap er ikke indlæst. Kan ikke vise modal.');
-        alert('Der opstod en fejl. Prøv venligst at genindlæse siden.');
+        console.error('Bootstrap is not loaded. Cannot show modal.');
+        alert('An error occurred. Please try reloading the page.');
         return;
     }
     
     // Tjek om modal-elementet eksisterer
     const modalElement = document.getElementById('disposalModal');
     if (!modalElement) {
-        console.error('Modal-element ikke fundet:', 'disposalModal');
-        alert('Modal ikke fundet. Kontakt venligst administrator.');
+        console.error('Modal element not found:', 'disposalModal');
+        alert('Modal not found. Please contact the administrator.');
         return;
     }
     
@@ -39,17 +39,17 @@ function showDisposalModal(event) {
                 const modal = new bootstrap.Modal(modalElement);
                 modal.show();
             } catch (modalError) {
-                console.error('Fejl ved visning af modal:', modalError);
-                alert('Kunne ikke vise modal. Prøv venligst at genindlæse siden.');
+                console.error('Error showing modal:', modalError);
+                alert('Could not show modal. Please try reloading the page.');
             }
         })
         .catch(error => {
-            console.error("Kunne ikke hente data:", error);
-            alert("Kunne ikke hente data. Prøv venligst igen.");
+            console.error("Could not fetch data:", error);
+            alert("Could not fetch data. Please try again.");
         });
     } catch (error) {
-        console.error('Fejl i showDisposalModal:', error);
-        alert('Der opstod en fejl. Prøv venligst igen.');
+        console.error('Error in showDisposalModal:', error);
+        alert('An error occurred. Please try again.');
     }
 }
 
@@ -151,17 +151,17 @@ function createDisposal() {
     
     // Valider input
     if (!sampleId) {
-        showErrorMessage("Vælg venligst en prøve");
+        showErrorMessageDisposal("Please select a sample");
         return;
     }
     
     if (amount <= 0) {
-        showErrorMessage("Antal skal være større end 0");
+        showErrorMessageDisposal("Amount must be greater than 0");
         return;
     }
     
     if (!disposalUser) {
-        showErrorMessage("Vælg venligst en bruger");
+        showErrorMessageDisposal("Please select a user");
         return;
     }
     
@@ -195,11 +195,11 @@ function createDisposal() {
                 window.location.reload();
             }, 1500);
         } else {
-            showErrorMessage(`Fejl ved kassation: ${data.error}`);
+            showErrorMessageDisposal(`Error during disposal: ${data.error}`);
         }
     })
     .catch(error => {
-        showErrorMessage(`Der opstod en fejl: ${error}`);
+        showErrorMessageDisposal(`An error occurred: ${error}`);
     });
 }
 
@@ -261,42 +261,56 @@ function disposeAllTestSamples(testId) {
     }
 }
 
-// Funktioner til håndtering af test oprettelse
-function showCreateTestModal() {
-    // Hent de tilgængelige prøver før vi viser modal
-    fetchAvailableSamples()
+// Functions for handling test creation - RENAMED to avoid conflicts
+// This function should not be called from disposal page
+function showCreateTestModalForDisposal() {
+    // Fetch available samples before showing modal
+    fetchAvailableSamplesForDisposal()
         .then(() => {
             const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
             modal.show();
         })
         .catch(error => {
-            showErrorMessage("Kunne ikke hente tilgængelige prøver: " + error);
+            showErrorMessageDisposal("Could not load available samples: " + error);
         });
 }
 
 // Funktion til at hente tilgængelige prøver
-function fetchAvailableSamples() {
+// This function is renamed to avoid conflict with test-functions.js
+function fetchAvailableSamplesForDisposal() {
     return fetch('/api/activeSamples')
-        .then(response => response.json())
-        .then(data => {
-            if (data.samples) {
-                populateSampleTable(data.samples);
-            } else {
-                throw new Error("Ingen prøver returneret");
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Server responded with status: ${response.status}`);
             }
+            return response.json();
+        })
+        .then(data => {
+            console.log("API response for disposal:", data);
+            
+            if (data.success) {
+                // Always pass a valid array to populateSampleTable
+                const samples = Array.isArray(data.samples) ? data.samples : [];
+                populateSampleTableForDisposal(samples);
+                return; // Successful handling
+            } 
+            
+            // If we get here, there was an error in the response
+            throw new Error(data.error || "No samples available");
         });
 }
 
 // Funktion til at populere prøvetabellen
-function populateSampleTable(samples) {
+// This function is renamed to avoid conflict with test-functions.js
+function populateSampleTableForDisposal(samples) {
     const tableBody = document.querySelector('#createTestModal .available-samples tbody');
     if (!tableBody) return;
     
-    // Ryd tabellen
+    // Clear the table
     tableBody.innerHTML = '';
     
     if (samples.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Ingen prøver tilgængelige</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="5" class="text-center">No samples available</td></tr>';
         return;
     }
     
@@ -338,14 +352,14 @@ function createTest() {
     
     // Valider input
     if (!testType) {
-        showErrorMessage("Vælg venligst en testtype");
+        showErrorMessageDisposal("Please select a test type");
         return;
     }
     
     // Hent valgte prøver
     const selectedSampleElements = document.querySelectorAll('input[name="selectedSamples"]:checked');
     if (selectedSampleElements.length === 0) {
-        showErrorMessage("Vælg mindst én prøve");
+        showErrorMessageDisposal("Select at least one sample");
         return;
     }
     
@@ -398,25 +412,25 @@ function createTest() {
                 window.location.reload();
             }, 1500);
         } else {
-            showErrorMessage(`Fejl ved oprettelse af test: ${data.error}`);
+            showErrorMessageDisposal(`Error creating test: ${data.error}`);
             // Genaktiver knappen
             if (createTestBtn) {
                 createTestBtn.disabled = false;
-                createTestBtn.innerHTML = 'Opret Test';
+                createTestBtn.innerHTML = 'Create Test';
             }
         }
     })
     .catch(error => {
-        showErrorMessage(`Der opstod en fejl: ${error}`);
+        showErrorMessageDisposal(`An error occurred: ${error}`);
         // Genaktiver knappen
         if (createTestBtn) {
             createTestBtn.disabled = false;
-            createTestBtn.innerHTML = 'Opret Test';
+            createTestBtn.innerHTML = 'Create Test';
         }
     });
 }
 
-// Beskedfunktioner til at vise fejl og succes
+// Message functions for displaying errors and success
 function showSuccessMessage(message) {
     const successToast = document.createElement('div');
     successToast.className = 'custom-toast success-toast';
@@ -560,13 +574,13 @@ function disposeAllTestSamples(testId) {
                     window.location.reload();
                 }, 1500);
             } else {
-                showErrorMessage(`Fejl ved kassation: ${data.error}`);
+                showErrorMessageDisposal(`Error during disposal: ${data.error}`);
             }
         })
         .catch(error => {
             // Skjul indlæsningsindikator
             hideLoadingOverlay();
-            showErrorMessage(`Der opstod en fejl: ${error}`);
+            showErrorMessageDisposal(`An error occurred: ${error}`);
         });
     });
 }
@@ -620,7 +634,8 @@ function confirmAction(message, onConfirm) {
     modal.show();
 }
 
-function showErrorMessage(message) {
+// This is renamed to avoid conflict with the function in test-functions.js
+function showErrorMessageDisposal(message) {
     const errorToast = document.createElement('div');
     errorToast.className = 'custom-toast error-toast';
     errorToast.innerHTML = `
@@ -628,7 +643,7 @@ function showErrorMessage(message) {
             <i class="fas fa-exclamation-circle"></i>
         </div>
         <div class="toast-content">
-            <div class="toast-title">Fejl</div>
+            <div class="toast-title">Error</div>
             <div class="toast-message">${message}</div>
         </div>
         <button class="toast-close" onclick="this.parentElement.remove()">
@@ -637,10 +652,10 @@ function showErrorMessage(message) {
     `;
     document.body.appendChild(errorToast);
 
-    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    // Add 'show' class after a short delay (for animation effect)
     setTimeout(() => errorToast.classList.add('show'), 10);
 
-    // Fjern automatisk efter 5 sekunder
+    // Remove automatically after 5 seconds
     setTimeout(() => {
         errorToast.classList.remove('show');
         setTimeout(() => errorToast.remove(), 300);
@@ -661,7 +676,7 @@ function showTestDetails(testId) {
             }
         })
         .catch(error => {
-            showErrorMessage(`Kunne ikke hente testdetaljer: ${error}`);
+            showErrorMessageDisposal(`Could not fetch test details: ${error}`);
         });
 }
 

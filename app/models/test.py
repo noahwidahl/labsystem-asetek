@@ -2,7 +2,7 @@ from datetime import datetime
 
 class Test:
     def __init__(self, id=None, test_no=None, test_name=None, description=None, 
-                 created_date=None, user_id=None, samples=None):
+                 created_date=None, user_id=None, samples=None, status="Active"):
         self.id = id
         self.test_no = test_no
         self.test_name = test_name
@@ -10,6 +10,7 @@ class Test:
         self.created_date = created_date or datetime.now()
         self.user_id = user_id
         self.samples = samples or []
+        self.status = status   # "Active", "Completed", "Archived"
     
     @classmethod
     def from_dict(cls, data):
@@ -42,7 +43,8 @@ class Test:
             test_name=row[2],
             description=row[3] if len(row) > 3 else None,
             created_date=row[4] if len(row) > 4 else None,
-            user_id=row[5] if len(row) > 5 else None
+            user_id=row[5] if len(row) > 5 else None,
+            status=row[6] if len(row) > 6 else "Active"
         )
     
     def to_dict(self):
@@ -53,5 +55,6 @@ class Test:
             'Description': self.description,
             'CreatedDate': self.created_date.strftime('%Y-%m-%d %H:%M:%S') if self.created_date else None,
             'UserID': self.user_id,
+            'Status': self.status,
             'Samples': self.samples
         }
