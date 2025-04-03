@@ -80,13 +80,16 @@ class ContainerService:
                         WHERE cs.ContainerID = c.ContainerID), 
                         0
                     ) as sample_count,
-                    c.ContainerCapacity
+                    c.ContainerCapacity,
+                    sl.LocationName
                 FROM container c
+                LEFT JOIN storagelocation sl ON c.LocationID = sl.LocationID
                 WHERE c.IsMixed = 1 OR (
                     SELECT IFNULL(SUM(cs.Amount), 0) 
                     FROM containersample cs 
                     WHERE cs.ContainerID = c.ContainerID
                 ) < IFNULL(c.ContainerCapacity, 999999) OR c.ContainerCapacity IS NULL
+                ORDER BY c.ContainerID DESC
             """
             
             result, _ = self.db.execute_query(query)
@@ -98,7 +101,8 @@ class ContainerService:
                         'ContainerID': row[0],
                         'Description': row[1],
                         'sample_count': row[2],
-                        'ContainerCapacity': row[3]
+                        'ContainerCapacity': row[3],
+                        'LocationName': row[4] if len(row) > 4 else 'Unknown'
                     })
             
             print(f"DEBUG: Found {len(containers)} available containers")
@@ -174,7 +178,23 @@ class ContainerService:
         """Gets the location for a container"""
         print(f"DEBUG: Getting location for container {container_id}")
         try:
-            # Find out which sample the container contains
+            # First check direct container.LocationID (new approach)
+            query = """
+                SELECT sl.LocationID, sl.LocationName
+                FROM container c
+                JOIN storagelocation sl ON c.LocationID = sl.LocationID
+                WHERE c.ContainerID = %s
+            """
+            
+            result, _ = self.db.execute_query(query, (container_id,))
+            
+            if result and len(result) > 0:
+                return {
+                    'LocationID': result[0][0],
+                    'LocationName': result[0][1]
+                }
+            
+            # Fallback: Find from contained samples (old approach)
             query = """
                 SELECT DISTINCT ss.LocationID, sl.LocationName
                 FROM containersample cs
@@ -187,6 +207,14 @@ class ContainerService:
             result, _ = self.db.execute_query(query, (container_id,))
             
             if result and len(result) > 0:
+                # Update the container with this location for future use
+                with self.db.transaction() as cursor:
+                    cursor.execute("""
+                        UPDATE container 
+                        SET LocationID = %s 
+                        WHERE ContainerID = %s
+                    """, (result[0][0], container_id))
+                
                 return {
                     'LocationID': result[0][0],
                     'LocationName': result[0][1]
@@ -271,37 +299,100 @@ class ContainerService:
                 # Print container object
                 print(f"DEBUG: Container object created: {container.__dict__}")
                 
+                # Get a default location ID (1.1.1) if none provided
+                location_id = container_data.get('locationId')
+                if not location_id:
+                    # Try to find the default location (1.1.1)
+                    cursor.execute("""
+                        SELECT LocationID FROM storagelocation 
+                        WHERE LocationName = '1.1.1' 
+                        LIMIT 1
+                    """)
+                    result = cursor.fetchone()
+                    if result:
+                        location_id = result[0]
+                
+                # Check if we need to create a new container type
+                new_container_type = container_data.get('newContainerType')
+                if new_container_type:
+                    print(f"DEBUG: Creating new container type: {new_container_type}")
+                    
+                    # Insert the new container type
+                    cursor.execute("""
+                        INSERT INTO ContainerType (
+                            TypeName,
+                            Description,
+                            DefaultCapacity
+                        )
+                        VALUES (%s, %s, %s)
+                    """, (
+                        new_container_type.get('typeName'),
+                        new_container_type.get('description', ''),
+                        new_container_type.get('capacity')
+                    ))
+                    
+                    # Get the new container type ID
+                    container_type_id = cursor.lastrowid
+                    print(f"DEBUG: Created new container type with ID: {container_type_id}")
+                    
+                    # Update the container object with the new type ID
+                    container.container_type_id = container_type_id
+                    
+                    # If container capacity not set, use the new type's capacity
+                    if not container.capacity and new_container_type.get('capacity'):
+                        container.capacity = new_container_type.get('capacity')
+                    
+                    # Log the activity
+                    cursor.execute("""
+                        INSERT INTO History (
+                            Timestamp, 
+                            ActionType, 
+                            UserID, 
+                            Notes
+                        )
+                        VALUES (NOW(), %s, %s, %s)
+                    """, (
+                        'Container type created',
+                        user_id,
+                        f"Container type '{new_container_type.get('typeName')}' created"
+                    ))
+                
+                # Add the location_id to the insert query
                 if container.container_type_id:
                     query = f"""
                         INSERT INTO {table_name} (
                             Description, 
                             ContainerTypeID,
                             IsMixed,
-                            ContainerCapacity
+                            ContainerCapacity,
+                            LocationID
                         )
-                        VALUES (%s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s)
                     """
                     
                     cursor.execute(query, (
                         container.description,
                         container.container_type_id,
                         1 if container.is_mixed else 0,
-                        container.capacity
+                        container.capacity,
+                        location_id
                     ))
                 else:
                     query = f"""
                         INSERT INTO {table_name} (
                             Description,
                             IsMixed,
-                            ContainerCapacity
+                            ContainerCapacity,
+                            LocationID
                         )
-                        VALUES (%s, %s, %s)
+                        VALUES (%s, %s, %s, %s)
                     """
                     
                     cursor.execute(query, (
                         container.description,
                         1 if container.is_mixed else 0,
-                        container.capacity
+                        container.capacity,
+                        location_id
                     ))
                 
                 container_id = cursor.lastrowid
@@ -354,7 +445,7 @@ class ContainerService:
                 
                 # Check if sample exists and is available
                 cursor.execute("""
-                    SELECT s.SampleID, ss.StorageID, ss.AmountRemaining 
+                    SELECT s.SampleID, ss.StorageID, ss.AmountRemaining, ss.LocationID
                     FROM Sample s
                     JOIN SampleStorage ss ON s.SampleID = ss.SampleID
                     WHERE s.SampleID = %s AND ss.AmountRemaining >= %s
@@ -368,6 +459,20 @@ class ContainerService:
                     }
                 
                 storage_id = sample_data[1]
+                sample_location_id = sample_data[3]
+                
+                # Update container's location to match the sample's location if not set
+                cursor.execute("""
+                    SELECT LocationID FROM container WHERE ContainerID = %s
+                """, (container_id,))
+                container_location = cursor.fetchone()
+                
+                if not container_location or not container_location[0]:
+                    # Container has no location, set it to sample's location
+                    cursor.execute("""
+                        UPDATE container SET LocationID = %s WHERE ContainerID = %s
+                    """, (sample_location_id, container_id))
+                    print(f"DEBUG: Updated container {container_id} location to {sample_location_id}")
                 
                 # Check if ContainerSample table exists, create if it doesn't
                 cursor.execute("SHOW TABLES LIKE 'ContainerSample'")

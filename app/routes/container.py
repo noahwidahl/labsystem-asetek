@@ -23,11 +23,21 @@ def init_container(blueprint, mysql):
                 container_dict['TotalItems'] = getattr(container, 'total_items', 0)
                 containers_for_template.append(container_dict)
             
-            # Get container types
             cursor = mysql.connection.cursor()
+            
+            # Get container types
             cursor.execute("SELECT ContainerTypeID, TypeName, Description, DefaultCapacity FROM ContainerType")
             type_columns = [col[0] for col in cursor.description]
             container_types = [dict(zip(type_columns, row)) for row in cursor.fetchall()]
+            
+            # Get storage locations for dropdown
+            cursor.execute("""
+                SELECT LocationID, LocationName, Rack, Section, Shelf
+                FROM storagelocation
+                ORDER BY Rack, Section, Shelf
+            """)
+            location_columns = [col[0] for col in cursor.description]
+            locations = [dict(zip(location_columns, row)) for row in cursor.fetchall()]
             
             # Get active samples for the "Add sample" function
             cursor.execute("""
@@ -53,7 +63,8 @@ def init_container(blueprint, mysql):
             return render_template('sections/containers.html', 
                                 containers=containers_for_template,
                                 container_types=container_types,
-                                available_samples=available_samples)
+                                available_samples=available_samples,
+                                locations=locations)
         except Exception as e:
             print(f"Error loading containers: {e}")
             import traceback
@@ -62,7 +73,8 @@ def init_container(blueprint, mysql):
                                 error=f"Error loading containers: {str(e)}",
                                 containers=[],
                                 container_types=[],
-                                available_samples=[])
+                                available_samples=[],
+                                locations=[])
     
     @blueprint.route('/api/containers/<int:container_id>/location')
     def get_container_location(container_id):
@@ -114,6 +126,25 @@ def init_container(blueprint, mysql):
             return jsonify({'success': True, 'containers': containers})
         except Exception as e:
             print(f"API error when fetching available containers: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+            
+    @blueprint.route('/api/containers/types')
+    def get_container_types():
+        try:
+            cursor = mysql.connection.cursor()
+            
+            # Get container types
+            cursor.execute("SELECT ContainerTypeID, TypeName, Description, DefaultCapacity FROM ContainerType")
+            type_columns = [col[0] for col in cursor.description]
+            container_types = [dict(zip(type_columns, row)) for row in cursor.fetchall()]
+            
+            cursor.close()
+            
+            return jsonify({'success': True, 'types': container_types})
+        except Exception as e:
+            print(f"API error when fetching container types: {e}")
             import traceback
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500

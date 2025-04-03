@@ -38,6 +38,69 @@ def validate_container_data(data):
             'field': 'description'
         }
     
+    # Location is required
+    if not data.get('locationId'):
+        return {
+            'valid': False,
+            'error': 'Storage location is required',
+            'field': 'containerLocation'
+        }
+    
+    # Validate location format
+    if not str(data.get('locationId')).isdigit():
+        return {
+            'valid': False,
+            'error': 'Location must be a valid location ID',
+            'field': 'containerLocation'
+        }
+    
+    # Container type is required - either an existing one or creating a new one
+    if not data.get('containerTypeId') and not data.get('newContainerType'):
+        return {
+            'valid': False,
+            'error': 'Container type is required',
+            'field': 'containerType'
+        }
+    
+    # Capacity is required
+    if not data.get('capacity'):
+        return {
+            'valid': False,
+            'error': 'Container capacity is required',
+            'field': 'containerCapacity'
+        }
+    
+    # Validate capacity format
+    if not str(data.get('capacity')).isdigit():
+        return {
+            'valid': False, 
+            'error': 'Capacity must be a number',
+            'field': 'containerCapacity'
+        }
+    
+    # Validate new container type if provided
+    if data.get('newContainerType'):
+        new_type = data.get('newContainerType')
+        
+        if not new_type.get('typeName'):
+            return {
+                'valid': False,
+                'error': 'Container type name is required',
+                'field': 'newContainerTypeName'
+            }
+        
+        # Validate capacity if provided in new container type
+        if new_type.get('capacity') and not str(new_type.get('capacity')).isdigit():
+            return {
+                'valid': False,
+                'error': 'Container type capacity must be a number',
+                'field': 'newContainerTypeCapacity'
+            }
+            
+        # If capacity is not provided for the container type, set a default
+        if not new_type.get('capacity'):
+            new_type['capacity'] = 10  # Default capacity
+    
     return {
         'valid': True
     }

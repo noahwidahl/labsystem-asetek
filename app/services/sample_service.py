@@ -225,29 +225,106 @@ class SampleService:
                         else:
                             # Create new container
                             print(f"DEBUG: Creating container for package {i+1}")
-                            # Use container description or sample description if not provided
-                            container_desc = sample_data.get('containerDescription') or sample_data.get('description', 'Container')
+                            # Use container description if provided, or default to generic container name
+                            container_desc = sample_data.get('containerDescription', 'Container')
                             if package_count > 1:
                                 container_desc += f" (Package {i+1})"
                             
                             # Use 'container' table directly
                             table_name = "container"
                             
-                            # Create container
-                            query = f"""
-                                INSERT INTO {table_name} (
-                                    Description,
-                                    IsMixed,
-                                    ContainerCapacity
-                                )
-                                VALUES (%s, %s, %s)
-                            """
+                            # Check if we need to create a new container type first
+                            if sample_data.get('newContainerType'):
+                                print(f"DEBUG: Creating new container type from sample registration")
+                                new_type = sample_data.get('newContainerType')
+                                
+                                # Insert the new container type
+                                cursor.execute("""
+                                    INSERT INTO ContainerType (
+                                        TypeName,
+                                        Description,
+                                        DefaultCapacity
+                                    )
+                                    VALUES (%s, %s, %s)
+                                """, (
+                                    new_type.get('typeName'),
+                                    new_type.get('description', ''),
+                                    new_type.get('capacity')
+                                ))
+                                
+                                # Get the new container type ID
+                                container_type_id = cursor.lastrowid
+                                print(f"DEBUG: Created new container type with ID: {container_type_id}")
+                                
+                                # Log the container type creation
+                                cursor.execute("""
+                                    INSERT INTO History (
+                                        Timestamp, 
+                                        ActionType, 
+                                        UserID, 
+                                        Notes
+                                    )
+                                    VALUES (NOW(), %s, %s, %s)
+                                """, (
+                                    'Container type created',
+                                    user_id,
+                                    f"Container type '{new_type.get('typeName')}' created during sample registration"
+                                ))
+                            elif sample_data.get('containerTypeId'):
+                                # Use the supplied container type ID
+                                container_type_id = sample_data.get('containerTypeId')
+                            else:
+                                # Try to find a default container type (using first one in the database)
+                                container_type_id = None
+                                cursor.execute("SELECT ContainerTypeID FROM ContainerType LIMIT 1")
+                                default_type_result = cursor.fetchone()
+                                if default_type_result:
+                                    container_type_id = default_type_result[0]
                             
-                            cursor.execute(query, (
-                                container_desc,
-                                1 if sample_data.get('containerIsMixed', False) else 0,
-                                amount_per_package  # Set capacity to the amount of samples in the package
-                            ))
+                            # Get capacity from parameters or default to amount_per_package
+                            capacity = sample_data.get('containerCapacity') or amount_per_package
+                            
+                            # Get location from parameters or use the one already determined
+                            container_location_id = sample_data.get('containerLocationId') or location_id
+                            
+                            # Create container with location and container type
+                            if container_type_id:
+                                query = f"""
+                                    INSERT INTO {table_name} (
+                                        Description,
+                                        ContainerTypeID,
+                                        IsMixed,
+                                        ContainerCapacity,
+                                        LocationID
+                                    )
+                                    VALUES (%s, %s, %s, %s, %s)
+                                """
+                                
+                                cursor.execute(query, (
+                                    container_desc,
+                                    container_type_id,
+                                    1 if sample_data.get('containerIsMixed', False) else 0,
+                                    capacity,  # Use supplied capacity or default to amount_per_package
+                                    container_location_id  # Use container-specific location if specified
+                                ))
+                            else:
+                                # No container type found, create without it
+                                query = f"""
+                                    INSERT INTO {table_name} (
+                                        Description,
+                                        IsMixed,
+                                        ContainerCapacity,
+                                        LocationID
+                                    )
+                                    VALUES (%s, %s, %s, %s)
+                                """
+                                
+                                cursor.execute(query, (
+                                    container_desc,
+                                    1 if sample_data.get('containerIsMixed', False) else 0,
+                                    capacity,  # Use supplied capacity or default to amount_per_package
+                                    container_location_id  # Use container-specific location if specified
+                                ))
                             
                             container_id = cursor.lastrowid
                             print(f"DEBUG: Created container with ID: {container_id}")

@@ -1,12 +1,13 @@
 class Container:
     def __init__(self, id=None, description=None, container_type_id=None, 
-                 is_mixed=False, capacity=None, status='Active'):
+                 is_mixed=False, capacity=None, status='Active', location_id=None):
         self.id = id
         self.description = description
         self.container_type_id = container_type_id
         self.is_mixed = is_mixed
         self.capacity = capacity
         self.status = status
+        self.location_id = location_id
     
     @classmethod
     def from_dict(cls, data):
@@ -14,7 +15,8 @@ class Container:
             description=data.get('description'),
             container_type_id=data.get('containerTypeId'),
             is_mixed=data.get('isMixed', False),
-            capacity=data.get('capacity')
+            capacity=data.get('capacity'),
+            location_id=data.get('locationId')
         )
     
     @classmethod
@@ -35,5 +37,6 @@ class Container:
             'ContainerTypeID': self.container_type_id,
             'IsMixed': self.is_mixed,
             'Capacity': self.capacity,
-            'Status': self.status
+            'Status': self.status,
+            'LocationID': self.location_id
         }

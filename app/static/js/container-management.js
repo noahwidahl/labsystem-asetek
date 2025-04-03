@@ -38,6 +38,12 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('targetContainerId').value = containerId;
         });
     });
+    
+    // Setup container type creation toggle
+    setupContainerTypeToggle();
+    
+    // Setup container type selection change
+    setupContainerTypeSelection();
 });
 
 function setupFilterButtons() {
@@ -158,23 +164,87 @@ function addSampleToContainer() {
 
 // Create new container
 function createContainer() {
+    // Clear previous validation errors
+    clearValidationErrors();
+    
     const description = document.getElementById('containerDescription').value;
-    const typeId = document.getElementById('containerType').value;
-    const capacity = document.getElementById('containerCapacity').value;
+    const createNewType = document.getElementById('createContainerType').checked;
     const isMixed = document.getElementById('containerIsMixed').checked;
+    const locationId = document.getElementById('containerLocation').value;
+    const capacityInput = document.getElementById('containerCapacity');
+    const capacity = capacityInput.value;
+    
+    // Get type data - either existing or new
+    let typeId = null;
+    let newContainerType = null;
     
     // Validation
+    let isValid = true;
+    
+    // Description is required
     if (!description) {
-        showErrorMessage('Please enter a description for the container');
+        showFieldError('containerDescription', 'Please enter a description for the container');
+        isValid = false;
+    }
+    
+    // Location is required
+    if (!locationId) {
+        showFieldError('containerLocation', 'Storage location is required');
+        isValid = false;
+    }
+    
+    // Capacity is required
+    if (!capacity) {
+        showFieldError('containerCapacity', 'Container capacity is required');
+        isValid = false;
+    }
+    
+    if (createNewType) {
+        // Creating a new container type
+        const typeNameInput = document.getElementById('newContainerTypeName');
+        const typeName = typeNameInput.value;
+        const typeCapacity = document.getElementById('newContainerTypeCapacity').value;
+        const typeDescription = document.getElementById('newContainerTypeDescription').value;
+        
+        if (!typeName) {
+            showFieldError('newContainerTypeName', 'Container type name is required');
+            isValid = false;
+        }
+        
+        newContainerType = {
+            typeName: typeName,
+            capacity: typeCapacity || null,
+            description: typeDescription || ''
+        };
+        
+        // Use the new type's capacity if not specified directly
+        if (!capacity && typeCapacity) {
+            capacityInput.value = typeCapacity;
+        }
+    } else {
+        // Using existing container type
+        const containerTypeSelect = document.getElementById('containerType');
+        typeId = containerTypeSelect.value;
+        
+        if (!typeId) {
+            showFieldError('containerType', 'Container type is required');
+            isValid = false;
+        }
+    }
+    
+    // If validation failed, stop here
+    if (!isValid) {
         return;
     }
     
     // Debug log
     console.log('Creating container with data:', {
         description,
-        typeId: typeId || 'null',
+        typeId: typeId || 'new type',
         capacity: capacity || 'null',
-        isMixed
+        isMixed,
+        locationId: locationId || 'default',
+        newContainerType
     });
     
     // Create container object
@@ -182,7 +252,9 @@ function createContainer() {
         description: description,
         containerTypeId: typeId || null,
         capacity: capacity || null,
-        isMixed: isMixed
+        isMixed: isMixed,
+        locationId: locationId || null,
+        newContainerType: newContainerType
     };
     
     // Send to server
@@ -210,13 +282,68 @@ function createContainer() {
                 window.location.reload();
             }, 1000);
         } else {
-            showErrorMessage(`Error during creation: ${data.error}`);
+            // If there's a field-specific error, show it on that field
+            if (data.field) {
+                const fieldMapping = {
+                    'description': 'containerDescription',
+                    'locationId': 'containerLocation',
+                    'containerTypeId': 'containerType',
+                    'capacity': 'containerCapacity',
+                    'newContainerTypeName': 'newContainerTypeName',
+                    'newContainerTypeCapacity': 'newContainerTypeCapacity'
+                };
+                
+                // Map backend field names to frontend element IDs
+                const fieldId = fieldMapping[data.field] || data.field;
+                showFieldError(fieldId, data.error);
+                
+                // Focus on the field with the error
+                const field = document.getElementById(fieldId);
+                if (field) {
+                    field.focus();
+                }
+            } else {
+                showErrorMessage(`Error during creation: ${data.error}`);
+            }
         }
     })
     .catch(error => {
         console.error('Error creating container:', error);
         showErrorMessage(`An error occurred: ${error}`);
     });
+}
+
+// Helper function to clear validation errors
+function clearValidationErrors() {
+    // Remove is-invalid class from all inputs
+    document.querySelectorAll('.is-invalid').forEach(element => {
+        element.classList.remove('is-invalid');
+    });
+    
+    // Remove all validation feedback elements
+    document.querySelectorAll('.invalid-feedback').forEach(element => {
+        element.remove();
+    });
+}
+
+// Helper function to show field-specific errors
+function showFieldError(fieldId, errorMessage) {
+    const field = document.getElementById(fieldId);
+    if (!field) return;
+    
+    // Add invalid class to the field
+    field.classList.add('is-invalid');
+    
+    // Create feedback element if it doesn't exist
+    let feedback = field.nextElementSibling;
+    if (!feedback || !feedback.classList.contains('invalid-feedback')) {
+        feedback = document.createElement('div');
+        feedback.className = 'invalid-feedback';
+        field.parentNode.insertBefore(feedback, field.nextSibling);
+    }
+    
+    // Set error message
+    feedback.textContent = errorMessage;
 }
 
 // Delete container
@@ -306,4 +433,108 @@ function showErrorMessage(message) {
         errorToast.classList.remove('show');
         setTimeout(() => errorToast.remove(), 300);
     }, 5000);
+}
+
+// Function to set up container type toggle
+function setupContainerTypeToggle() {
+    const createTypeCheckbox = document.getElementById('createContainerType');
+    const containerTypeSelect = document.getElementById('containerType');
+    const newTypeSection = document.getElementById('newContainerTypeSection');
+    const capacityInput = document.getElementById('containerCapacity');
+    
+    if (!createTypeCheckbox || !containerTypeSelect || !newTypeSection) return;
+    
+    // Toggle between container type dropdown and create new section
+    createTypeCheckbox.addEventListener('change', function() {
+        const createNew = this.checked;
+        
+        containerTypeSelect.disabled = createNew;
+        newTypeSection.classList.toggle('d-none', !createNew);
+        
+        // Clear validation errors on toggle
+        if (createNew) {
+            // We're creating a new type, clear validation on select
+            containerTypeSelect.classList.remove('is-invalid');
+            const selectFeedback = containerTypeSelect.nextElementSibling;
+            if (selectFeedback && selectFeedback.classList.contains('invalid-feedback')) {
+                selectFeedback.remove();
+            }
+            
+            // Clear container type selection
+            containerTypeSelect.value = '';
+            
+            // Focus on new type name field
+            setTimeout(() => {
+                document.getElementById('newContainerTypeName').focus();
+            }, 100);
+        } else {
+            // We're using existing type, clear validation on new type fields
+            document.getElementById('newContainerTypeName').classList.remove('is-invalid');
+            const typeFeedback = document.getElementById('newContainerTypeName').nextElementSibling;
+            if (typeFeedback && typeFeedback.classList.contains('invalid-feedback')) {
+                typeFeedback.remove();
+            }
+            
+            // If container type is already selected, update the capacity
+            if (containerTypeSelect.value) {
+                const selectedOption = containerTypeSelect.options[containerTypeSelect.selectedIndex];
+                const typeData = selectedOption.dataset;
+                
+                if (typeData.capacity && !capacityInput.value) {
+                    capacityInput.value = typeData.capacity;
+                }
+            }
+            
+            // Focus on container type select
+            setTimeout(() => {
+                containerTypeSelect.focus();
+            }, 100);
+        }
+    });
+}
+
+// Function to handle container type selection
+function setupContainerTypeSelection() {
+    const containerTypeSelect = document.getElementById('containerType');
+    const capacityInput = document.getElementById('containerCapacity');
+    
+    if (!containerTypeSelect || !capacityInput) return;
+    
+    // Lookup capacity when type changes
+    containerTypeSelect.addEventListener('change', function() {
+        const typeId = this.value;
+        if (!typeId) {
+            capacityInput.value = '';
+            capacityInput.placeholder = 'Capacity (required)';
+            return;
+        }
+        
+        // Find the selected option
+        const selectedOption = this.options[this.selectedIndex];
+        const typeData = selectedOption.dataset;
+        
+        // Set default capacity if available
+        if (typeData.capacity) {
+            capacityInput.value = typeData.capacity;
+            capacityInput.placeholder = `Default: ${typeData.capacity}`;
+        }
+        
+        // Remove any validation error on container type
+        containerTypeSelect.classList.remove('is-invalid');
+        const feedback = containerTypeSelect.nextElementSibling;
+        if (feedback && feedback.classList.contains('invalid-feedback')) {
+            feedback.remove();
+        }
+    });
+    
+    // Initial setup - populate capacity if a type is already selected
+    if (containerTypeSelect.value) {
+        const selectedOption = containerTypeSelect.options[containerTypeSelect.selectedIndex];
+        const typeData = selectedOption.dataset;
+        
+        if (typeData.capacity && !capacityInput.value) {
+            capacityInput.value = typeData.capacity;
+            capacityInput.placeholder = `Default: ${typeData.capacity}`;
+        }
+    }
 }

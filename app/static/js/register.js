@@ -49,13 +49,6 @@ function setupContainerOptions() {
     createContainersCheckbox.addEventListener('change', function() {
         existingContainerSection.classList.toggle('d-none', !this.checked);
         containerDetailsSection.classList.toggle('d-none', !this.checked || existingContainerOption.checked);
-        
-        // Hvis vi bruger eksisterende container, spring placeringen over
-        if (this.checked && existingContainerOption.checked) {
-            skipLocationSelection = true;
-        } else {
-            skipLocationSelection = false;
-        }
     });
     
     // Handle radio button selection
@@ -63,7 +56,6 @@ function setupContainerOptions() {
         if (this.checked) {
             containerDetailsSection.classList.remove('d-none');
             existingContainerSelectArea.classList.add('d-none');
-            skipLocationSelection = false;
         }
     });
     
@@ -72,11 +64,10 @@ function setupContainerOptions() {
             containerDetailsSection.classList.add('d-none');
             existingContainerSelectArea.classList.remove('d-none');
             fetchExistingContainers();
-            skipLocationSelection = true;
         }
     });
 
-    // Lyt efter valg af container for at få dens placering
+    // Listen for container selection to get its location
     const existingContainerSelect = document.getElementById('existingContainerSelect');
     if (existingContainerSelect) {
         existingContainerSelect.addEventListener('change', function() {
@@ -128,7 +119,9 @@ function fetchExistingContainers() {
                 data.containers.forEach(container => {
                     const option = document.createElement('option');
                     option.value = container.ContainerID;
-                    option.textContent = `${container.ContainerID}: ${container.Description} (${container.sample_count || 0} prøver)`;
+                    // Include location information in the dropdown for better identification
+                    const locationInfo = container.LocationName ? ` - Location: ${container.LocationName}` : '';
+                    option.textContent = `${container.ContainerID}: ${container.Description}${locationInfo} (${container.sample_count || 0} prøver)`;
                     existingContainerSelect.appendChild(option);
                 });
             } else {
@@ -252,6 +245,9 @@ function nextStep() {
             currentStep = 4;
         }
         
+        // Never skip to location selection step (as requested)
+        // Always go to the grid to select a location for better overview
+        
         // Make sure we don't go beyond the maximum number of steps
         currentStep = Math.min(currentStep, totalSteps);
         
@@ -305,6 +301,15 @@ function validateCurrentStep() {
             if (!unit || !unit.value) {
                 showErrorMessage('Vælg venligst en enhed', 'unit');
                 isValid = false;
+            }
+            
+            // Validate container data if using containers
+            const createContainers = document.getElementById('createContainers')?.checked || false;
+            if (createContainers) {
+                // Use the container module to validate container data
+                if (typeof ContainerModule !== 'undefined' && !ContainerModule.validate()) {
+                    isValid = false;
+                }
             }
             
             return isValid;
@@ -369,11 +374,20 @@ function setupBulkSampleHandling() {
     if (isBulkSampleCheckbox && unitSelect) {
         // Save all original options for later use
         const allOptions = Array.from(unitSelect.options);
-        const stkOption = Array.from(unitSelect.options).find(opt => 
+        
+        // Find stk/pcs option and rename to pcs if it's "stk"
+        const pcsOption = Array.from(unitSelect.options).find(opt => 
             opt.textContent.trim().toLowerCase() === 'stk' || 
             opt.textContent.trim().toLowerCase() === 'pcs');
+            
+        // Rename any "stk" options to "pcs" for consistency across the app
+        allOptions.forEach(option => {
+            if (option.textContent.trim().toLowerCase() === 'stk') {
+                option.textContent = 'pcs';
+            }
+        });
         
-        // Default setting: Only stk is available
+        // Default setting: Only pcs is available
         updateUnitOptions(false);
         
         // Handle changes in the checkbox
@@ -396,10 +410,9 @@ function setupBulkSampleHandling() {
             unitSelect.appendChild(emptyOption);
             
             if (isBulk) {
-                // For bulk quantity: Add all units except stk
+                // For bulk quantity: Add all units except pcs
                 allOptions.forEach(option => {
-                    if (option.value && option.textContent.trim().toLowerCase() !== 'stk' && 
-                        option.textContent.trim().toLowerCase() !== 'pcs') {
+                    if (option.value && option.textContent.trim().toLowerCase() !== 'pcs') {
                         unitSelect.appendChild(option.cloneNode(true));
                     }
                 });
@@ -407,16 +420,20 @@ function setupBulkSampleHandling() {
                 // Reset value (forces the user to select a unit)
                 unitSelect.value = '';
             } else {
-                // For pieces: Only stk is available
-                if (stkOption) {
-                    unitSelect.appendChild(stkOption.cloneNode(true));
-                    unitSelect.value = stkOption.value;
+                // For pieces: Only pcs is available
+                if (pcsOption) {
+                    // Make a clone of the pcs option
+                    const pcsOptionClone = pcsOption.cloneNode(true);
+                    // Ensure it says "pcs" not "stk"
+                    pcsOptionClone.textContent = 'pcs';
+                    unitSelect.appendChild(pcsOptionClone);
+                    unitSelect.value = pcsOption.value;
                 } else {
-                    // Fallback if we didn't find stk option
-                    const newStkOption = document.createElement('option');
-                    newStkOption.value = "1"; // Assuming stk has ID=1
-                    newStkOption.textContent = 'stk';
-                    unitSelect.appendChild(newStkOption);
+                    // Fallback if we didn't find pcs option
+                    const newPcsOption = document.createElement('option');
+                    newPcsOption.value = "1"; // Assuming pcs has ID=1
+                    newPcsOption.textContent = 'pcs';
+                    unitSelect.appendChild(newPcsOption);
                     unitSelect.value = "1";
                 }
             }
@@ -1202,11 +1219,18 @@ function handleFormSubmission() {
             // Create new container
             formData.containerDescription = document.getElementById('containerDescription')?.value || '';
             formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
+            formData.containerTypeId = document.getElementById('containerType')?.value || '';
+            formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
             
-            // Standard location, if we're not skipping it
-            if (!skipLocationSelection) {
-                formData.storageLocation = document.getElementById('selectedLocationInput')?.value || selectedLocation || '';
+            // Save container location separately from sample location
+            const containerLocationSelect = document.getElementById('containerLocation');
+            if (containerLocationSelect && containerLocationSelect.value) {
+                formData.containerLocationId = containerLocationSelect.value;
+                console.log("Container location set to:", containerLocationSelect.value);
             }
+            
+            // Always use the standard selected location from the grid for the sample
+            formData.storageLocation = document.getElementById('selectedLocationInput')?.value || selectedLocation || '';
         }
     } else {
         // Standard location without container

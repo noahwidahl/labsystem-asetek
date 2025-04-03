@@ -21,9 +21,15 @@ def init_sample(blueprint, mysql):
             cursor.execute("SELECT UserID, Name FROM User")
             users = [dict(UserID=row[0], Name=row[1]) for row in cursor.fetchall()]
             
-            # Get units
+            # Get units (translate 'stk' to 'pcs')
             cursor.execute("SELECT UnitID, UnitName FROM Unit ORDER BY UnitName")
-            units = [dict(UnitID=row[0], UnitName=row[1]) for row in cursor.fetchall()]
+            units = []
+            for row in cursor.fetchall():
+                unit_name = row[1]
+                # Translate 'stk' to 'pcs' for consistency across the app
+                if unit_name.lower() == 'stk':
+                    unit_name = 'pcs'
+                units.append(dict(UnitID=row[0], UnitName=unit_name))
             
             # Get locations
             cursor.execute("""
@@ -39,13 +45,19 @@ def init_sample(blueprint, mysql):
                     'LabName': row[2]
                 })
             
+            # Get container types
+            cursor.execute("SELECT ContainerTypeID, TypeName, Description, DefaultCapacity FROM ContainerType")
+            type_columns = [col[0] for col in cursor.description]
+            container_types = [dict(zip(type_columns, row)) for row in cursor.fetchall()]
+            
             cursor.close()
             
             return render_template('sections/register.html', 
                                 suppliers=suppliers,
                                 users=users,
                                 units=units,
-                                locations=locations)
+                                locations=locations,
+                                container_types=container_types)
         except Exception as e:
             print(f"Error loading register page: {e}")
             return render_template('sections/register.html', 
