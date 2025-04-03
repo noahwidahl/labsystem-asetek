@@ -126,19 +126,15 @@ class ContainerService:
                 
                 table_name = "container"
                 
-                # Check if the container has associated samples
+                # Delete container's samples first if any
+                # Instead of preventing deletion, we'll delete the container-sample links
                 cursor.execute("""
-                    SELECT COUNT(*) FROM ContainerSample 
+                    DELETE FROM ContainerSample 
                     WHERE ContainerID = %s
                 """, (container_id,))
                 
-                sample_count = cursor.fetchone()[0]
-                if sample_count > 0:
-                    print(f"DEBUG: Container {container_id} has {sample_count} associated samples and cannot be deleted")
-                    return {
-                        'success': False,
-                        'error': f'Container has {sample_count} associated samples and cannot be deleted'
-                    }
+                deleted_samples = cursor.rowcount
+                print(f"DEBUG: Deleted {deleted_samples} sample links from container {container_id}")
                 
                 # Delete the container
                 cursor.execute(f"""
@@ -158,7 +154,7 @@ class ContainerService:
                 """, (
                     'Container deleted',
                     user_id,
-                    f"Container {container_id} deleted"
+                    f"Container {container_id} deleted with {deleted_samples} sample links"
                 ))
                 
                 return {

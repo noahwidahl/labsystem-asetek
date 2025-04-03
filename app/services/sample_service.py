@@ -102,7 +102,14 @@ class SampleService:
             
             # Determine if it's a multi-package or single sample
             is_multi_package = sample_data.get('isMultiPackage', False)
-            package_count = int(sample_data.get('packageCount', 1)) if is_multi_package else 1
+            # Ensure package_count is 1 when using containers
+            if sample_data.get('useExistingContainer', False) or (sample_data.get('createContainers', False) and not is_multi_package):
+                # For container operations, always use 1 package
+                package_count = 1
+            else:
+                package_count = int(sample_data.get('packageCount', 1)) if is_multi_package else 1
+            
+            print(f"DEBUG: is_multi_package={is_multi_package}, package_count={package_count}, useExistingContainer={sample_data.get('useExistingContainer', False)}")
             
             # Generate a unique barcode if not provided
             base_barcode = sample_data.get('barcode', '')

@@ -12,30 +12,30 @@ def _get_storage_locations(mysql):
             COUNT(ss.StorageID) as count,
             CASE WHEN COUNT(ss.StorageID) > 0 THEN 'occupied' ELSE 'available' END as status,
             IFNULL(l.LabName, 'Unknown') as LabName,
-            sl.Reol,
-            sl.Sektion,
-            sl.Hylde
+            sl.Rack,
+            sl.Section,
+            sl.Shelf
         FROM StorageLocation sl
         LEFT JOIN Lab l ON sl.LabID = l.LabID
         LEFT JOIN SampleStorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
-        GROUP BY sl.LocationID, sl.LocationName, l.LabName, sl.Reol, sl.Sektion, sl.Hylde
+        GROUP BY sl.LocationID, sl.LocationName, l.LabName, sl.Rack, sl.Section, sl.Shelf
         ORDER BY 
-            COALESCE(sl.Reol, 999),
-            COALESCE(sl.Sektion, 999),
-            COALESCE(sl.Hylde, 999)
+            COALESCE(sl.Rack, 999),
+            COALESCE(sl.Section, 999),
+            COALESCE(sl.Shelf, 999)
     """)
     
     columns = [col[0] for col in cursor.description]
     locations = [dict(zip(columns, row)) for row in cursor.fetchall()]
     
-    # For locations where Reol, Sektion, Hylde are NULL, extract them from LocationName
+    # For locations where Rack, Section, Shelf are NULL, extract them from LocationName
     for loc in locations:
-        if loc.get('Reol') is None or loc.get('Sektion') is None or loc.get('Hylde') is None:
+        if loc.get('Rack') is None or loc.get('Section') is None or loc.get('Shelf') is None:
             parts = loc.get('LocationName', '').split('.')
             if len(parts) == 3:
-                loc['Reol'] = int(parts[0]) if parts[0].isdigit() else None
-                loc['Sektion'] = int(parts[1]) if parts[1].isdigit() else None
-                loc['Hylde'] = int(parts[2]) if parts[2].isdigit() else None
+                loc['Rack'] = int(parts[0]) if parts[0].isdigit() else None
+                loc['Section'] = int(parts[1]) if parts[1].isdigit() else None
+                loc['Shelf'] = int(parts[2]) if parts[2].isdigit() else None
     
     cursor.close()
     return locations
@@ -115,6 +115,29 @@ def init_dashboard(blueprint, mysql):
                                 history_items=[],
                                 locations=[])
     
+    @blueprint.route('/api/storage-locations')
+    def api_storage_locations():
+        try:
+            locations = _get_storage_locations(mysql)
+            
+            # Force locations to show 0 count after clearing data
+            for location in locations:
+                # Ensure count is 0 or an actual count (not None)
+                location['count'] = int(location.get('count', 0) or 0)
+            
+            return jsonify({
+                'success': True,
+                'locations': locations
+            })
+        except Exception as e:
+            import traceback
+            error_message = f"Error getting storage locations: {str(e)}\n{traceback.format_exc()}"
+            print(error_message)
+            return jsonify({
+                'success': False,
+                'error': error_message
+            }), 500
+            
     @blueprint.route('/history')
     def history():
         try:
@@ -334,7 +357,7 @@ def init_dashboard(blueprint, mysql):
                 for shelf_num in range(max_shelf + 1, max_shelf + 1 + (shelf_count - existing_count)):
                     location_name = f"{rack_num}.{section_num}.{shelf_num}"
                     cursor.execute("""
-                        INSERT INTO StorageLocation (LocationName, LabID, Reol, Sektion, Hylde)
+                        INSERT INTO StorageLocation (LocationName, LabID, Rack, Section, Shelf)
                         VALUES (%s, %s, %s, %s, %s)
                     """, (location_name, lab_id, rack_num, section_num, shelf_num))
                 
@@ -438,7 +461,7 @@ def init_dashboard(blueprint, mysql):
                 for shelf in range(1, 6):  # 5 shelves per section
                     location_name = f"{rack_num}.{section}.{shelf}"
                     cursor.execute("""
-                        INSERT INTO StorageLocation (LocationName, LabID, Reol, Sektion, Hylde)
+                        INSERT INTO StorageLocation (LocationName, LabID, Rack, Section, Shelf)
                         VALUES (%s, %s, %s, %s, %s)
                     """, (location_name, lab_id, rack_num, section, shelf))
             

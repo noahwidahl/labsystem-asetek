@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentPath = window.location.pathname;
     if (currentPath === '/' || currentPath.includes('/dashboard')) {
         loadStorageLocations();
+    } else if (currentPath.includes('/storage')) {
+        setupSampleDeleteButtons();
     }
 });
 
@@ -122,4 +124,103 @@ function showExpiringDetails() {
     // This could fetch data from the API in a more complete implementation
     const expiringModal = new bootstrap.Modal(document.getElementById('expiringDetailsModal'));
     expiringModal.show();
+}
+
+// Setup delete buttons for samples
+function setupSampleDeleteButtons() {
+    const deleteButtons = document.querySelectorAll('.delete-sample-btn');
+    
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const sampleId = this.getAttribute('data-sample-id');
+            deleteSample(sampleId);
+        });
+    });
+}
+
+// Delete sample function
+function deleteSample(sampleId) {
+    if (!sampleId) return;
+    
+    if (confirm(`Are you sure you want to delete sample ${sampleId}?`)) {
+        fetch(`/api/samples/${sampleId}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSuccessMessage('Sample deleted successfully!');
+                
+                // Remove the row from the table or refresh the page
+                const row = this.closest('tr');
+                if (row) {
+                    row.remove();
+                } else {
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                }
+            } else {
+                showErrorMessage(`Error deleting sample: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            showErrorMessage(`An error occurred: ${error}`);
+        });
+    }
+}
+
+// Message display functions
+function showSuccessMessage(message) {
+    const successToast = document.createElement('div');
+    successToast.className = 'custom-toast success-toast';
+    successToast.innerHTML = `
+        <div class="toast-icon">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="toast-content">
+            <div class="toast-title">Success</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    document.body.appendChild(successToast);
+
+    // Add 'show' class after a short delay (for animation effect)
+    setTimeout(() => successToast.classList.add('show'), 10);
+
+    // Remove automatically after 3 seconds
+    setTimeout(() => {
+        successToast.classList.remove('show');
+        setTimeout(() => successToast.remove(), 300);
+    }, 3000);
+}
+
+function showErrorMessage(message) {
+    const errorToast = document.createElement('div');
+    errorToast.className = 'custom-toast error-toast';
+    errorToast.innerHTML = `
+        <div class="toast-icon">
+            <i class="fas fa-exclamation-circle"></i>
+        </div>
+        <div class="toast-content">
+            <div class="toast-title">Error</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    document.body.appendChild(errorToast);
+
+    // Add 'show' class after a short delay (for animation effect)
+    setTimeout(() => errorToast.classList.add('show'), 10);
+
+    // Remove automatically after 5 seconds
+    setTimeout(() => {
+        errorToast.classList.remove('show');
+        setTimeout(() => errorToast.remove(), 300);
+    }, 5000);
 }

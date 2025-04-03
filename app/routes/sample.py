@@ -70,7 +70,10 @@ def init_sample(blueprint, mysql):
                 # Get unit
                 cursor.execute("SELECT UnitName FROM Unit WHERE UnitID = %s", (sample.unit_id,))
                 unit_result = cursor.fetchone()
+                # Ensure consistent unit name - "stk" becomes "pcs"
                 unit = unit_result[0] if unit_result else "pcs"
+                if unit.lower() == "stk":
+                    unit = "pcs"
                 
                 # Get location
                 cursor.execute("""
@@ -123,6 +126,68 @@ def init_sample(blueprint, mysql):
             return jsonify(result)
         except Exception as e:
             print(f"API error: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @blueprint.route('/api/samples/<int:sample_id>', methods=['DELETE'])
+    def delete_sample(sample_id):
+        try:
+            # Get current user
+            current_user = get_current_user()
+            user_id = current_user['UserID']
+            
+            # First remove any ContainerSample links
+            cursor = mysql.connection.cursor()
+            
+            # Get SampleStorage records for this sample
+            cursor.execute("SELECT StorageID FROM SampleStorage WHERE SampleID = %s", (sample_id,))
+            storage_ids = [row[0] for row in cursor.fetchall()]
+            
+            if storage_ids:
+                # Remove container-sample links
+                for storage_id in storage_ids:
+                    cursor.execute("DELETE FROM ContainerSample WHERE SampleStorageID = %s", (storage_id,))
+            
+            # Delete history records for this sample first
+            cursor.execute("DELETE FROM History WHERE SampleID = %s", (sample_id,))
+            
+            # Delete from TestSample
+            cursor.execute("DELETE FROM TestSample WHERE SampleID = %s", (sample_id,))
+            
+            # Delete from SampleStorage
+            cursor.execute("DELETE FROM SampleStorage WHERE SampleID = %s", (sample_id,))
+            
+            # Delete from SampleSerialNumber
+            cursor.execute("DELETE FROM SampleSerialNumber WHERE SampleID = %s", (sample_id,))
+            
+            # Delete from Sample
+            cursor.execute("DELETE FROM Sample WHERE SampleID = %s", (sample_id,))
+            
+            # Log the action
+            cursor.execute("""
+                INSERT INTO History (
+                    Timestamp, 
+                    ActionType, 
+                    UserID, 
+                    Notes
+                )
+                VALUES (NOW(), %s, %s, %s)
+            """, (
+                'Sample deleted',
+                user_id,
+                f"Sample {sample_id} deleted"
+            ))
+            
+            mysql.connection.commit()
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'sample_id': sample_id
+            })
+        except Exception as e:
+            print(f"API error deleting sample: {e}")
             import traceback
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500

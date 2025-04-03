@@ -12,10 +12,10 @@ function updateStorageOverview(locations) {
         let rackNum, sectionNum, shelfNum;
         
         // Extract rack, section, shelf numbers
-        if (location.Reol !== undefined && location.Sektion !== undefined && location.Hylde !== undefined) {
-            rackNum = location.Reol;
-            sectionNum = location.Sektion;
-            shelfNum = location.Hylde;
+        if (location.Rack !== undefined && location.Section !== undefined && location.Shelf !== undefined) {
+            rackNum = location.Rack;
+            sectionNum = location.Section;
+            shelfNum = location.Shelf;
         } else {
             const parts = location.LocationName.split('.');
             if (parts.length === 3) {

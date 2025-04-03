@@ -744,47 +744,47 @@ function createGridFromLocations(locations) {
 
     grid.innerHTML = '';
     
-    // Organisér lokationer efter reol, sektion, hylde
+    // Organize locations by rack, section, shelf
     const organizedLocations = organizeLocationsByStructure(locations);
     
-    // Opret reol-sektioner
+    // Create rack sections
     Object.keys(organizedLocations).sort((a, b) => parseInt(a) - parseInt(b)).forEach(reolNum => {
         const reolSection = document.createElement('div');
         reolSection.className = 'reol-section mb-4';
         
         const reolHeader = document.createElement('h5');
-        reolHeader.textContent = `Reol ${reolNum}`;
+        reolHeader.textContent = `Rack ${reolNum}`;
         reolHeader.className = 'mb-2';
         reolSection.appendChild(reolHeader);
         
         const sektionsContainer = document.createElement('div');
         sektionsContainer.className = 'd-flex flex-wrap';
         
-        // For hver sektion i reolen
+        // For each section in the rack
         Object.keys(organizedLocations[reolNum]).sort((a, b) => parseInt(a) - parseInt(b)).forEach(sektionNum => {
             const sektionDiv = document.createElement('div');
             sektionDiv.className = 'sektion-container me-3 mb-3';
             
             const sektionHeader = document.createElement('div');
-            sektionHeader.textContent = `Sektion ${sektionNum}`;
+            sektionHeader.textContent = `Section ${sektionNum}`;
             sektionHeader.className = 'sektion-header small text-muted mb-1';
             sektionDiv.appendChild(sektionHeader);
             
             const hyldeContainer = document.createElement('div');
             hyldeContainer.className = 'd-flex flex-column';
             
-            // For hver hylde i sektionen
+            // For each shelf in the section
             Object.keys(organizedLocations[reolNum][sektionNum]).sort((a, b) => parseInt(a) - parseInt(b)).forEach(hyldeNum => {
                 const location = organizedLocations[reolNum][sektionNum][hyldeNum];
                 const locationName = `${reolNum}.${sektionNum}.${hyldeNum}`;
                 
-                // Opret hylde-celle
+                // Create shelf cell
                 const cell = document.createElement('div');
                 cell.className = 'storage-cell mb-1';
                 cell.dataset.locationId = location.LocationID;
                 cell.dataset.locationName = locationName;
                 
-                // Viser antal prøver på hylden i stedet for "occupied"
+                // Show number of samples on the shelf instead of "occupied"
                 const count = location.count || 0;
                 
                 const locationEl = document.createElement('div');
@@ -793,13 +793,13 @@ function createGridFromLocations(locations) {
                 
                 const capacity = document.createElement('div');
                 capacity.className = 'capacity small';
-                capacity.textContent = count > 0 ? `${count} prøve(r)` : 'Ledig';
+                capacity.textContent = count > 0 ? `${count} sample(s)` : 'Available';
                 
                 cell.appendChild(locationEl);
                 cell.appendChild(capacity);
                 hyldeContainer.appendChild(cell);
                 
-                // Tilføj klikevent til cellen - altid klikbar uanset indhold
+                // Add click event to the cell - always clickable regardless of content
                 cell.addEventListener('click', () => selectStorageCell(cell));
             });
             
@@ -819,11 +819,11 @@ function organizeLocationsByStructure(locations) {
     locations.forEach(location => {
         let reolNum, sektionNum, hyldeNum;
         
-        // If we have Reol, Sektion, Hylde columns directly
-        if (location.Reol !== undefined && location.Sektion !== undefined && location.Hylde !== undefined) {
-            reolNum = location.Reol;
-            sektionNum = location.Sektion;
-            hyldeNum = location.Hylde;
+        // If we have Rack, Section, Shelf columns directly
+        if (location.Rack !== undefined && location.Section !== undefined && location.Shelf !== undefined) {
+            reolNum = location.Rack;
+            sektionNum = location.Section;
+            hyldeNum = location.Shelf;
         } else {
             // Parse LocationName (assumes format rack.section.shelf)
             const parts = location.LocationName.split('.');
