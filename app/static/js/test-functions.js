@@ -746,8 +746,11 @@ function createTest() {
 }
 
 // CompleteTest function
-function completeTest(testId) {
-    confirmAction(`Are you sure you want to complete test ${testId}?`, function() {
+function completeTest(testId, testNo) {
+    // Use testNo for display if available, otherwise fallback to testId
+    const displayId = testNo || testId;
+    
+    confirmAction(`Are you sure you want to complete test ${displayId}?`, function() {
         // Show loading indicator
         showLoadingOverlay();
         
@@ -769,22 +772,24 @@ function completeTest(testId) {
             hideLoadingOverlay();
             
             if (data.success) {
-                showSuccessMessage(`Test ${testId} has been completed successfully!`);
+                showSuccessMessage(`Test ${data.test_id || displayId} has been completed successfully!`);
                 
                 // Close modal if open
                 const modal = bootstrap.Modal.getInstance(document.getElementById('testDetailsModal'));
                 if (modal) modal.hide();
                 
-                // Remove test card manually (client-side)
-                removeTestCardFromDOM(testId);
+                // Reload the page after a short delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
             } else {
                 showErrorMessage(`Error while finishing test: ${data.error}`);
             }
         })
         .catch(error => {
-            // Skjul indlæsningsindikator
+            // Hide loading indicator
             hideLoadingOverlay();
-            showErrorMessage(`An error has occured: ${error}`);
+            showErrorMessage(`An error has occurred: ${error}`);
             console.error("Error while finishing test:", error);
         });
     });
@@ -901,6 +906,16 @@ function showTestDetails(testId) {
         .then(data => {
             console.log("API response data:", data);  // Debug output
             if (data.test) {
+                // Store the test number globally for use with other functions
+                currentTestNo = data.test.TestNo;
+                console.log(`Set currentTestNo: ${currentTestNo}`);
+                
+                // Update the "Complete Test" button to use the test number
+                const completeBtn = document.getElementById('completeTestBtn');
+                if (completeBtn) {
+                    completeBtn.setAttribute('onclick', `completeTest('${testId}', '${currentTestNo}')`);
+                }
+                
                 populateTestDetailsModal(data.test);
             } else {
                 throw new Error("No test data returned");

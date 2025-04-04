@@ -657,6 +657,8 @@ class TestService:
         actual_test_id = result[0][0]
         test_no = result[0][1]
         
+        print(f"Completing test: DB ID={actual_test_id}, TestNo={test_no}")
+        
         # Process test completion including sample disposition
         with self.db.transaction() as cursor:
             # Default disposition is to dispose all samples if not specified

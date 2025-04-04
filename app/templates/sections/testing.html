@@ -112,7 +112,7 @@
                                 <button class="btn btn-outline-secondary" onclick="showTestDetails('{{ test.TestID }}')">
                                     <i class="fas fa-info-circle me-1"></i> View Details
                                 </button>
-                                <button class="btn btn-outline-danger" onclick="completeTest('{{ test.TestID }}')">
+                                <button class="btn btn-outline-danger" onclick="completeTest('{{ test.TestID }}', '{{ test.TestNo }}')">
                                     <i class="fas fa-check-circle me-1"></i> Complete Test
                                 </button>
                             </div>
@@ -136,10 +136,11 @@
 {% include "modals/create_test_iteration_modal.html" %}
 
 <script>
-    // Variable to store current test ID
+    // Variables to store current test information
     let currentTestId = null;
+    let currentTestNo = null;
     
-    // Update showTestDetails function to set currentTestId
+    // Update showTestDetails function to set currentTestId and currentTestNo
     function showTestDetails(testId) {
         currentTestId = testId;
         // Fetch test details from server
@@ -147,6 +148,10 @@
             .then(response => response.json())
             .then(data => {
                 if (data.test) {
+                    // Store the test number for use with other functions
+                    currentTestNo = data.test.TestNo;
+                    console.log(`Set currentTestNo: ${currentTestNo}`);
+                    
                     populateTestDetailsModal(data.test);
                     const modal = new bootstrap.Modal(document.getElementById('testDetailsModal'));
                     modal.show();
