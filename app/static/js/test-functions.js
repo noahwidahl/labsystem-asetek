@@ -369,10 +369,10 @@ function createTest() {
     });
 }
 
-// CompleteTest funktion
+// CompleteTest function
 function completeTest(testId) {
-    confirmAction(`Are you sure you want to finish test ${testId}?`, function() {
-        // Vis indlæsningsindikator
+    confirmAction(`Are you sure you want to complete test ${testId}?`, function() {
+        // Show loading indicator
         showLoadingOverlay();
         
         fetch(`/api/completeTest/${testId}`, {
@@ -389,11 +389,11 @@ function completeTest(testId) {
             return response.json();
         })
         .then(data => {
-            // Skjul indlæsningsindikator
+            // Hide loading indicator
             hideLoadingOverlay();
             
             if (data.success) {
-                showSuccessMessage(`Test ${testId} has been finished!`);
+                showSuccessMessage(`Test ${testId} has been completed successfully!`);
                 
                 // Close modal if open
                 const modal = bootstrap.Modal.getInstance(document.getElementById('testDetailsModal'));
@@ -499,6 +499,8 @@ function hideLoadingOverlay() {
 
 function showTestDetails(testId) {
     currentTestId = testId;
+    console.log(`Showing test details for ID: ${testId}`);  // Debug output
+    
     // Show loading indicator
     const modal = new bootstrap.Modal(document.getElementById('testDetailsModal'));
     modal.show();
@@ -510,6 +512,7 @@ function showTestDetails(testId) {
     // Fetch test details from server
     fetch(`/api/testDetails/${testId}`)
         .then(response => {
+            console.log(`Response status: ${response.status}`); // Debug output
             if (response.status === 404) {
                 // If test is not found (maybe it has been completed)
                 throw new Error("The test was not found. It may have been completed.");
@@ -520,6 +523,7 @@ function showTestDetails(testId) {
             return response.json();
         })
         .then(data => {
+            console.log("API response data:", data);  // Debug output
             if (data.test) {
                 populateTestDetailsModal(data.test);
             } else {
@@ -583,6 +587,8 @@ function disposeAllTestSamples(testId) {
 function populateTestDetailsModal(test) {
     const testInfoEl = document.querySelector('.test-info');
     const samplesTableEl = document.querySelector('.test-samples-table tbody');
+    
+    console.log("Test data received:", test);  // Debug output
     
     // Update title
     document.querySelector('#testDetailsModal .modal-title').textContent = `Test Details: ${test.TestNo || test.TestID}`;

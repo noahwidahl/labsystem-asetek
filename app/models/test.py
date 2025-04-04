@@ -15,18 +15,12 @@ class Test:
     @classmethod
     def from_dict(cls, data):
         test_type = data.get('type', '')
-        test_number = f"T{test_type}"
+        # Generate a timestamp-based test number if not using the predefined ones
+        current_time = datetime.now().strftime("%y%m%d%H%M")
+        test_number = f"T{current_time}"
         
-        # Generate test name based on type
-        test_name = ""
-        if "1234.5" in test_type:
-            test_name = "Pressure Test"
-        elif "2345.6" in test_type:
-            test_name = "Thermal Test"
-        elif "3456.7" in test_type:
-            test_name = "Durability Test"
-        else:
-            test_name = f"Test {test_type.upper()}"
+        # Use the input directly as the test name
+        test_name = f"{test_type} Test"
         
         return cls(
             test_no=test_number,
@@ -48,13 +42,34 @@ class Test:
         )
     
     def to_dict(self):
-        return {
-            'TestID': self.id,
-            'TestNo': self.test_no,
-            'TestName': self.test_name,
-            'Description': self.description,
-            'CreatedDate': self.created_date.strftime('%Y-%m-%d %H:%M:%S') if self.created_date else None,
-            'UserID': self.user_id,
-            'Status': self.status,
-            'Samples': self.samples
-        }
+        try:
+            # Handle potential None values safely
+            date_str = None
+            if self.created_date:
+                try:
+                    date_str = self.created_date.strftime('%Y-%m-%d %H:%M:%S')
+                except Exception as e:
+                    print(f"Date formatting error: {e}, using string representation instead")
+                    date_str = str(self.created_date)
+            
+            # Print debug info about samples
+            print(f"Samples type: {type(self.samples)}, value: {self.samples}")
+            
+            return {
+                'TestID': self.id,
+                'TestNo': self.test_no,
+                'TestName': self.test_name,
+                'Description': self.description,
+                'CreatedDate': date_str,
+                'UserID': self.user_id,
+                'Status': self.status,
+                'Samples': self.samples or []  # Ensure samples is never None
+            }
+        except Exception as e:
+            print(f"Error in Test.to_dict(): {e}")
+            # Return minimal dict if conversion fails
+            return {
+                'TestID': str(self.id) if self.id else None,
+                'TestNo': str(self.test_no) if self.test_no else None,
+                'Error': f"Failed to convert test to dictionary: {str(e)}"
+            }

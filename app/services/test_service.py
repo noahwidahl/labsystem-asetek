@@ -371,14 +371,24 @@ class TestService:
             
     def get_test_details(self, test_id):
         """Get detailed information about a test including all test samples"""
+        # Add debug output
+        print(f"Service: Getting test details for test_id: {test_id} (type: {type(test_id)})")
+        
+        # Get all tests first to debug
+        debug_query = "SELECT TestID, TestNo FROM Test"
+        debug_result, _ = self.db.execute_query(debug_query)
+        print(f"Service: All tests in database: {debug_result}")
+        
         # Check if test_id is an integer or a string
         try:
             test_id_int = int(test_id)
             # If it's an integer, search by TestID
+            print(f"Service: Parsed test_id as integer: {test_id_int}")
             query = "SELECT TestID, TestNo FROM Test WHERE TestID = %s"
             params = (test_id_int,)
         except ValueError:
             # If it's not an integer, search by TestNo
+            print(f"Service: Using test_id as string: {test_id}")
             query = "SELECT TestID, TestNo FROM Test WHERE TestNo = %s"
             params = (test_id,)
         
@@ -418,14 +428,13 @@ class TestService:
         else:
             test.user_name = "Unknown"
         
-        # Get all samples in the test
+        # Get all samples in the test - without SerialNumber field that doesn't exist
         samples_query = """
             SELECT 
                 ts.TestSampleID,
                 ts.SampleID,
                 ts.TestIteration,
                 ts.GeneratedIdentifier,
-                ts.SerialNumber,
                 s.Description,
                 s.PartNumber
             FROM TestSample ts
@@ -443,9 +452,8 @@ class TestService:
                 'OriginalSampleID': row[1],
                 'TestIteration': row[2],
                 'GeneratedIdentifier': row[3],
-                'SerialNumber': row[4] if len(row) > 4 else None,
-                'Description': row[5] if len(row) > 5 else "Unknown",
-                'PartNumber': row[6] if len(row) > 6 else None
+                'Description': row[4] if len(row) > 4 else "Unknown",
+                'PartNumber': row[5] if len(row) > 5 else None
             })
         
         test.samples = samples

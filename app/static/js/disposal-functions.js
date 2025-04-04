@@ -582,15 +582,15 @@ function confirmAction(message, onConfirm) {
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header bg-warning">
-                    <h5 class="modal-title">Bekræft handling</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Luk"></button>
+                    <h5 class="modal-title">Confirm Action</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <p>${message}</p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuller</button>
-                    <button type="button" class="btn btn-primary" id="confirmActionBtn">Bekræft</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmActionBtn">Confirm</button>
                 </div>
             </div>
         </div>
@@ -647,85 +647,11 @@ function showErrorMessageDisposal(message) {
     }, 5000);
 }
 
-// Funktion til at vise test detaljer
-function showTestDetails(testId) {
-    fetch(`/api/testDetails/${testId}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.test) {
-                populateTestDetailsModal(data.test);
-                const modal = new bootstrap.Modal(document.getElementById('testDetailsModal'));
-                modal.show();
-            } else {
-                throw new Error("Ingen testdata returneret");
-            }
-        })
-        .catch(error => {
-            showErrorMessageDisposal(`Could not fetch test details: ${error}`);
-        });
-}
+// This function will be handled by test-functions.js instead
+// Removed to avoid conflict with the same function in test-functions.js
 
-// Funktion til at populere test detaljer i modal
-function populateTestDetailsModal(test) {
-    const modal = document.getElementById('testDetailsModal');
-    if (!modal) return;
-    
-    // Find elementer i modalen
-    const titleEl = modal.querySelector('.modal-title');
-    const testInfoEl = modal.querySelector('.test-info');
-    const samplesTableEl = modal.querySelector('.test-samples-table');
-    
-    // Opdater titel
-    if (titleEl) {
-        titleEl.textContent = `Test Detaljer: ${test.TestNo || test.TestID}`;
-    }
-    
-    // Opdater test info
-    if (testInfoEl) {
-        testInfoEl.innerHTML = `
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <p><strong>Test Navn:</strong> ${test.TestName || 'Ikke angivet'}</p>
-                    <p><strong>Test Nummer:</strong> ${test.TestNo || test.TestID}</p>
-                    <p><strong>Oprettet:</strong> ${test.CreatedDate || 'Ukendt'}</p>
-                </div>
-                <div class="col-md-6">
-                    <p><strong>Ejer:</strong> ${test.UserName || 'Ukendt'}</p>
-                    <p><strong>Status:</strong> <span class="badge bg-primary">Aktiv</span></p>
-                    <p><strong>Antal Prøver:</strong> ${test.Samples ? test.Samples.length : 0}</p>
-                </div>
-            </div>
-        `;
-    }
-    
-    // Opdater prøvetabel
-    if (samplesTableEl && test.Samples) {
-        const tableBody = samplesTableEl.querySelector('tbody');
-        if (tableBody) {
-            tableBody.innerHTML = '';
-            
-            if (test.Samples.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Ingen prøver i denne test</td></tr>';
-            } else {
-                test.Samples.forEach((sample, index) => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${sample.GeneratedIdentifier || `${test.TestNo}_${index + 1}`}</td>
-                        <td>${sample.Description || 'Ikke angivet'}</td>
-                        <td>${sample.OriginalSampleID || 'N/A'}</td>
-                        <td>
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-outline-primary">Detaljer</button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="disposeSample('${sample.TestSampleID}')">Kassér</button>
-                            </div>
-                        </td>
-                    `;
-                    tableBody.appendChild(row);
-                });
-            }
-        }
-    }
-}
+// This function will be handled by test-functions.js instead
+// Removed to avoid conflict with the same function in test-functions.js
 
 // Initialiser funktioner når siden indlæses
 document.addEventListener('DOMContentLoaded', function() {

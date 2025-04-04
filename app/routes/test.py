@@ -118,13 +118,34 @@ def init_test(blueprint, mysql):
     @blueprint.route('/api/testDetails/<test_id>')
     def get_test_details(test_id):
         try:
+            # Print request info for debugging
+            print(f"API: Request for test details with test_id={test_id}")
+            
             # Get test details from service
             test = test_service.get_test_details(test_id)
             
-            # Convert to JSON-friendly format
-            test_dict = test.to_dict()
-            test_dict['UserName'] = getattr(test, 'user_name', 'Unknown')
-            test_dict['History'] = getattr(test, 'history', [])
+            if not test:
+                print(f"API: No test found with ID {test_id}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Test not found'
+                }), 404
+                
+            # Convert to JSON-friendly format - handle Nones to avoid serialization issues
+            test_dict = {
+                'TestID': test.id,
+                'TestNo': test.test_no,
+                'TestName': test.test_name or f"Test {test.id}",
+                'Description': test.description or "",
+                'CreatedDate': test.created_date.strftime('%Y-%m-%d %H:%M:%S') if test.created_date else None,
+                'UserID': test.user_id,
+                'Status': test.status or "Active",
+                'UserName': getattr(test, 'user_name', 'Unknown'),
+                'Samples': getattr(test, 'samples', []),
+                'History': getattr(test, 'history', [])
+            }
+            
+            print(f"API: Returning test details: {test_dict}")
             
             return jsonify({
                 'success': True,
@@ -134,7 +155,11 @@ def init_test(blueprint, mysql):
             print(f"API error getting test details: {e}")
             import traceback
             traceback.print_exc()
-            return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({
+                'success': False, 
+                'error': str(e),
+                'error_type': str(type(e).__name__)
+            }), 500
             
     @blueprint.route('/api/disposeSample/<test_sample_id>', methods=['POST'])
     def dispose_sample(test_sample_id):
