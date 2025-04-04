@@ -49,6 +49,236 @@ class TestService:
         
         return tests
     
+    def create_test_iteration(self, test_data, user_id, original_test_id):
+        """Create a new iteration of an existing test - completely separate method"""
+        samples_added = 0
+        db_test_id = None
+        
+        try:
+            # Get the exact test number to use - this was generated in the route
+            test_no = test_data.get('exact_test_number')
+            
+            if not test_no:
+                raise ValueError("Missing exact test number for iteration")
+            
+            print(f"Creating test iteration with EXACT number: {test_no}")
+            
+            # Validate that this is a proper test number format (T11.2 etc)
+            import re
+            match = re.search(r'T(\d+)\.(\d+)', test_no)
+            if not match:
+                raise ValueError(f"Invalid test number format for iteration: {test_no}")
+            
+            # Extract the base number and new iteration
+            base_num = match.group(1)
+            iter_num = int(match.group(2))
+            print(f"Parsed test number: base={base_num}, iteration={iter_num}")
+            
+            # Double-check original test number if provided
+            if test_data.get('original_test_no'):
+                orig_match = re.search(r'T(\d+)\.(\d+)', test_data.get('original_test_no'))
+                if orig_match:
+                    orig_base = orig_match.group(1)
+                    orig_iter = int(orig_match.group(2))
+                    
+                    # Validate base number matches and iteration is incremented by 1
+                    if orig_base != base_num:
+                        print(f"WARNING: Base numbers don't match: {orig_base} vs {base_num}")
+                    
+                    if iter_num != orig_iter + 1:
+                        print(f"WARNING: Iteration number should be {orig_iter + 1}, but got {iter_num}")
+            
+            # Step 1: Create the Test object
+            test = Test.from_dict(test_data)
+            test.test_no = test_no  # Use the exact number
+            test.user_id = user_id
+            
+            print(f"Creating test iteration: {test_no}, user_id: {user_id}")
+            
+            # Step 2: Insert the test record
+            with self.db.transaction() as cursor:
+                cursor.execute("""
+                    INSERT INTO Test (TestNo, TestName, Description, CreatedDate, UserID)
+                    VALUES (%s, %s, %s, NOW(), %s)
+                """, (
+                    test.test_no,
+                    test.test_name,
+                    test.description,
+                    test.user_id
+                ))
+                
+                # Get the database ID of the created test
+                db_test_id = cursor.lastrowid
+                print(f"Created test iteration with DB ID: {db_test_id}")
+                
+                # Add a special history entry for iteration tracking
+                cursor.execute("""
+                    INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
+                    VALUES (NOW(), %s, %s, %s, %s)
+                """, (
+                    'Test iteration created',
+                    user_id,
+                    db_test_id,
+                    f"Test {test_no} is an iteration of test ID #{original_test_id}"
+                ))
+            
+            # Step 3: Process samples if there are any
+            if test_data.get('samples'):
+                for sample_idx, sample_data in enumerate(test_data.get('samples')):
+                    sample_id = sample_data.get('id')
+                    amount = int(sample_data.get('amount', 1))
+                    
+                    # Get sample info
+                    sample_query = """
+                        SELECT s.IsUnique, s.PartNumber, s.Description
+                        FROM Sample s
+                        WHERE s.SampleID = %s
+                    """
+                    sample_result, _ = self.db.execute_query(sample_query, (sample_id,))
+                    
+                    is_unique = sample_result[0][0] if sample_result and len(sample_result) > 0 else 0
+                    part_number = sample_result[0][1] if sample_result and len(sample_result) > 0 and len(sample_result[0]) > 1 else None
+                    description = sample_result[0][2] if sample_result and len(sample_result) > 0 and len(sample_result[0]) > 2 else None
+                    
+                    # Handle unique samples differently if required
+                    if is_unique:
+                        # Generate placeholder serial numbers
+                        current_time = datetime.now().strftime("%Y%m%d%H%M%S")
+                        serial_numbers = [f"SN-{sample_id}-{current_time}-{i+1}" for i in range(amount)]
+                        
+                        # If serial numbers are provided in the request, use them
+                        selected_serials = sample_data.get('serialNumbers', [])
+                        serials_to_use = selected_serials if selected_serials else serial_numbers[:amount]
+                        
+                        for serial_idx, serial_number in enumerate(serials_to_use[:amount]):
+                            # Process each unique sample in its own transaction
+                            with self.db.transaction() as cursor:
+                                # Generate identification ID according to documentation format: "T1234.5_1"
+                                # The format is TestID_SequentialNumber where sequential number is unique per test
+                                base_identifier = f"{test_no}_{samples_added + 1}"
+                                test_sample_id = base_identifier
+                                
+                                # Add the sample to the test
+                                try:
+                                    cursor.execute("""
+                                        INSERT INTO TestSample (SampleID, TestID, TestIteration, GeneratedIdentifier, SerialNumber)
+                                        VALUES (%s, %s, %s, %s, %s)
+                                    """, (
+                                        sample_id,
+                                        db_test_id,
+                                        samples_added + 1,
+                                        test_sample_id,
+                                        serial_number
+                                    ))
+                                except Exception as e:
+                                    # If SerialNumber column doesn't exist, try without it
+                                    if "Unknown column 'SerialNumber'" in str(e):
+                                        cursor.execute("""
+                                            INSERT INTO TestSample (SampleID, TestID, TestIteration, GeneratedIdentifier)
+                                            VALUES (%s, %s, %s, %s)
+                                        """, (
+                                            sample_id,
+                                            db_test_id,
+                                            samples_added + 1,
+                                            test_sample_id
+                                        ))
+                                    else:
+                                        # Re-raise if it's a different error
+                                        raise
+                                
+                                # Log in history that this specific unit was used in test
+                                cursor.execute("""
+                                    INSERT INTO History (Timestamp, ActionType, UserID, SampleID, TestID, Notes)
+                                    VALUES (NOW(), %s, %s, %s, %s, %s)
+                                """, (
+                                    'Sample added to test',
+                                    user_id,
+                                    sample_id,
+                                    db_test_id,
+                                    f"Sample with S/N {serial_number} added to test iteration {test_no} as {test_sample_id}"
+                                ))
+                            
+                            samples_added += 1
+                    else:
+                        # For generic samples (like O-rings), process each in its own small transaction
+                        for i in range(amount):
+                            with self.db.transaction() as cursor:
+                                # Generate identification ID according to documentation format: "T1234.5_1"
+                                # The format is TestID_SequentialNumber where sequential number is unique per test
+                                base_identifier = f"{test_no}_{samples_added + 1}"
+                                test_sample_id = base_identifier
+                                
+                                # Check if this identifier already exists
+                                cursor.execute("""
+                                    SELECT COUNT(*) FROM TestSample 
+                                    WHERE GeneratedIdentifier = %s
+                                """, (test_sample_id,))
+                                
+                                count = cursor.fetchone()[0]
+                                
+                                # If it already exists, add a unique suffix
+                                if count > 0:
+                                    timestamp = int(datetime.now().timestamp() * 1000)
+                                    test_sample_id = f"{base_identifier}_{timestamp % 1000}"
+                                
+                                cursor.execute("""
+                                    INSERT INTO TestSample (SampleID, TestID, TestIteration, GeneratedIdentifier)
+                                    VALUES (%s, %s, %s, %s)
+                                """, (
+                                    sample_id,
+                                    db_test_id,
+                                    samples_added + 1,
+                                    test_sample_id
+                                ))
+                                
+                                # Log in history
+                                cursor.execute("""
+                                    INSERT INTO History (Timestamp, ActionType, UserID, SampleID, TestID, Notes)
+                                    VALUES (NOW(), %s, %s, %s, %s, %s)
+                                """, (
+                                    'Sample added to test',
+                                    user_id,
+                                    sample_id,
+                                    db_test_id,
+                                    f"{description if description else 'Sample'} added to test iteration {test_no} as {test_sample_id}"
+                                ))
+                            
+                            samples_added += 1
+                        
+                        # Update storage amount in a separate transaction
+                        with self.db.transaction() as cursor:
+                            cursor.execute("""
+                                UPDATE SampleStorage 
+                                SET AmountRemaining = AmountRemaining - %s
+                                WHERE SampleID = %s AND AmountRemaining >= %s
+                                LIMIT 1
+                            """, (amount, sample_id, amount))
+            
+            # Log the test creation with special iteration flag
+            with self.db.transaction() as cursor:
+                cursor.execute("""
+                    INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
+                    VALUES (NOW(), %s, %s, %s, %s)
+                """, (
+                    'Test created',
+                    user_id,
+                    db_test_id,
+                    f"Test iteration {test_no} created with {samples_added} samples (iteration of test #{original_test_id})"
+                ))
+            
+            return {
+                'success': True, 
+                'test_id': test_no,
+                'test_db_id': db_test_id,
+                'sample_count': samples_added,
+                'is_iteration': True
+            }
+        except Exception as e:
+            print(f"Error in create_test_iteration: {e}")
+            import traceback
+            traceback.print_exc()
+            raise e
+    
     def create_test(self, test_data, user_id):
         """Create a new test with samples"""
         samples_added = 0
@@ -56,16 +286,23 @@ class TestService:
         test_no = None
         
         try:
-            # Step 1: Get the next test number - do this outside of the main transaction
-            # Using parameter for LIKE to avoid % escaping issues
-            query = """
-                SELECT TestNo FROM Test 
-                WHERE TestNo LIKE ? 
-                ORDER BY TestID DESC LIMIT 1
-            """
-            # MySQLdb uses %s not ? for placeholders, so replace it
-            query = query.replace("?", "%s")
-            result, _ = self.db.execute_query(query, ('T%',))
+            # Check if we have an exact test number to use (should not happen in normal test creation)
+            if test_data.get('exact_test_number'):
+                test_no = test_data.get('exact_test_number')
+                print(f"WARNING: Using exact test number in regular create_test: {test_no}")
+                
+            # Regular test number generation if no exact number was provided
+            if not test_no:
+                # Step 1: Get the next test number - do this outside of the main transaction
+                # Using parameter for LIKE to avoid % escaping issues
+                query = """
+                    SELECT TestNo FROM Test 
+                    WHERE TestNo LIKE ? 
+                    ORDER BY TestID DESC LIMIT 1
+                """
+                # MySQLdb uses %s not ? for placeholders, so replace it
+                query = query.replace("?", "%s")
+                result, _ = self.db.execute_query(query, ('T%',))
             
             # Process test number logic to match documentation format T1234.5
             # According to documentation:
@@ -73,7 +310,11 @@ class TestService:
             # - .5 is the iteration number
             
             # First, check if there are any existing tests
-            if result and len(result) > 0 and result[0][0]:
+            # This will only run if we did the query above
+            if test_no:
+                # Already have a test_no from exact_test_number parameter
+                print(f"Using provided exact test number: {test_no}")
+            elif result and len(result) > 0 and result[0][0]:
                 last_test_no = result[0][0]
                 print(f"Last test number: {last_test_no}")
                 
@@ -92,71 +333,65 @@ class TestService:
                         test_type = test_data.get('type', '')
                         test_description = test_data.get('description', '')
                         
-                        # Create a new test number by default
-                        test_number = base_number + 1
-                        iteration = 1
-                        
-                        # Check if the user explicitly requested a new iteration of an existing test
-                        # Check if this is explicitly marked as an iteration
-                        is_iteration = test_data.get('is_iteration', False)
-                        
-                        # Check if an original test ID was provided
+                        # Determine if this is a new test or an iteration
                         original_test_id = test_data.get('original_test_id')
                         
-                        # Also check for keywords in the description
-                        has_iteration_keywords = test_description and ('iteration' in test_description.lower() or 
-                                               'fortsættelse' in test_description.lower() or
-                                               'fortsaettelse' in test_description.lower() or
-                                               'iter.' in test_description.lower())
-                        
-                        # If original_test_id is provided, use that directly
                         if original_test_id:
+                            # THIS IS AN ITERATION - "Add Iteration" was used
+                            print(f"Creating iteration based on original test ID: {original_test_id}")
+                            
                             # Get the original test information
-                            original_query = "SELECT TestNo, TestName FROM Test WHERE TestID = %s"
+                            original_query = """
+                                SELECT t.TestID, t.TestNo, t.TestName, t.Description, t.UserID
+                                FROM Test t 
+                                WHERE t.TestID = %s
+                            """
                             original_result, _ = self.db.execute_query(original_query, (original_test_id,))
                             
                             if original_result and len(original_result) > 0:
-                                original_test_no = original_result[0][0]
+                                original_test_id = original_result[0][0]
+                                original_test_no = original_result[0][1]
+                                original_test_name = original_result[0][2]
+                                
+                                # Make sure to use the same test name as the original test
+                                if not test_data.get('type'):
+                                    test_data['type'] = original_test_name
                                 
                                 # Extract test number and iteration from the original
                                 original_match = re.search(r'T(\d+)\.(\d+)', original_test_no)
                                 if original_match:
-                                    # Use the same test number but increment the iteration
-                                    test_number = int(original_match.group(1))
-                                    last_iter_query = """
-                                        SELECT MAX(CAST(SUBSTRING_INDEX(TestNo, '.', -1) AS UNSIGNED))
-                                        FROM Test
-                                        WHERE TestNo LIKE 'T%s.%%'
-                                    """
-                                    last_iter_result, _ = self.db.execute_query(last_iter_query, (test_number,))
+                                    # Extract test number and current iteration from the original test
+                                    # Critical: Override the base_number and iteration with values from original test
+                                    test_number = int(original_match.group(1))      # e.g., 11 from T11.1
+                                    current_iteration = int(original_match.group(2)) # e.g., 1 from T11.1
                                     
-                                    if last_iter_result and last_iter_result[0][0]:
-                                        iteration = int(last_iter_result[0][0]) + 1
+                                    # Simply increment the iteration number of the SAME test
+                                    # T11.1 → T11.2
+                                    iteration = current_iteration + 1
+                                    
+                                    print(f"Creating new iteration #{iteration} of test T{test_number}")
+                                    
+                                    # Store the parent test ID as part of the test description for tracking
+                                    # This will help track the relationship between iterations
+                                    if test_data.get('description'):
+                                        test_data['description'] += f" [Iteration of test #{original_test_id}]"
                                     else:
-                                        iteration = 1
+                                        test_data['description'] = f"Iteration of test #{original_test_id}"
                                     
-                                    print(f"Creating iteration {iteration} of test T{test_number} from original test {original_test_no}")
-                        
-                        # If either condition is true and we don't have an original_test_id, treat as iteration
-                        elif is_iteration or has_iteration_keywords:
-                            # User wants to create a new iteration of an existing test
-                            # Get the original test's information
-                            iteration_query = """
-                                SELECT TestID, TestNo, TestName FROM Test 
-                                WHERE TestNo LIKE %s
-                                ORDER BY TestID DESC
-                            """
-                            # Look for tests with same base number (T1234.%)
-                            iteration_pattern = f"T{base_number}.%"
-                            iteration_result, _ = self.db.execute_query(iteration_query, (iteration_pattern,))
-                            
-                            if iteration_result and len(iteration_result) > 0:
-                                # Found the original test, make a new iteration
-                                test_number = base_number
-                                iteration = iteration + 1
-                                print(f"Creating new iteration {iteration} of test T{test_number}")
+                                    # No need to set test_number again - we've overridden it correctly
+                                else:
+                                    print(f"Original test number format not recognized: {original_test_no}")
+                                    # Fallback to creating a new test
+                                    test_number = base_number + 1
+                                    iteration = 1
+                            else:
+                                print(f"Original test not found: {original_test_id}")
+                                # Fallback to creating a new test
+                                test_number = base_number + 1
+                                iteration = 1 
                         else:
-                            # No iterations found (shouldn't happen), use next number
+                            # THIS IS A NEW TEST (not an iteration)
+                            print("Creating new test (not an iteration)")
                             test_number = base_number + 1
                             iteration = 1
                     else:
@@ -178,15 +413,19 @@ class TestService:
                     print(f"Error parsing last test number: {e}")
                     test_number = 1  # Start with 1 for new format
                     iteration = 1  # Start with iteration 1
-            else:
+            elif not test_no:
                 # No existing tests, start with 1
                 test_number = 1
                 iteration = 1
             
             # Format according to documentation: T1234.5 
             # Where 1234 is sequential test number and .5 is iteration
-            test_no = f"T{test_number}.{iteration}"
-            print(f"Generated test number: {test_no}")
+            # Only set test_no if it wasn't already set (by direct iteration)
+            if not test_no:
+                test_no = f"T{test_number}.{iteration}"
+                print(f"GENERATED TEST NUMBER: {test_no} (test_number={test_number}, iteration={iteration})")
+            
+            print(f"FINAL TEST NUMBER: {test_no}")
             
             # Step 2: Create the Test object
             test = Test.from_dict(test_data)
@@ -285,8 +524,7 @@ class TestService:
                                     user_id,
                                     sample_id,
                                     db_test_id,
-                                    # Double %% to escape % in format strings when using periods
-                                    f"Sample with S/N {serial_number} added to test T{test_number}.1 as {test_sample_id}"
+                                    f"Sample with S/N {serial_number} added to test {test_no} as {test_sample_id}"
                                 ))
                             
                             samples_added += 1
@@ -331,8 +569,7 @@ class TestService:
                                     user_id,
                                     sample_id,
                                     db_test_id,
-                                    # Double %% to escape % in format strings when using periods
-                                    f"{description if description else 'Sample'} added to test T{test_number}.1 as {test_sample_id}"
+                                    f"{description if description else 'Sample'} added to test {test_no} as {test_sample_id}"
                                 ))
                             
                             samples_added += 1
@@ -348,6 +585,29 @@ class TestService:
             
             # Step 5: Log the test creation in a final transaction
             with self.db.transaction() as cursor:
+                # Check if this is an iteration of an existing test
+                original_test_id = test_data.get('original_test_id')
+                
+                # Create the standard history entry
+                notes = f"Test {test_no} created with {samples_added} samples"
+                
+                # If this is an iteration, add a special history entry to track the relationship
+                if original_test_id:
+                    # Add an additional entry specific to the iteration relationship
+                    cursor.execute("""
+                        INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
+                        VALUES (NOW(), %s, %s, %s, %s)
+                    """, (
+                        'Test iteration created',
+                        user_id,
+                        db_test_id,
+                        f"Test {test_no} is an iteration of test #{original_test_id}"
+                    ))
+                    
+                    # Update the notes for the main history entry
+                    notes += f" (iteration of test #{original_test_id})"
+                
+                # Add the main history entry for test creation
                 cursor.execute("""
                     INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
                     VALUES (NOW(), %s, %s, %s, %s)
@@ -355,8 +615,7 @@ class TestService:
                     'Test created',
                     user_id,
                     db_test_id,
-                    # Double %% to escape % in format strings when using periods
-                    f"Test T{test_number}.1 created with {samples_added} samples"
+                    notes
                 ))
             
             return {
@@ -563,10 +822,11 @@ class TestService:
             related_query = """
                 SELECT TestID, TestNo, TestName, Description, CreatedDate, UserID
                 FROM Test
-                WHERE TestNo LIKE 'T%s.%%'
+                WHERE TestNo LIKE %s
                 ORDER BY CAST(SUBSTRING_INDEX(TestNo, '.', -1) AS UNSIGNED)
             """
-            related_result, _ = self.db.execute_query(related_query, (base_number,))
+            pattern = f"T{base_number}.%"
+            related_result, _ = self.db.execute_query(related_query, (pattern,))
             
             if related_result and len(related_result) > 0:
                 for row in related_result:

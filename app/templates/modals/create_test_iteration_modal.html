@@ -1,17 +1,28 @@
-<!-- Test Creation Modal -->
-<div class="modal" id="createTestModal" tabindex="-1">
+<!-- Test Iteration Modal -->
+<div class="modal" id="createTestIterationModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+            <div class="modal-header bg-success text-white">
                 <h5 class="modal-title">
-                    <i class="fas fa-flask me-2"></i>
-                    Create New Test
+                    <i class="fas fa-sync-alt me-2"></i>
+                    Create Test Iteration
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <!-- Regular Test Mode Only -->
-                <input type="hidden" id="testMode" value="regular">
+                <!-- Iteration Info Banner -->
+                <div class="alert alert-success mb-4" id="iterationInfoBanner">
+                    <div class="d-flex align-items-center">
+                        <div class="me-3">
+                            <i class="fas fa-info-circle fa-2x"></i>
+                        </div>
+                        <div>
+                            <strong>You are creating a test iteration</strong><br>
+                            <span id="iterationOriginalTest">Original test: </span><br>
+                            <span id="iterationNewNumber">New iteration: </span>
+                        </div>
+                    </div>
+                </div>
                 
                 <!-- Test Information -->
                 <div class="card mb-4">
@@ -23,24 +34,28 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label class="fw-bold">Test Type</label>
-                                    <input type="text" class="form-control" name="testType" placeholder="Enter test type (e.g. Pressure, Thermal, etc.)" required>
-                                    <small class="text-muted">Enter the type of test to perform</small>
+                                    <input type="text" class="form-control" id="iterationTestType" name="iterationTestType" readonly>
+                                    <small class="text-muted">Same as original test</small>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label class="fw-bold">Test Owner</label>
                                     <input type="text" class="form-control" readonly value="{{ current_user.Name }}" />
-                                    <input type="hidden" name="testOwner" value="{{ current_user.UserID }}" />
+                                    <input type="hidden" name="iterationTestOwner" value="{{ current_user.UserID }}" />
                                     <small class="text-muted">The person responsible for the test</small>
                                 </div>
                             </div>
                         </div>
                         <div class="form-group mb-3">
                             <label class="fw-bold">Test Description</label>
-                            <textarea class="form-control" name="testDescription" rows="2" placeholder="Enter a brief description of the test (optional)"></textarea>
-                            <small class="text-muted">Description for this test</small>
+                            <textarea class="form-control" id="iterationTestDescription" name="iterationTestDescription" rows="2"></textarea>
+                            <small class="text-muted">Description for this iteration</small>
                         </div>
+                        
+                        <!-- Hidden fields for iteration data -->
+                        <input type="hidden" id="originalTestId" name="originalTestId">
+                        <input type="hidden" id="originalTestNo" name="originalTestNo">
                     </div>
                 </div>
                 
@@ -56,17 +71,17 @@
                                     <span class="input-group-text">
                                         <i class="fas fa-search"></i>
                                     </span>
-                                    <input type="text" class="form-control" id="sampleSearchInput" placeholder="Search for samples...">
+                                    <input type="text" class="form-control" id="iterationSampleSearchInput" placeholder="Search for samples...">
                                 </div>
                             </div>
-                            <div class="available-samples">
+                            <div class="iteration-available-samples">
                                 <div class="table-responsive">
                                     <table class="table table-hover">
                                         <thead class="table-light">
                                             <tr>
                                                 <th style="width: 40px">
                                                     <div class="text-center">
-                                                        <input type="checkbox" id="selectAll" title="Select all samples">
+                                                        <input type="checkbox" id="iterationSelectAll" title="Select all samples">
                                                     </div>
                                                 </th>
                                                 <th>ID</th>
@@ -88,9 +103,9 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="createTestBtn" onclick="createTest()">
-                    <i class="fas fa-plus-circle me-1"></i>
-                    Create Test
+                <button type="button" class="btn btn-success" id="createIterationBtn" onclick="createTestIteration()">
+                    <i class="fas fa-sync-alt me-1"></i>
+                    Create Test Iteration
                 </button>
             </div>
         </div>
@@ -100,11 +115,11 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Add search functionality
-        const searchInput = document.getElementById('sampleSearchInput');
+        const searchInput = document.getElementById('iterationSampleSearchInput');
         if (searchInput) {
             searchInput.addEventListener('input', function() {
                 const searchTerm = this.value.toLowerCase();
-                const rows = document.querySelectorAll('.available-samples tbody tr');
+                const rows = document.querySelectorAll('.iteration-available-samples tbody tr');
                 
                 rows.forEach(row => {
                     const text = row.textContent.toLowerCase();
@@ -114,10 +129,10 @@
         }
         
         // "Select all" checkbox
-        const selectAllCheckbox = document.getElementById('selectAll');
+        const selectAllCheckbox = document.getElementById('iterationSelectAll');
         if (selectAllCheckbox) {
             selectAllCheckbox.addEventListener('change', function() {
-                const checkboxes = document.querySelectorAll('input[name="selectedSamples"]:not(:disabled)');
+                const checkboxes = document.querySelectorAll('.iteration-available-samples input[name="selectedSamples"]:not(:disabled)');
                 
                 // Find visible rows (not filtered out by search)
                 const visibleCheckboxes = Array.from(checkboxes).filter(checkbox => {

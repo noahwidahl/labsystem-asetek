@@ -80,61 +80,50 @@ function showWarningMessage(message) {
     }, 4000);
 }
 
-// Function to add an iteration to an existing test
-function addTestIteration(testId, testNo, testName) {
-    // Show the create test modal but pre-populate it for an iteration
-    const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
+// Function to show the dedicated test iteration modal
+function showCreateTestIterationModal(testId, testNo, testName) {
+    console.log(`DEBUG: showCreateTestIterationModal called with testId=${testId}, testNo=${testNo}, testName=${testName}`);
     
-    // Pre-fill the test type field with the original test's name
-    const testTypeInput = document.querySelector('[name="testType"]');
-    if (testTypeInput) {
-        testTypeInput.value = testName || "Unknown";
+    // Get the dedicated test iteration modal
+    const modal = new bootstrap.Modal(document.getElementById('createTestIterationModal'));
+    
+    // Fill in test information
+    document.getElementById('iterationTestType').value = testName || "Unknown";
+    document.getElementById('iterationTestDescription').value = `Iteration of test ${testNo}`;
+    
+    // Set hidden fields
+    document.getElementById('originalTestId').value = testId;
+    document.getElementById('originalTestNo').value = testNo;
+    
+    // Show iteration information in the banner
+    // Parse the test number to show next iteration
+    const match = testNo.match(/T(\d+)\.(\d+)/);
+    let nextIterationNo = testNo;
+    
+    if (match) {
+        const baseNum = match[1];
+        const iterNum = parseInt(match[2]);
+        nextIterationNo = `T${baseNum}.${iterNum + 1}`;
     }
     
-    // Add the iteration info to the description
-    const testDescriptionInput = document.querySelector('[name="testDescription"]');
-    if (testDescriptionInput) {
-        testDescriptionInput.value = `Iteration of test ${testNo}`;
-    }
+    document.getElementById('iterationOriginalTest').textContent = `Original test: ${testNo}`;
+    document.getElementById('iterationNewNumber').textContent = `New iteration: ${nextIterationNo}`;
     
-    // Set a hidden field with the original test ID
-    let originalTestField = document.getElementById('originalTestId');
-    if (!originalTestField) {
-        originalTestField = document.createElement('input');
-        originalTestField.type = 'hidden';
-        originalTestField.id = 'originalTestId';
-        originalTestField.name = 'originalTestId';
-        document.querySelector('#createTestModal .modal-body').appendChild(originalTestField);
-    }
-    originalTestField.value = testId;
+    // Log debug information
+    console.log(`Preparing iteration of test ${testNo} (ID: ${testId})`);
+    console.log(`Next iteration number will be: ${nextIterationNo}`);
     
-    // Add an info message to the modal
-    const infoBox = document.createElement('div');
-    infoBox.className = 'alert alert-info mb-3';
-    infoBox.innerHTML = `
-        <strong>Creating iteration of test ${testNo}</strong>
-        <p>This will create a new set of samples for the existing test. The new samples will 
-        have identifiers that continue the sequence from the original test.</p>
-    `;
-    
-    // Add the info box at the top of the modal
-    const modalBody = document.querySelector('#createTestModal .modal-body');
-    modalBody.insertBefore(infoBox, modalBody.firstChild);
-    
-    // Update modal title
-    document.querySelector('#createTestModal .modal-title').textContent = `Add Iteration to Test ${testNo}`;
-    
-    // Now show the modal
+    // Show the modal
     modal.show();
     
     // Show loading state in table
-    const tableBody = document.querySelector('#createTestModal .available-samples tbody');
+    const tableBody = document.querySelector('#createTestIterationModal .iteration-available-samples tbody');
     if (tableBody) {
         tableBody.innerHTML = `
             <tr>
                 <td colspan="6" class="text-center">
                     <div class="d-flex justify-content-center my-3">
-                        <div class="spinner-border text-primary" role="status">
+                        <div class="spinner-border text-success" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
                     </div>
@@ -145,9 +134,9 @@ function addTestIteration(testId, testNo, testName) {
     }
     
     // Fetch available samples
-    fetchAvailableSamples()
+    fetchAvailableSamplesForIteration()
         .catch(error => {
-            console.error("Error fetching samples:", error);
+            console.error("Error fetching samples for iteration:", error);
             
             if (tableBody) {
                 tableBody.innerHTML = `
@@ -162,13 +151,269 @@ function addTestIteration(testId, testNo, testName) {
                 `;
             }
             
-            // Disable the create test button
-            const createTestBtn = document.getElementById('createTestBtn');
-            if (createTestBtn) {
-                createTestBtn.disabled = true;
-                createTestBtn.title = 'No samples available for testing';
+            // Disable the create button
+            const createBtn = document.getElementById('createIterationBtn');
+            if (createBtn) {
+                createBtn.disabled = true;
+                createBtn.title = 'No samples available for testing';
             }
         });
+}
+
+// Function to fetch available samples for iteration, using the same API endpoint
+function fetchAvailableSamplesForIteration() {
+    return fetch('/api/activeSamples')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Server responded with status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Always pass a valid array to populateIterationSampleTable
+                const samples = Array.isArray(data.samples) ? data.samples : [];
+                populateIterationSampleTable(samples);
+                return;
+            }
+            
+            // If we get here, there was an error in the response
+            throw new Error(data.error || "Unknown error");
+        });
+}
+
+// Function to populate the iteration sample table
+function populateIterationSampleTable(samples) {
+    const tableBody = document.querySelector('#createTestIterationModal .iteration-available-samples tbody');
+    if (!tableBody) return;
+    
+    // Clear the table
+    tableBody.innerHTML = '';
+    
+    // Set create button state
+    const createBtn = document.getElementById('createIterationBtn');
+    if (createBtn) {
+        if (samples.length === 0) {
+            createBtn.disabled = true;
+            createBtn.title = 'No samples available for testing';
+        } else {
+            createBtn.disabled = false;
+            createBtn.title = '';
+        }
+    }
+    
+    // Show message if no samples
+    if (samples.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center p-3">
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        No samples available for testing. Please register and store samples first.
+                    </div>
+                </td>
+            </tr>`;
+        return;
+    }
+    
+    // Populate the table with samples
+    samples.forEach(sample => {
+        const row = document.createElement('tr');
+        
+        // Determine if this is a unique sample with serial numbers
+        const isUnique = sample.IsUnique === 1;
+        const hasSerialNumbers = sample.SerialNumbersList && sample.SerialNumbersList.length > 0;
+        
+        // Create base row HTML
+        let rowHtml = `
+            <td>
+                <input type="checkbox" name="selectedSamples" value="${sample.SampleID}" data-unique="${isUnique ? 1 : 0}">
+            </td>
+            <td>${sample.SampleIDFormatted}</td>
+            <td>${sample.PartNumber || '-'}</td>
+            <td>${sample.Description}</td>
+            <td>${sample.LocationName || 'Unknown'}</td>
+        `;
+        
+        // Different input for amount based on sample type
+        if (isUnique && hasSerialNumbers) {
+            // For unique samples with serial numbers, offer dropdowns instead of amount
+            rowHtml += `
+                <td>
+                    <div class="serial-number-selector" data-id="${sample.SampleID}" style="display: none;">
+                        <select class="form-select form-select-sm" multiple size="3">
+                            ${sample.SerialNumbersList.map(sn => `<option value="${sn}">${sn}</option>`).join('')}
+                        </select>
+                        <small class="form-text text-muted">Select serial numbers</small>
+                    </div>
+                    <div class="amount-selector">
+                        <input type="number" class="form-control form-control-sm" name="sampleAmount" 
+                               value="1" min="1" max="${sample.AmountRemaining}" data-id="${sample.SampleID}">
+                    </div>
+                </td>
+            `;
+        } else {
+            // For standard samples, just show amount selector
+            rowHtml += `
+                <td>
+                    <input type="number" class="form-control form-control-sm" name="sampleAmount" 
+                           value="1" min="1" max="${sample.AmountRemaining}" data-id="${sample.SampleID}">
+                </td>
+            `;
+        }
+        
+        row.innerHTML = rowHtml;
+        tableBody.appendChild(row);
+        
+        // Add event listeners for unique sample checkboxes
+        if (isUnique && hasSerialNumbers) {
+            const checkbox = row.querySelector('input[name="selectedSamples"]');
+            checkbox.addEventListener('change', function() {
+                const serialSelector = row.querySelector('.serial-number-selector');
+                const amountSelector = row.querySelector('.amount-selector');
+                
+                if (this.checked) {
+                    serialSelector.style.display = 'block';
+                    amountSelector.style.display = 'none';
+                } else {
+                    serialSelector.style.display = 'none';
+                    amountSelector.style.display = 'block';
+                }
+            });
+        }
+    });
+}
+
+// Function specifically for creating a test iteration
+function createTestIteration() {
+    // Get test information
+    const testType = document.getElementById('iterationTestType').value;
+    const testOwner = document.querySelector('[name="iterationTestOwner"]').value;
+    const testDescription = document.getElementById('iterationTestDescription').value;
+    
+    // Get critical iteration information
+    const originalTestId = document.getElementById('originalTestId').value;
+    const originalTestNo = document.getElementById('originalTestNo').value;
+    
+    // Validate input
+    if (!testType) {
+        showErrorMessage("Test type is missing");
+        return;
+    }
+    
+    if (!originalTestId || !originalTestNo) {
+        showErrorMessage("Original test information is missing");
+        return;
+    }
+    
+    // Get selected samples
+    const selectedSampleElements = document.querySelectorAll('#createTestIterationModal input[name="selectedSamples"]:checked');
+    if (selectedSampleElements.length === 0) {
+        showErrorMessage("Select at least one sample");
+        return;
+    }
+    
+    // Build array of selected samples with amount and serial numbers if applicable
+    const selectedSamples = Array.from(selectedSampleElements).map(element => {
+        const sampleId = element.value;
+        const isUnique = element.dataset.unique === "1";
+        let amount = 1;
+        let serialNumbers = [];
+        
+        // Handle unique samples differently
+        if (isUnique) {
+            // Look for serial number selector
+            const serialSelector = element.closest('tr').querySelector('.serial-number-selector select');
+            if (serialSelector) {
+                // Get selected serial numbers
+                serialNumbers = Array.from(serialSelector.selectedOptions).map(opt => opt.value);
+                
+                // If serial numbers are selected, set amount to match
+                if (serialNumbers.length > 0) {
+                    amount = serialNumbers.length;
+                } else {
+                    // Otherwise get the amount from input
+                    const amountInput = document.querySelector(`#createTestIterationModal input[name="sampleAmount"][data-id="${sampleId}"]`);
+                    amount = amountInput ? parseInt(amountInput.value) || 1 : 1;
+                }
+            }
+        } else {
+            // Standard samples just use amount
+            const amountInput = document.querySelector(`#createTestIterationModal input[name="sampleAmount"][data-id="${sampleId}"]`);
+            amount = amountInput ? parseInt(amountInput.value) || 1 : 1;
+        }
+        
+        const sampleData = {
+            id: sampleId,
+            amount: amount
+        };
+        
+        // Add serial numbers if any were selected
+        if (serialNumbers.length > 0) {
+            sampleData.serialNumbers = serialNumbers;
+        }
+        
+        return sampleData;
+    });
+    
+    // Complete test data with both original test info AND iteration flag
+    const testData = {
+        type: testType,
+        owner: testOwner,
+        samples: selectedSamples,
+        description: testDescription,
+        original_test_id: originalTestId,
+        original_test_no: originalTestNo,
+        is_iteration: true
+    };
+    
+    // Debug log
+    console.log("===== CREATING TEST ITERATION =====");
+    console.log(`Original Test ID: ${originalTestId}`);
+    console.log(`Original Test No: ${originalTestNo}`);
+    console.log(`Test Type: ${testType}`);
+    console.log(`Samples: ${selectedSamples.length}`);
+    console.log("Test Data:", testData);
+    
+    // IMPORTANT: Always use the dedicated endpoint for iterations
+    const endpoint = '/api/createTestIteration';
+    
+    // Show loading indicator
+    showLoadingOverlay();
+    
+    // Send to server
+    fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(testData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Hide loading indicator
+        hideLoadingOverlay();
+        
+        if (data.success) {
+            showSuccessMessage(`Test iteration ${data.test_id} has been created successfully!`);
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createTestIterationModal'));
+            if (modal) modal.hide();
+            
+            // Reload page after short delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showErrorMessage(`Error creating test iteration: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        // Hide loading indicator
+        hideLoadingOverlay();
+        showErrorMessage(`An error occurred: ${error}`);
+    });
 }
 
 // Functions for handling test creation
@@ -180,6 +425,17 @@ function showCreateTestModal() {
         existingInfoBox.remove();
     }
     
+    // Reset the create button text and style
+    document.getElementById('testMode').value = "regular";
+    
+    // Reset button styling
+    const createTestBtn = document.getElementById('createTestBtn');
+    if (createTestBtn) {
+        createTestBtn.classList.remove('btn-success');
+        createTestBtn.classList.add('btn-primary');
+        createTestBtn.title = '';
+    }
+    
     // Clear any existing values
     const testTypeInput = document.querySelector('[name="testType"]');
     if (testTypeInput) {
@@ -189,12 +445,6 @@ function showCreateTestModal() {
     const testDescriptionInput = document.querySelector('[name="testDescription"]');
     if (testDescriptionInput) {
         testDescriptionInput.value = '';
-    }
-    
-    // Clear original test ID if set
-    const originalTestField = document.getElementById('originalTestId');
-    if (originalTestField) {
-        originalTestField.value = '';
     }
     
     // Show modal first to improve user experience
@@ -447,30 +697,26 @@ function createTest() {
         return sampleData;
     });
     
-    // Check if this is an iteration of an existing test
-    const isIteration = document.getElementById('isTestIteration')?.checked;
+    // Get the description field value
     let description = document.querySelector('[name="testDescription"]')?.value || '';
     
-    // Get the original test ID if this is an iteration
-    const originalTestId = document.getElementById('originalTestId')?.value;
-    
-    // If this is an iteration, add a note to the description
-    if ((isIteration || originalTestId) && !description.toLowerCase().includes('iteration')) {
-        description = (description ? description + " - " : "") + "Iteration of previous test";
-    }
-    
-    // Create test data
+    // Create test data - NO ITERATION INFO, this is for regular tests only!
     const testData = {
         type: testType,
         owner: testOwner,
         samples: selectedSamples,
-        description: description,
-        is_iteration: isIteration || !!originalTestId,
-        original_test_id: originalTestId || null
+        description: description
     };
     
+    console.log("DEBUG: Test Data:", testData);
+    
+    // Regular tests always use the standard endpoint
+    const endpoint = '/api/createTest';
+    
+    console.log(`Using endpoint: ${endpoint}`);
+    
     // Send to server
-    fetch('/api/createTest', {
+    fetch(endpoint, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -755,10 +1001,14 @@ function populateTestDetailsModal(test) {
                 row.classList.add('table-primary');
             }
             
+            // Extract sample count if available
+            const sampleCount = relatedTest.Samples ? relatedTest.Samples.length : '-';
+            
             row.innerHTML = `
                 <td>${relatedTest.TestNo}</td>
                 <td>${relatedTest.TestName || 'Not specified'}</td>
                 <td>${relatedTest.CreatedDate || 'Unknown'}</td>
+                <td>${sampleCount}</td>
                 <td>
                     ${relatedTest.IsCurrent ? 
                         '<span class="badge bg-primary">Current</span>' : 
