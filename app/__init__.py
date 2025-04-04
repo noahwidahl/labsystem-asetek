@@ -17,6 +17,9 @@ def create_app():
     app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD')
     app.config['MYSQL_DB'] = os.getenv('MYSQL_DB')
     
+    # Deaktivér cache for templates
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
+    
     # Initialiser MySQL
     mysql.init_app(app)
     
