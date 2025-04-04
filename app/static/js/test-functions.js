@@ -644,7 +644,7 @@ function updateWelcomeMessage(testCount) {
     if (testCount > 0) {
         welcomeMessage.innerHTML = `
             <h4>Welcome to Test Administration</h4>
-            <p>You have <strong>${testCount}</strong> active tests in the system.</p>
+            <p>You have <strong>${testCount}</strong> active tests in the system!</p>
         `;
     } else {
         welcomeMessage.innerHTML = `
