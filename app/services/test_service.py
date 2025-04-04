@@ -68,35 +68,125 @@ class TestService:
             result, _ = self.db.execute_query(query, ('T%',))
             
             # Process test number logic to match documentation format T1234.5
-            # Documentation indicates test numbers should be sequential, not timestamp-based
+            # According to documentation:
+            # - T1234 is the test number (sequential)
+            # - .5 is the iteration number
+            
+            # First, check if there are any existing tests
             if result and len(result) > 0 and result[0][0]:
-                # Try to extract the number part from the last test number
                 last_test_no = result[0][0]
                 print(f"Last test number: {last_test_no}")
                 
                 try:
-                    # Extract numeric part (1234 from T1234.5)
+                    # Extract the base test number and iteration
                     import re
-                    match = re.search(r'T(\d+)', last_test_no)
+                    # Pattern to match T1234.5 format
+                    match = re.search(r'T(\d+)\.(\d+)', last_test_no)
+                    
                     if match:
-                        last_number = int(match.group(1))
-                        # If it's a large timestamp-like number, reset to proper sequence
-                        if last_number > 10000:
-                            # Use a smaller number range (1-9999) as specified in documentation
-                            test_number = 1  # Start with 1 for new format
+                        # We found a properly formatted test number
+                        base_number = int(match.group(1))
+                        iteration = int(match.group(2))
+                        
+                        # Get the test type - this determines if it's a new test or iteration
+                        test_type = test_data.get('type', '')
+                        test_description = test_data.get('description', '')
+                        
+                        # Create a new test number by default
+                        test_number = base_number + 1
+                        iteration = 1
+                        
+                        # Check if the user explicitly requested a new iteration of an existing test
+                        # Check if this is explicitly marked as an iteration
+                        is_iteration = test_data.get('is_iteration', False)
+                        
+                        # Check if an original test ID was provided
+                        original_test_id = test_data.get('original_test_id')
+                        
+                        # Also check for keywords in the description
+                        has_iteration_keywords = test_description and ('iteration' in test_description.lower() or 
+                                               'fortsættelse' in test_description.lower() or
+                                               'fortsaettelse' in test_description.lower() or
+                                               'iter.' in test_description.lower())
+                        
+                        # If original_test_id is provided, use that directly
+                        if original_test_id:
+                            # Get the original test information
+                            original_query = "SELECT TestNo, TestName FROM Test WHERE TestID = %s"
+                            original_result, _ = self.db.execute_query(original_query, (original_test_id,))
+                            
+                            if original_result and len(original_result) > 0:
+                                original_test_no = original_result[0][0]
+                                
+                                # Extract test number and iteration from the original
+                                original_match = re.search(r'T(\d+)\.(\d+)', original_test_no)
+                                if original_match:
+                                    # Use the same test number but increment the iteration
+                                    test_number = int(original_match.group(1))
+                                    last_iter_query = """
+                                        SELECT MAX(CAST(SUBSTRING_INDEX(TestNo, '.', -1) AS UNSIGNED))
+                                        FROM Test
+                                        WHERE TestNo LIKE 'T%s.%%'
+                                    """
+                                    last_iter_result, _ = self.db.execute_query(last_iter_query, (test_number,))
+                                    
+                                    if last_iter_result and last_iter_result[0][0]:
+                                        iteration = int(last_iter_result[0][0]) + 1
+                                    else:
+                                        iteration = 1
+                                    
+                                    print(f"Creating iteration {iteration} of test T{test_number} from original test {original_test_no}")
+                        
+                        # If either condition is true and we don't have an original_test_id, treat as iteration
+                        elif is_iteration or has_iteration_keywords:
+                            # User wants to create a new iteration of an existing test
+                            # Get the original test's information
+                            iteration_query = """
+                                SELECT TestID, TestNo, TestName FROM Test 
+                                WHERE TestNo LIKE %s
+                                ORDER BY TestID DESC
+                            """
+                            # Look for tests with same base number (T1234.%)
+                            iteration_pattern = f"T{base_number}.%"
+                            iteration_result, _ = self.db.execute_query(iteration_query, (iteration_pattern,))
+                            
+                            if iteration_result and len(iteration_result) > 0:
+                                # Found the original test, make a new iteration
+                                test_number = base_number
+                                iteration = iteration + 1
+                                print(f"Creating new iteration {iteration} of test T{test_number}")
                         else:
-                            test_number = last_number + 1
+                            # No iterations found (shouldn't happen), use next number
+                            test_number = base_number + 1
+                            iteration = 1
                     else:
-                        test_number = 1  # Start with 1 for new format
+                        # Non-standard format, use a new sequential number
+                        # Extract numeric part (any number after T)
+                        basic_match = re.search(r'T(\d+)', last_test_no)
+                        if basic_match:
+                            number = int(basic_match.group(1))
+                            # If it's a large timestamp-like number, reset to proper sequence
+                            if number > 10000:
+                                test_number = 1  # Start with 1 for new format
+                            else:
+                                test_number = number + 1
+                        else:
+                            test_number = 1  # Start with 1 for new format
+                        
+                        iteration = 1  # Start with iteration 1
                 except Exception as e:
                     print(f"Error parsing last test number: {e}")
                     test_number = 1  # Start with 1 for new format
+                    iteration = 1  # Start with iteration 1
             else:
-                test_number = 1  # Start with 1 for new format
+                # No existing tests, start with 1
+                test_number = 1
+                iteration = 1
             
             # Format according to documentation: T1234.5 
-            # Where 1234 is sequential and .5 is iteration
-            test_no = f"T{test_number}.1"
+            # Where 1234 is sequential test number and .5 is iteration
+            test_no = f"T{test_number}.{iteration}"
+            print(f"Generated test number: {test_no}")
             
             # Step 2: Create the Test object
             test = Test.from_dict(test_data)
@@ -154,7 +244,7 @@ class TestService:
                             # Process each unique sample in its own transaction
                             with self.db.transaction() as cursor:
                                 # Generate identification ID according to documentation format: "T1234.5_1"
-                                # Where test_no is T1234.1 and samples_added + 1 gives the sequential number
+                                # The format is TestID_SequentialNumber where sequential number is unique per test
                                 base_identifier = f"{test_no}_{samples_added + 1}"
                                 test_sample_id = base_identifier
                                 
@@ -205,7 +295,7 @@ class TestService:
                         for i in range(amount):
                             with self.db.transaction() as cursor:
                                 # Generate identification ID according to documentation format: "T1234.5_1"
-                                # Where test_no is T1234.1 and samples_added + 1 gives the sequential number
+                                # The format is TestID_SequentialNumber where sequential number is unique per test
                                 base_identifier = f"{test_no}_{samples_added + 1}"
                                 test_sample_id = base_identifier
                                 
@@ -460,6 +550,35 @@ class TestService:
             raise ValueError('Test not found')
         
         actual_test_id = result[0][0]
+        current_test_no = result[0][1]
+        
+        # Check if this is part of a test series (has same base number)
+        import re
+        test_match = re.search(r'T(\d+)\.(\d+)', current_test_no)
+        related_tests = []
+        
+        if test_match:
+            base_number = test_match.group(1)
+            # Find all tests with the same base number
+            related_query = """
+                SELECT TestID, TestNo, TestName, Description, CreatedDate, UserID
+                FROM Test
+                WHERE TestNo LIKE 'T%s.%%'
+                ORDER BY CAST(SUBSTRING_INDEX(TestNo, '.', -1) AS UNSIGNED)
+            """
+            related_result, _ = self.db.execute_query(related_query, (base_number,))
+            
+            if related_result and len(related_result) > 0:
+                for row in related_result:
+                    related_tests.append({
+                        'TestID': row[0],
+                        'TestNo': row[1],
+                        'TestName': row[2],
+                        'Description': row[3],
+                        'CreatedDate': row[4].strftime('%Y-%m-%d %H:%M:%S') if row[4] else None,
+                        'UserID': row[5],
+                        'IsCurrent': row[0] == actual_test_id
+                    })
         
         # Get basic test information
         query = """
@@ -553,6 +672,7 @@ class TestService:
             })
         
         test.history = history
+        test.related_tests = related_tests
         
         return test
     

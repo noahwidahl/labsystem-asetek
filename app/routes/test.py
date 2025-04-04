@@ -257,6 +257,39 @@ def init_test(blueprint, mysql):
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500
             
+    @blueprint.route('/api/tests')
+    def get_tests():
+        """Get all tests for UI display"""
+        try:
+            # Get all tests without samples for display in dropdowns
+            cursor = mysql.connection.cursor()
+            cursor.execute("""
+                SELECT TestID, TestNo, TestName 
+                FROM Test 
+                ORDER BY TestID DESC
+                LIMIT 100
+            """)
+            
+            tests = []
+            for row in cursor.fetchall():
+                tests.append({
+                    'id': row[0],
+                    'test_no': row[1],
+                    'name': row[2] or f"Test {row[1]}",
+                })
+            
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'tests': tests
+            })
+        except Exception as e:
+            print(f"API error getting tests: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
     @blueprint.route('/api/activeSamples')
     def get_active_samples():
         cursor = None

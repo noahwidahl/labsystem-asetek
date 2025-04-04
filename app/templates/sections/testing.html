@@ -20,6 +20,17 @@
             <p>You have <strong class="active-tests-count">{{ active_tests|length }}</strong> active tests in the system!</p>
         </div>
         
+        <div class="alert alert-info mb-4">
+            <h5><i class="fas fa-info-circle me-2"></i>Test ID Format</h5>
+            <p>According to system documentation, test IDs follow the format <code>T1234.5</code> where:</p>
+            <ul>
+                <li><code>T</code> is the test type identifier</li>
+                <li><code>1234</code> is the sequential test number</li>
+                <li><code>.5</code> is the iteration number of this test</li>
+            </ul>
+            <p>Sample IDs within a test have the format <code>T1234.5_1</code>, <code>T1234.5_2</code>, etc.</p>
+        </div>
+        
         <h3 class="mb-3">Active Tests</h3>
         
         {% if active_tests %}
@@ -28,8 +39,8 @@
                 <div class="col-md-6 col-lg-4 mb-4">
                     <div class="card test-card h-100 shadow-sm">
                         <div class="card-header d-flex justify-content-between align-items-center bg-light py-2">
-                            <span class="text-muted small">#{{ loop.index }} Active</span>
-                            <span class="badge rounded-pill bg-primary">{{ test.TestID }}</span>
+                            <span class="badge rounded-pill bg-success">Active</span>
+                            <span class="badge rounded-pill bg-primary">{{ test.TestNo }}</span>
                         </div>
                         <div class="card-body">
                             <h5 class="card-title mb-3">
@@ -59,9 +70,15 @@
                             </ul>
                             
                             <div class="sample-list mb-3 bg-light p-2 rounded">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="text-muted small">Test No:</span>
+                                    <strong>{{ test.TestNo }}</strong>
+                                </div>
                                 <div class="d-flex flex-wrap gap-1">
-                                    <div class="sample-item px-2 py-1 bg-white rounded border">{{ test.TestID }}_1</div>
-                                    <div class="sample-item px-2 py-1 bg-white rounded border">{{ test.TestID }}_2</div>
+                                    <div class="sample-item px-2 py-1 bg-white rounded border">{{ test.TestNo }}_1</div>
+                                    {% if test.sample_count > 1 %}
+                                    <div class="sample-item px-2 py-1 bg-white rounded border">{{ test.TestNo }}_2</div>
+                                    {% endif %}
                                     {% if test.sample_count > 2 %}
                                     <div class="sample-more px-2 py-1 bg-white rounded border">+{{ test.sample_count - 2 }} more</div>
                                     {% endif %}
@@ -70,6 +87,9 @@
                         </div>
                         <div class="card-footer bg-white pt-0 border-top-0">
                             <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <button class="btn btn-outline-primary" onclick="addTestIteration('{{ test.TestID }}', '{{ test.TestNo }}', '{{ test.TestName }}')">
+                                    <i class="fas fa-plus-circle me-1"></i> Add Iteration
+                                </button>
                                 <button class="btn btn-outline-secondary" onclick="showTestDetails('{{ test.TestID }}')">
                                     <i class="fas fa-info-circle me-1"></i> View Details
                                 </button>

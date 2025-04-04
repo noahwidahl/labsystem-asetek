@@ -33,9 +33,14 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group mb-3">
                             <label class="fw-bold">Test Description</label>
                             <textarea class="form-control" name="testDescription" rows="2" placeholder="Enter a brief description of the test (optional)"></textarea>
+                            <small class="text-muted">Include "iteration" in description to create a new iteration of an existing test</small>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <strong>Note about test numbering:</strong> Tests are numbered according to the documentation format, e.g., T1234.5, where T is the test type, 1234 is the test number, and .5 is the iteration. Sample IDs within a test follow the pattern T1234.5_1, T1234.5_2, etc.
                         </div>
                     </div>
                 </div>

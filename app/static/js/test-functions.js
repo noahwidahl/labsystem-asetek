@@ -80,8 +80,123 @@ function showWarningMessage(message) {
     }, 4000);
 }
 
+// Function to add an iteration to an existing test
+function addTestIteration(testId, testNo, testName) {
+    // Show the create test modal but pre-populate it for an iteration
+    const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
+    
+    // Pre-fill the test type field with the original test's name
+    const testTypeInput = document.querySelector('[name="testType"]');
+    if (testTypeInput) {
+        testTypeInput.value = testName || "Unknown";
+    }
+    
+    // Add the iteration info to the description
+    const testDescriptionInput = document.querySelector('[name="testDescription"]');
+    if (testDescriptionInput) {
+        testDescriptionInput.value = `Iteration of test ${testNo}`;
+    }
+    
+    // Set a hidden field with the original test ID
+    let originalTestField = document.getElementById('originalTestId');
+    if (!originalTestField) {
+        originalTestField = document.createElement('input');
+        originalTestField.type = 'hidden';
+        originalTestField.id = 'originalTestId';
+        originalTestField.name = 'originalTestId';
+        document.querySelector('#createTestModal .modal-body').appendChild(originalTestField);
+    }
+    originalTestField.value = testId;
+    
+    // Add an info message to the modal
+    const infoBox = document.createElement('div');
+    infoBox.className = 'alert alert-info mb-3';
+    infoBox.innerHTML = `
+        <strong>Creating iteration of test ${testNo}</strong>
+        <p>This will create a new set of samples for the existing test. The new samples will 
+        have identifiers that continue the sequence from the original test.</p>
+    `;
+    
+    // Add the info box at the top of the modal
+    const modalBody = document.querySelector('#createTestModal .modal-body');
+    modalBody.insertBefore(infoBox, modalBody.firstChild);
+    
+    // Update modal title
+    document.querySelector('#createTestModal .modal-title').textContent = `Add Iteration to Test ${testNo}`;
+    
+    // Now show the modal
+    modal.show();
+    
+    // Show loading state in table
+    const tableBody = document.querySelector('#createTestModal .available-samples tbody');
+    if (tableBody) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center">
+                    <div class="d-flex justify-content-center my-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <p>Loading available samples...</p>
+                </td>
+            </tr>
+        `;
+    }
+    
+    // Fetch available samples
+    fetchAvailableSamples()
+        .catch(error => {
+            console.error("Error fetching samples:", error);
+            
+            if (tableBody) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center">
+                            <div class="alert alert-warning mb-0">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                Could not load samples. Please make sure you have samples registered and stored in the system.
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            // Disable the create test button
+            const createTestBtn = document.getElementById('createTestBtn');
+            if (createTestBtn) {
+                createTestBtn.disabled = true;
+                createTestBtn.title = 'No samples available for testing';
+            }
+        });
+}
+
 // Functions for handling test creation
 function showCreateTestModal() {
+    // Reset modal title and remove any existing info boxes
+    document.querySelector('#createTestModal .modal-title').textContent = 'Create New Test';
+    const existingInfoBox = document.querySelector('#createTestModal .alert');
+    if (existingInfoBox) {
+        existingInfoBox.remove();
+    }
+    
+    // Clear any existing values
+    const testTypeInput = document.querySelector('[name="testType"]');
+    if (testTypeInput) {
+        testTypeInput.value = '';
+    }
+    
+    const testDescriptionInput = document.querySelector('[name="testDescription"]');
+    if (testDescriptionInput) {
+        testDescriptionInput.value = '';
+    }
+    
+    // Clear original test ID if set
+    const originalTestField = document.getElementById('originalTestId');
+    if (originalTestField) {
+        originalTestField.value = '';
+    }
+    
     // Show modal first to improve user experience
     const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
     modal.show();
@@ -332,12 +447,26 @@ function createTest() {
         return sampleData;
     });
     
+    // Check if this is an iteration of an existing test
+    const isIteration = document.getElementById('isTestIteration')?.checked;
+    let description = document.querySelector('[name="testDescription"]')?.value || '';
+    
+    // Get the original test ID if this is an iteration
+    const originalTestId = document.getElementById('originalTestId')?.value;
+    
+    // If this is an iteration, add a note to the description
+    if ((isIteration || originalTestId) && !description.toLowerCase().includes('iteration')) {
+        description = (description ? description + " - " : "") + "Iteration of previous test";
+    }
+    
     // Create test data
     const testData = {
         type: testType,
         owner: testOwner,
         samples: selectedSamples,
-        description: document.querySelector('[name="testDescription"]')?.value || ''
+        description: description,
+        is_iteration: isIteration || !!originalTestId,
+        original_test_id: originalTestId || null
     };
     
     // Send to server
@@ -588,6 +717,8 @@ function disposeAllTestSamples(testId) {
 function populateTestDetailsModal(test) {
     const testInfoEl = document.querySelector('.test-info');
     const samplesTableEl = document.querySelector('.test-samples-table tbody');
+    const relatedTestsSection = document.querySelector('.related-tests');
+    const relatedTestsTableEl = document.querySelector('.related-tests-table tbody');
     
     console.log("Test data received:", test);  // Debug output
     
@@ -610,6 +741,38 @@ function populateTestDetailsModal(test) {
         </div>
         ${test.Description ? `<p><strong>Description:</strong> ${test.Description}</p>` : ''}
     `;
+    
+    // Show related tests if available
+    if (test.related_tests && test.related_tests.length > 1) {  // More than 1 means there are other iterations
+        relatedTestsSection.style.display = 'block';
+        relatedTestsTableEl.innerHTML = '';
+        
+        test.related_tests.forEach(relatedTest => {
+            const row = document.createElement('tr');
+            
+            // Highlight the current test
+            if (relatedTest.IsCurrent) {
+                row.classList.add('table-primary');
+            }
+            
+            row.innerHTML = `
+                <td>${relatedTest.TestNo}</td>
+                <td>${relatedTest.TestName || 'Not specified'}</td>
+                <td>${relatedTest.CreatedDate || 'Unknown'}</td>
+                <td>
+                    ${relatedTest.IsCurrent ? 
+                        '<span class="badge bg-primary">Current</span>' : 
+                        `<button class="btn btn-sm btn-outline-primary" onclick="showTestDetails('${relatedTest.TestID}')">
+                            <i class="fas fa-eye"></i> View
+                        </button>`
+                    }
+                </td>
+            `;
+            relatedTestsTableEl.appendChild(row);
+        });
+    } else {
+        relatedTestsSection.style.display = 'none';
+    }
     
     // Update sample table
     if (test.Samples && test.Samples.length > 0) {
