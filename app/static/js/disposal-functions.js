@@ -498,23 +498,8 @@ function showWarningMessage(message) {
     }, 4000);
 }
 
-// Hjælpefunktion til at vise velkomsttekst baseret på antal aktive tests
-function updateWelcomeMessage(testCount) {
-    const welcomeMessage = document.querySelector('.welcome-message');
-    if (!welcomeMessage) return;
-    
-    if (testCount > 0) {
-        welcomeMessage.innerHTML = `
-            <h4>Velkommen til Test Administration</h4>
-            <p>Du har <strong>${testCount}</strong> aktive tests i systemet.</p>
-        `;
-    } else {
-        welcomeMessage.innerHTML = `
-            <h4>Velkommen til Test Administration</h4>
-            <p>Du har ingen aktive tests. Start en ny test ved at klikke på knappen ovenfor.</p>
-        `;
-    }
-}
+// Fjernet updateWelcomeMessage fra disposal-functions.js for at undgå konflikt
+// Denne funktion er nu kun defineret i test-functions.js
 
 function showLoadingOverlay() {
     // Tjek om overlay allerede eksisterer
@@ -757,11 +742,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Opdater velkomstbesked
-    const activeTestsCount = document.querySelector('.active-tests-count');
-    if (activeTestsCount) {
-        updateWelcomeMessage(parseInt(activeTestsCount.textContent) || 0);
-    }
+    // Lad være med at opdatere velkomstbesked fra denne fil
+    // Det håndteres i test-functions.js
 });
 
 // Initialiser funktioner når siden indlæses
