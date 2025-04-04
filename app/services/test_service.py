@@ -34,7 +34,8 @@ class TestService:
         tests = []
         for row in result:
             test = Test.from_db_row(row)
-            test.sample_count = row[6] if len(row) > 6 else 0
+            # Æen
+            test.sample_count = row[7] if len(row) > 7 else 0
             
             # Get username
             user_query = "SELECT Name FROM User WHERE UserID = %s"
