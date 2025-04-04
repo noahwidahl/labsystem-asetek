@@ -1,4 +1,33 @@
 from contextlib import contextmanager
+from flask import current_app
+
+# Global variable to store the DB manager instance
+_db_manager = None
+
+def get_db_manager():
+    """
+    Singleton pattern to get database manager instance.
+    This helps avoid circular imports when db access is needed from models.
+    """
+    global _db_manager
+    
+    if _db_manager is None:
+        try:
+            # Get MySQL instance from app context - this can fail if called outside Flask context
+            from app import mysql
+            _db_manager = DatabaseManager(mysql)
+        except Exception as e:
+            # This is a fallback for when this is called outside Flask context
+            # It's not ideal but prevents complete failure
+            print(f"Error creating DB manager: {e}")
+            # Return a simple object with execute_query method
+            class DummyManager:
+                def execute_query(self, query, params=None):
+                    print(f"DUMMY DB MANAGER: Would execute {query} with {params}")
+                    return [], None
+            _db_manager = DummyManager()
+    
+    return _db_manager
 
 class DatabaseManager:
     def __init__(self, mysql):
@@ -31,6 +60,17 @@ class DatabaseManager:
     def execute_query(self, query, params=None, commit=False):
         cursor = self.mysql.connection.cursor()
         try:
+            # Add enhanced debugging for string format issues
+            if '%' in query:
+                print(f"DEBUG DB: Query contains % character: {query}")
+                if params is None or len(params) == 0:
+                    print("DEBUG DB: WARNING - Query contains % but has no parameters!")
+                    # Try to escape % characters in the query
+                    modified_query = query.replace('%', '%%')
+                    print(f"DEBUG DB: Modified query: {modified_query}")
+                    query = modified_query
+
+            # Execute the query
             result = cursor.execute(query, params or ())
             rows = cursor.fetchall() if cursor.description else []
             
@@ -48,6 +88,15 @@ class DatabaseManager:
                 self.mysql.connection.rollback()
                 print(f"DEBUG DB: Error, rolled back changes: {e}")
             print(f"DEBUG DB: Query error: {e}")
+            
+            # Enhanced error reporting for format string errors
+            if "not enough arguments for format string" in str(e):
+                print(f"DEBUG DB: FORMAT ERROR - Query: {query}")
+                print(f"DEBUG DB: FORMAT ERROR - Params: {params}")
+                print("DEBUG DB: This is likely caused by unescaped % characters in the query")
+                if "LIKE" in query and "%" in query:
+                    print("DEBUG DB: Query contains LIKE and %. Try escaping % with %%")
+            
             raise e
         finally:
             cursor.close()

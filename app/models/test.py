@@ -14,30 +14,20 @@ class Test:
     
     @classmethod
     def from_dict(cls, data):
+        """
+        Creates a Test object from dictionary data received from the API.
+        Note: The test_no will be properly set by the service layer before saving to DB.
+        """
         test_type = data.get('type', '')
         
-        # Format per documentation: "T1234.5" where 1234 is test number and .5 is iteration
-        # We'll use incrementing numbers starting from 1000 for test number
-        # and .1 for first iteration
+        # Use exactly what was entered as test type name
+        test_name = test_type
         
-        # Get the next sequential test number from the total count of tests
-        # This is a simple approach - for production, a more robust method would be needed
-        import random
-        
-        # Generate a 4-digit test number between 1000-9999
-        test_number = random.randint(1000, 9999)
-        
-        # Set iteration to .1 for a new test
-        iteration = 1
-        
-        # Format according to documentation: T1234.5
-        test_id = f"T{test_number}.{iteration}"
-        
-        # Use the input directly as the test name
-        test_name = f"{test_type} Test"
+        # test_no will be set by service layer with proper sequential numbering
+        test_no = None
         
         return cls(
-            test_no=test_id,
+            test_no=test_no,
             test_name=test_name,
             description=data.get('description', ''),
             user_id=data.get('owner')

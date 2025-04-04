@@ -29,7 +29,7 @@ class TestService:
             ORDER BY t.CreatedDate DESC
         """
         
-        result, _ = self.db.execute_query(query)
+        result, _ = self.db.execute_query(query, ())
         
         tests = []
         for row in result:
@@ -50,49 +50,98 @@ class TestService:
         return tests
     
     def create_test(self, test_data, user_id):
-        with self.db.transaction() as cursor:
+        """Create a new test with samples"""
+        samples_added = 0
+        db_test_id = None
+        test_no = None
+        
+        try:
+            # Step 1: Get the next test number - do this outside of the main transaction
+            # Using parameter for LIKE to avoid % escaping issues
+            query = """
+                SELECT TestNo FROM Test 
+                WHERE TestNo LIKE ? 
+                ORDER BY TestID DESC LIMIT 1
+            """
+            # MySQLdb uses %s not ? for placeholders, so replace it
+            query = query.replace("?", "%s")
+            result, _ = self.db.execute_query(query, ('T%',))
+            
+            # Process test number logic to match documentation format T1234.5
+            # Documentation indicates test numbers should be sequential, not timestamp-based
+            if result and len(result) > 0 and result[0][0]:
+                # Try to extract the number part from the last test number
+                last_test_no = result[0][0]
+                print(f"Last test number: {last_test_no}")
+                
+                try:
+                    # Extract numeric part (1234 from T1234.5)
+                    import re
+                    match = re.search(r'T(\d+)', last_test_no)
+                    if match:
+                        last_number = int(match.group(1))
+                        # If it's a large timestamp-like number, reset to proper sequence
+                        if last_number > 10000:
+                            # Use a smaller number range (1-9999) as specified in documentation
+                            test_number = 1  # Start with 1 for new format
+                        else:
+                            test_number = last_number + 1
+                    else:
+                        test_number = 1  # Start with 1 for new format
+                except Exception as e:
+                    print(f"Error parsing last test number: {e}")
+                    test_number = 1  # Start with 1 for new format
+            else:
+                test_number = 1  # Start with 1 for new format
+            
+            # Format according to documentation: T1234.5 
+            # Where 1234 is sequential and .5 is iteration
+            test_no = f"T{test_number}.1"
+            
+            # Step 2: Create the Test object
             test = Test.from_dict(test_data)
+            test.test_no = test_no  # Set the generated test_no
             test.user_id = user_id
             
-            # Create the test
-            cursor.execute("""
-                INSERT INTO Test (TestNo, TestName, Description, CreatedDate, UserID)
-                VALUES (%s, %s, %s, NOW(), %s)
-            """, (
-                test.test_no,
-                test.test_name,
-                test.description,
-                test.user_id
-            ))
+            print(f"Creating test with test_no: {test_no}, user_id: {user_id}")
+            print(f"Test data: {test_data}")
             
-            test_id = cursor.lastrowid
-            
-            # Add samples to the test
-            if test_data.get('samples'):
-                samples_added = 0
+            # Step 3: Insert the test record
+            with self.db.transaction() as cursor:
+                cursor.execute("""
+                    INSERT INTO Test (TestNo, TestName, Description, CreatedDate, UserID)
+                    VALUES (%s, %s, %s, NOW(), %s)
+                """, (
+                    test.test_no,
+                    test.test_name,
+                    test.description,
+                    test.user_id
+                ))
                 
+                # Get the database ID of the created test
+                db_test_id = cursor.lastrowid
+                print(f"Created test with DB ID: {db_test_id}")
+            
+            # Step 4: Process samples if there are any
+            if test_data.get('samples'):
                 for sample_idx, sample_data in enumerate(test_data.get('samples')):
                     sample_id = sample_data.get('id')
                     amount = int(sample_data.get('amount', 1))
                     
-                    # Get sample info to determine if it's unique
-                    cursor.execute("""
+                    # Get sample info in a separate query
+                    sample_query = """
                         SELECT s.IsUnique, s.PartNumber, s.Description
                         FROM Sample s
                         WHERE s.SampleID = %s
-                    """, (sample_id,))
+                    """
+                    sample_result, _ = self.db.execute_query(sample_query, (sample_id,))
                     
-                    sample_info = cursor.fetchone()
-                    is_unique = sample_info[0] if sample_info else 0
-                    part_number = sample_info[1] if sample_info and len(sample_info) > 1 else None
-                    description = sample_info[2] if sample_info and len(sample_info) > 2 else None
+                    is_unique = sample_result[0][0] if sample_result and len(sample_result) > 0 else 0
+                    part_number = sample_result[0][1] if sample_result and len(sample_result) > 0 and len(sample_result[0]) > 1 else None
+                    description = sample_result[0][2] if sample_result and len(sample_result) > 0 and len(sample_result[0]) > 2 else None
                     
                     # Handle unique samples differently if required
                     if is_unique:
-                        # For unique samples (like cooling loops), we need specific serial numbers
-                        # Since SampleSerialNumber table doesn't exist yet, we'll generate placeholder serial numbers
-                        # This is a temporary solution until the proper table is created
-                        
                         # Generate placeholder serial numbers
                         current_time = datetime.now().strftime("%Y%m%d%H%M%S")
                         serial_numbers = [f"SN-{sample_id}-{current_time}-{i+1}" for i in range(amount)]
@@ -102,123 +151,135 @@ class TestService:
                         serials_to_use = selected_serials if selected_serials else serial_numbers[:amount]
                         
                         for serial_idx, serial_number in enumerate(serials_to_use[:amount]):
-                            # Generate identification ID according to documentation format: "T1234.5_1"
-                            # The format should be TestID_SequentialNumber
-                            base_identifier = f"{test.test_no}_{samples_added + 1}"
-                            test_sample_id = base_identifier
-                            
-                            # Add the sample to the test
-                            # Check if SerialNumber column exists in TestSample table
-                            try:
-                                cursor.execute("""
-                                    INSERT INTO TestSample (SampleID, TestID, TestIteration, GeneratedIdentifier, SerialNumber)
-                                    VALUES (%s, %s, %s, %s, %s)
-                                """, (
-                                    sample_id,
-                                    test_id,
-                                    samples_added + 1,
-                                    test_sample_id,
-                                    serial_number
-                                ))
-                            except Exception as e:
-                                # If SerialNumber column doesn't exist, try without it
-                                if "Unknown column 'SerialNumber'" in str(e):
+                            # Process each unique sample in its own transaction
+                            with self.db.transaction() as cursor:
+                                # Generate identification ID according to documentation format: "T1234.5_1"
+                                # Where test_no is T1234.1 and samples_added + 1 gives the sequential number
+                                base_identifier = f"{test_no}_{samples_added + 1}"
+                                test_sample_id = base_identifier
+                                
+                                # Add the sample to the test
+                                try:
                                     cursor.execute("""
-                                        INSERT INTO TestSample (SampleID, TestID, TestIteration, GeneratedIdentifier)
-                                        VALUES (%s, %s, %s, %s)
+                                        INSERT INTO TestSample (SampleID, TestID, TestIteration, GeneratedIdentifier, SerialNumber)
+                                        VALUES (%s, %s, %s, %s, %s)
                                     """, (
                                         sample_id,
-                                        test_id,
+                                        db_test_id,
                                         samples_added + 1,
-                                        test_sample_id
+                                        test_sample_id,
+                                        serial_number
                                     ))
-                                else:
-                                    # Re-raise if it's a different error
-                                    raise
-                            
-                            # Log in history that this specific unit was used in test
-                            cursor.execute("""
-                                INSERT INTO History (Timestamp, ActionType, UserID, SampleID, TestID, Notes)
-                                VALUES (NOW(), %s, %s, %s, %s, %s)
-                            """, (
-                                'Sample added to test',
-                                user_id,
-                                sample_id,
-                                test_id,
-                                f"Sample with S/N {serial_number} added to test {test.test_no} as {test_sample_id}"
-                            ))
+                                except Exception as e:
+                                    # If SerialNumber column doesn't exist, try without it
+                                    if "Unknown column 'SerialNumber'" in str(e):
+                                        cursor.execute("""
+                                            INSERT INTO TestSample (SampleID, TestID, TestIteration, GeneratedIdentifier)
+                                            VALUES (%s, %s, %s, %s)
+                                        """, (
+                                            sample_id,
+                                            db_test_id,
+                                            samples_added + 1,
+                                            test_sample_id
+                                        ))
+                                    else:
+                                        # Re-raise if it's a different error
+                                        raise
+                                
+                                # Log in history that this specific unit was used in test
+                                cursor.execute("""
+                                    INSERT INTO History (Timestamp, ActionType, UserID, SampleID, TestID, Notes)
+                                    VALUES (NOW(), %s, %s, %s, %s, %s)
+                                """, (
+                                    'Sample added to test',
+                                    user_id,
+                                    sample_id,
+                                    db_test_id,
+                                    # Double %% to escape % in format strings when using periods
+                                    f"Sample with S/N {serial_number} added to test T{test_number}.1 as {test_sample_id}"
+                                ))
                             
                             samples_added += 1
                     else:
-                        # For generic samples (like O-rings), just add the amount
+                        # For generic samples (like O-rings), process each in its own small transaction
                         for i in range(amount):
-                            # Generate identification ID according to documentation format: "T1234.5_1"
-                            # Part number should not be included in the identifier per documentation
-                            # The format should be TestID_SequentialNumber
-                            base_identifier = f"{test.test_no}_{samples_added + 1}"
-                            test_sample_id = base_identifier
-                            
-                            # Check if this identifier already exists
-                            cursor.execute("""
-                                SELECT COUNT(*) FROM TestSample 
-                                WHERE GeneratedIdentifier = %s
-                            """, (test_sample_id,))
-                            
-                            count = cursor.fetchone()[0]
-                            
-                            # If it already exists, add a unique suffix
-                            if count > 0:
-                                timestamp = int(datetime.now().timestamp() * 1000)
-                                test_sample_id = f"{base_identifier}_{timestamp % 1000}"
-                            
-                            cursor.execute("""
-                                INSERT INTO TestSample (SampleID, TestID, TestIteration, GeneratedIdentifier)
-                                VALUES (%s, %s, %s, %s)
-                            """, (
-                                sample_id,
-                                test_id,
-                                samples_added + 1,
-                                test_sample_id
-                            ))
-                            
-                            # Log in history
-                            cursor.execute("""
-                                INSERT INTO History (Timestamp, ActionType, UserID, SampleID, TestID, Notes)
-                                VALUES (NOW(), %s, %s, %s, %s, %s)
-                            """, (
-                                'Sample added to test',
-                                user_id,
-                                sample_id,
-                                test_id,
-                                f"{description if description else 'Sample'} added to test {test.test_no} as {test_sample_id}"
-                            ))
+                            with self.db.transaction() as cursor:
+                                # Generate identification ID according to documentation format: "T1234.5_1"
+                                # Where test_no is T1234.1 and samples_added + 1 gives the sequential number
+                                base_identifier = f"{test_no}_{samples_added + 1}"
+                                test_sample_id = base_identifier
+                                
+                                # Check if this identifier already exists
+                                cursor.execute("""
+                                    SELECT COUNT(*) FROM TestSample 
+                                    WHERE GeneratedIdentifier = %s
+                                """, (test_sample_id,))
+                                
+                                count = cursor.fetchone()[0]
+                                
+                                # If it already exists, add a unique suffix
+                                if count > 0:
+                                    timestamp = int(datetime.now().timestamp() * 1000)
+                                    test_sample_id = f"{base_identifier}_{timestamp % 1000}"
+                                
+                                cursor.execute("""
+                                    INSERT INTO TestSample (SampleID, TestID, TestIteration, GeneratedIdentifier)
+                                    VALUES (%s, %s, %s, %s)
+                                """, (
+                                    sample_id,
+                                    db_test_id,
+                                    samples_added + 1,
+                                    test_sample_id
+                                ))
+                                
+                                # Log in history
+                                cursor.execute("""
+                                    INSERT INTO History (Timestamp, ActionType, UserID, SampleID, TestID, Notes)
+                                    VALUES (NOW(), %s, %s, %s, %s, %s)
+                                """, (
+                                    'Sample added to test',
+                                    user_id,
+                                    sample_id,
+                                    db_test_id,
+                                    # Double %% to escape % in format strings when using periods
+                                    f"{description if description else 'Sample'} added to test T{test_number}.1 as {test_sample_id}"
+                                ))
                             
                             samples_added += 1
-                    
-                    # Reduce the amount in storage
-                    cursor.execute("""
-                        UPDATE SampleStorage 
-                        SET AmountRemaining = AmountRemaining - %s
-                        WHERE SampleID = %s AND AmountRemaining >= %s
-                        LIMIT 1
-                    """, (amount, sample_id, amount))
+                        
+                        # Update storage amount in a separate transaction
+                        with self.db.transaction() as cursor:
+                            cursor.execute("""
+                                UPDATE SampleStorage 
+                                SET AmountRemaining = AmountRemaining - %s
+                                WHERE SampleID = %s AND AmountRemaining >= %s
+                                LIMIT 1
+                            """, (amount, sample_id, amount))
             
-            # Log the test creation
-            cursor.execute("""
-                INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
-                VALUES (NOW(), %s, %s, %s, %s)
-            """, (
-                'Test created',
-                user_id,
-                test_id,
-                f"Test {test.test_no} created with {samples_added} samples"
-            ))
+            # Step 5: Log the test creation in a final transaction
+            with self.db.transaction() as cursor:
+                cursor.execute("""
+                    INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
+                    VALUES (NOW(), %s, %s, %s, %s)
+                """, (
+                    'Test created',
+                    user_id,
+                    db_test_id,
+                    # Double %% to escape % in format strings when using periods
+                    f"Test T{test_number}.1 created with {samples_added} samples"
+                ))
             
             return {
                 'success': True, 
-                'test_id': test.test_no,
+                'test_id': test_no,
+                'test_db_id': db_test_id,
                 'sample_count': samples_added
             }
+        except Exception as e:
+            print(f"Error in create_test: {e}")
+            import traceback
+            traceback.print_exc()
+            raise e
     
     def complete_test(self, test_id, user_id, disposition_data=None):
         """
@@ -377,7 +438,7 @@ class TestService:
         
         # Get all tests first to debug
         debug_query = "SELECT TestID, TestNo FROM Test"
-        debug_result, _ = self.db.execute_query(debug_query)
+        debug_result, _ = self.db.execute_query(debug_query, ())
         print(f"Service: All tests in database: {debug_result}")
         
         # Check if test_id is an integer or a string

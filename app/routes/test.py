@@ -86,9 +86,32 @@ def init_test(blueprint, mysql):
             user_id = current_user['UserID']
             
             # Create test via service
-            result = test_service.create_test(data, user_id)
-            
-            return jsonify(result)
+            try:
+                print(f"API: Creating test with data: {data}")
+                result = test_service.create_test(data, user_id)
+                print(f"API: Test creation result: {result}")
+                return jsonify(result)
+            except Exception as inner_e:
+                print(f"Exception in create_test service call: {inner_e}")
+                import traceback
+                traceback.print_exc()
+                
+                # Enhance error message with more details
+                error_type = type(inner_e).__name__
+                error_msg = str(inner_e)
+                
+                # Detect specific database errors
+                if "not enough arguments for format string" in error_msg:
+                    error_msg = "Database query error: SQL query has placeholders but no parameters were provided. Please contact the developer."
+                elif "cursor closed" in error_msg:
+                    error_msg = "Database connection error: Database cursor was closed before operation completed. Please try again."
+                
+                return jsonify({
+                    'success': False, 
+                    'error': f"Service error: {error_msg}",
+                    'error_type': error_type,
+                    'raw_error': str(inner_e),
+                }), 500
         except Exception as e:
             print(f"API error: {e}")
             import traceback

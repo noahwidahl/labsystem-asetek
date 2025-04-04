@@ -336,7 +336,8 @@ function createTest() {
     const testData = {
         type: testType,
         owner: testOwner,
-        samples: selectedSamples
+        samples: selectedSamples,
+        description: document.querySelector('[name="testDescription"]')?.value || ''
     };
     
     // Send to server
@@ -597,7 +598,7 @@ function populateTestDetailsModal(test) {
     testInfoEl.innerHTML = `
         <div class="row mb-3">
             <div class="col-md-6">
-                <p><strong>Test Name:</strong> ${test.TestName || 'Not specified'}</p>
+                <p><strong>Test Type:</strong> ${test.TestName || 'Not specified'}</p>
                 <p><strong>Test Number:</strong> ${test.TestNo || test.TestID}</p>
                 <p><strong>Created:</strong> ${test.CreatedDate || 'Unknown'}</p>
             </div>
