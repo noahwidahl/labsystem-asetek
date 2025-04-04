@@ -102,9 +102,9 @@ class TestService:
                         serials_to_use = selected_serials if selected_serials else serial_numbers[:amount]
                         
                         for serial_idx, serial_number in enumerate(serials_to_use[:amount]):
-                            # Generate identification ID including part number if available
-                            part_info = f"_{part_number}" if part_number else ""
-                            base_identifier = f"{test.test_no}{part_info}_{samples_added + 1}"
+                            # Generate identification ID according to documentation format: "T1234.5_1"
+                            # The format should be TestID_SequentialNumber
+                            base_identifier = f"{test.test_no}_{samples_added + 1}"
                             test_sample_id = base_identifier
                             
                             # Add the sample to the test
@@ -152,9 +152,10 @@ class TestService:
                     else:
                         # For generic samples (like O-rings), just add the amount
                         for i in range(amount):
-                            # Generate identification ID including part number if available
-                            part_info = f"_{part_number}" if part_number else ""
-                            base_identifier = f"{test.test_no}{part_info}_{samples_added + 1}"
+                            # Generate identification ID according to documentation format: "T1234.5_1"
+                            # Part number should not be included in the identifier per documentation
+                            # The format should be TestID_SequentialNumber
+                            base_identifier = f"{test.test_no}_{samples_added + 1}"
                             test_sample_id = base_identifier
                             
                             # Check if this identifier already exists

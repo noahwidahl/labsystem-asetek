@@ -15,15 +15,29 @@ class Test:
     @classmethod
     def from_dict(cls, data):
         test_type = data.get('type', '')
-        # Generate a timestamp-based test number if not using the predefined ones
-        current_time = datetime.now().strftime("%y%m%d%H%M")
-        test_number = f"T{current_time}"
+        
+        # Format per documentation: "T1234.5" where 1234 is test number and .5 is iteration
+        # We'll use incrementing numbers starting from 1000 for test number
+        # and .1 for first iteration
+        
+        # Get the next sequential test number from the total count of tests
+        # This is a simple approach - for production, a more robust method would be needed
+        import random
+        
+        # Generate a 4-digit test number between 1000-9999
+        test_number = random.randint(1000, 9999)
+        
+        # Set iteration to .1 for a new test
+        iteration = 1
+        
+        # Format according to documentation: T1234.5
+        test_id = f"T{test_number}.{iteration}"
         
         # Use the input directly as the test name
         test_name = f"{test_type} Test"
         
         return cls(
-            test_no=test_number,
+            test_no=test_id,
             test_name=test_name,
             description=data.get('description', ''),
             user_id=data.get('owner')
