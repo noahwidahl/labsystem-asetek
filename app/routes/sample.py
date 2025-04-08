@@ -184,9 +184,6 @@ def init_sample(blueprint, mysql):
             traceback.print_exc()
             return render_template('sections/storage.html', 
                                 error=f"Error loading samples: {e}")
-                sort_order=sort_order,
-                filter_criteria=filter_criteria
-            )
             
             # Get all locations for filter dropdown
             cursor = mysql.connection.cursor()
