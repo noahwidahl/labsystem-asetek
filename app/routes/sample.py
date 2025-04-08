@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify, request
+from flask import Blueprint, render_template, jsonify, request, url_for
 from app.services.sample_service import SampleService
 from app.utils.auth import get_current_user
 from app.utils.validators import validate_sample_data
@@ -66,54 +66,219 @@ def init_sample(blueprint, mysql):
     @blueprint.route('/storage')
     def storage():
         try:
-            samples = sample_service.get_all_samples()
+            # DIRECT DB ACCESS: Completely bypass sample_service to get reliable data
+            cursor = mysql.connection.cursor()
+            print("DIRECT ACCESS: Getting all samples from the database")
+            
+            # Get all samples
+            cursor.execute("""
+                SELECT 
+                    s.SampleID, 
+                    s.Description, 
+                    s.Status, 
+                    s.Amount, 
+                    s.PartNumber, 
+                    s.UnitID, 
+                    s.ReceptionID,
+                    r.ReceivedDate,
+                    u.UnitName,
+                    ss.LocationID,
+                    sl.LocationName
+                FROM Sample s
+                LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
+                LEFT JOIN Unit u ON s.UnitID = u.UnitID
+                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                ORDER BY s.SampleID DESC
+            """)
+            
+            sample_rows = cursor.fetchall()
+            print(f"DIRECT ACCESS: Found {len(sample_rows)} samples")
+            
+            # Get all locations for filter dropdown
+            cursor.execute("SELECT LocationID, LocationName FROM StorageLocation ORDER BY LocationName")
+            locations = [dict(LocationID=row[0], LocationName=row[1]) for row in cursor.fetchall()]
+            
+            # Get status options for filter dropdown
+            cursor.execute("SELECT DISTINCT Status FROM Sample")
+            statuses = [row[0] for row in cursor.fetchall()]
+            
+            # Initialize empty filter criteria
+            filter_criteria = {}
+            search_term = request.args.get('search', '')
+            sort_by = 'sample_id'
+            sort_order = 'DESC'
+            
+            # Convert to format used by template
+            samples_for_template = []
+            
+            # Get column names for easier access
+            columns = [col[0] for col in cursor.description]
+            
+            for row in sample_rows:
+                # Convert row to dict
+                sample_dict = dict(zip(columns, row))
+                
+                # Extract values with defaults for safety
+                sample_id = sample_dict.get('SampleID')
+                description = sample_dict.get('Description', 'No description')
+                status = sample_dict.get('Status', 'Unknown')
+                amount = sample_dict.get('Amount', 0)
+                part_number = sample_dict.get('PartNumber', '-')
+                
+                # Get reception date
+                reception_date = sample_dict.get('ReceivedDate')
+                
+                # Get unit
+                unit_name = sample_dict.get('UnitName', 'pcs')
+                if unit_name and unit_name.lower() == 'stk':
+                    unit_name = 'pcs'
+                
+                # Get location
+                location_name = sample_dict.get('LocationName', 'Unknown')
+                
+                # Apply simple filtering if search term provided
+                if search_term and not (
+                    (description and search_term.lower() in description.lower()) or
+                    (part_number and search_term.lower() in str(part_number).lower()) or
+                    (location_name and search_term.lower() in location_name.lower())
+                ):
+                    continue  # Skip this sample
+                
+                # Apply simple status filtering
+                status_filter = request.args.get('status')
+                if status_filter and status != status_filter:
+                    continue  # Skip this sample
+                
+                # Format the sample data
+                sample_data = {
+                    "ID": f"SMP-{sample_id}",
+                    "PartNumber": part_number,
+                    "Description": description,
+                    "Reception": reception_date.strftime('%Y-%m-%d') if reception_date else "Unknown",
+                    "Amount": f"{amount} {unit_name}",
+                    "Location": location_name,
+                    "Registered": reception_date.strftime('%Y-%m-%d %H:%M') if reception_date else "Unknown",
+                    "Status": status
+                }
+                
+                samples_for_template.append(sample_data)
+                
+            print(f"DIRECT ACCESS: Prepared {len(samples_for_template)} samples for template")
+            
+            # Return the template with all the data
+            cursor.close()
+            return render_template(
+                'sections/storage.html', 
+                samples=samples_for_template,
+                locations=locations,
+                statuses=statuses,
+                current_search=search_term,
+                current_sort_by=sort_by,
+                current_sort_order=sort_order,
+                filter_criteria=filter_criteria
+            )
+        except Exception as e:
+            print(f"CRITICAL ERROR in storage page: {e}")
+            import traceback
+            traceback.print_exc()
+            return render_template('sections/storage.html', 
+                                error=f"Error loading samples: {e}")
+                sort_order=sort_order,
+                filter_criteria=filter_criteria
+            )
+            
+            # Get all locations for filter dropdown
+            cursor = mysql.connection.cursor()
+            cursor.execute("SELECT LocationID, LocationName FROM StorageLocation ORDER BY LocationName")
+            locations = [dict(LocationID=row[0], LocationName=row[1]) for row in cursor.fetchall()]
+            
+            # Get status options for filter dropdown
+            cursor.execute("SELECT DISTINCT Status FROM Sample")
+            statuses = [row[0] for row in cursor.fetchall()]
+            
+            # Debug information
+            print(f"Found {len(samples)} samples matching criteria")
+            for i, sample in enumerate(samples[:3]):  # Print first 3 for debugging
+                print(f"Sample {i+1}: ID={sample.id}, Description={sample.description}, Status={sample.status}")
             
             # Convert to format used by template
             samples_for_template = []
             for sample in samples:
-                # Get additional information
-                cursor = mysql.connection.cursor()
-                
-                # Get reception date
-                cursor.execute("SELECT ReceivedDate FROM Reception WHERE ReceptionID = %s", (sample.reception_id,))
-                reception_result = cursor.fetchone()
-                reception_date = reception_result[0] if reception_result else None
-                
-                # Get unit
-                cursor.execute("SELECT UnitName FROM Unit WHERE UnitID = %s", (sample.unit_id,))
-                unit_result = cursor.fetchone()
-                # Ensure consistent unit name - "stk" becomes "pcs"
-                unit = unit_result[0] if unit_result else "pcs"
-                if unit.lower() == "stk":
+                try:
+                    # Get unit name - ensuring consistent unit name
+                    unit = "pcs"
+                    if hasattr(sample, 'unit_name') and sample.unit_name:
+                        unit = sample.unit_name
+                        if unit.lower() == "stk":
+                            unit = "pcs"
+                    else:
+                        # Fallback if not in the joined query
+                        cursor.execute("SELECT UnitName FROM Unit WHERE UnitID = %s", (sample.unit_id,))
+                        unit_result = cursor.fetchone()
+                        unit = unit_result[0] if unit_result else "pcs"
+                        if unit and unit.lower() == "stk":
+                            unit = "pcs"
+                    
+                    # Get location - may already be available from the join
+                    location = "Unknown"
+                    if hasattr(sample, 'location_name') and sample.location_name:
+                        location = sample.location_name
+                    
+                    # Get reception date - may already be available from the join
+                    reception_date = None
+                    if hasattr(sample, 'received_date') and sample.received_date:
+                        reception_date = sample.received_date
+                    else:
+                        # Fallback if not in the joined query
+                        cursor.execute("SELECT ReceivedDate FROM Reception WHERE ReceptionID = %s", (sample.reception_id,))
+                        reception_result = cursor.fetchone()
+                        reception_date = reception_result[0] if reception_result else None
+                        
+                    # Debug information for each sample processed
+                    print(f"Processing sample {sample.id}: reception_date={reception_date}, location={location}, unit={unit}")
+                except Exception as sample_error:
+                    print(f"Error processing sample {sample.id if hasattr(sample, 'id') else 'unknown'}: {sample_error}")
+                    # Set default values
+                    reception_date = None
+                    location = "Unknown"
                     unit = "pcs"
                 
-                # Get location
-                cursor.execute("""
-                    SELECT sl.LocationName 
-                    FROM SampleStorage ss 
-                    JOIN StorageLocation sl ON ss.LocationID = sl.LocationID 
-                    WHERE ss.SampleID = %s
-                """, (sample.id,))
-                location_result = cursor.fetchone()
-                location = location_result[0] if location_result else "Unknown"
+                # Get Amount from SampleStorage if available, otherwise use sample.amount
+                amount = getattr(sample, 'amount', 0)
                 
-                cursor.close()
-                
-                samples_for_template.append({
-                    "ID": f"SMP-{sample.id}",
-                    "PartNumber": sample.part_number,
-                    "Description": sample.description,
+                # Safe access to properties with fallbacks for robustness
+                sample_data = {
+                    "ID": f"SMP-{getattr(sample, 'id', '?')}",
+                    "PartNumber": getattr(sample, 'part_number', '-'),
+                    "Description": getattr(sample, 'description', 'No description'),
                     "Reception": reception_date.strftime('%Y-%m-%d') if reception_date else "Unknown",
-                    "Amount": f"{sample.amount} {unit}",
+                    "Amount": f"{amount} {unit}",
                     "Location": location,
                     "Registered": reception_date.strftime('%Y-%m-%d %H:%M') if reception_date else "Unknown",
-                    "Status": sample.status
-                })
+                    "Status": getattr(sample, 'status', 'Unknown')
+                }
+                
+                samples_for_template.append(sample_data)
             
-            return render_template('sections/storage.html', samples=samples_for_template)
+            cursor.close()
+            
+            # Pass all data to template including sorting and filter state
+            return render_template(
+                'sections/storage.html', 
+                samples=samples_for_template,
+                locations=locations,
+                statuses=statuses,
+                current_search=search_term,
+                current_sort_by=sort_by,
+                current_sort_order=sort_order,
+                filter_criteria=filter_criteria
+            )
         except Exception as e:
             print(f"Error loading storage: {e}")
-            return render_template('sections/storage.html', error="Error loading storage")
+            import traceback
+            traceback.print_exc()
+            return render_template('sections/storage.html', error=f"Error loading storage: {e}")
     
     @blueprint.route('/api/samples', methods=['POST'])
     def create_sample():
@@ -333,6 +498,115 @@ def init_sample(blueprint, mysql):
                 'success': True,
                 'disposals': disposals
             })
+        except Exception as e:
+            print(f"API error getting recent disposals: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'disposals': [],
+                'error': str(e)
+            }), 500
+    
+    @blueprint.route('/api/search', methods=['GET'])
+    def global_search():
+        """
+        Global search endpoint for the header search bar
+        Searches across samples, locations, tests etc.
+        """
+        try:
+            search_term = request.args.get('q', '').strip()
+            
+            if not search_term or len(search_term) < 2:
+                return jsonify({
+                    'success': False,
+                    'error': 'Search term must be at least 2 characters',
+                    'results': []
+                })
+            
+            # Get sample-related results
+            cursor = mysql.connection.cursor()
+            
+            # Search across multiple tables using LIKE for better matching
+            query = """
+                SELECT 
+                    'Sample' as result_type,
+                    CONCAT('SMP-', s.SampleID) as id,
+                    s.Description as title,
+                    IFNULL(s.PartNumber, 'No part number') as subtitle,
+                    s.Status as status,
+                    CONCAT('/storage?search=', %s) as url
+                FROM Sample s
+                WHERE 
+                    s.Description LIKE %s OR
+                    s.PartNumber LIKE %s OR
+                    s.Barcode LIKE %s
+                LIMIT 10
+                
+                UNION
+                
+                SELECT 
+                    'Location' as result_type,
+                    CONCAT('LOC-', sl.LocationID) as id,
+                    sl.LocationName as title,
+                    l.LabName as subtitle,
+                    'Active' as status,
+                    CONCAT('/storage?location=', CAST(sl.LocationID as CHAR)) as url
+                FROM StorageLocation sl
+                JOIN Lab l ON sl.LabID = l.LabID
+                WHERE sl.LocationName LIKE %s
+                LIMIT 5
+                
+                UNION
+                
+                SELECT 
+                    'Test' as result_type,
+                    CONCAT('TST-', t.TestID) as id,
+                    CONCAT('Test #', t.TestID) as title,
+                    u.Name as subtitle,
+                    IF(EXISTS(SELECT 1 FROM History h WHERE h.TestID = t.TestID AND h.ActionType = 'Test completed'), 'Completed', 'Active') as status,
+                    '/testing' as url
+                FROM Test t
+                JOIN User u ON t.UserID = u.UserID
+                WHERE t.TestID LIKE %s
+                LIMIT 5
+            """
+            
+            # Prepare search parameters
+            search_param = f"%{search_term}%"
+            params = [
+                search_term,  # URL param
+                search_param, search_param, search_param,  # Sample searches
+                search_param,  # Location search
+                search_param   # Test search
+            ]
+            
+            cursor.execute(query, params)
+            
+            # Format results
+            columns = [col[0] for col in cursor.description]
+            results = []
+            
+            for row in cursor.fetchall():
+                result_dict = dict(zip(columns, row))
+                results.append(result_dict)
+                
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'query': search_term,
+                'results': results
+            })
+        except Exception as e:
+            print(f"API error in global search: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'results': []
+            }), 500
         except Exception as e:
             print(f"API error getting recent disposals: {e}")
             import traceback

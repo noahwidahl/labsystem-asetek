@@ -20,10 +20,14 @@
         </div>
         <div class="header-center">
             <div class="search-container">
-                <input type="text" placeholder="Search across all samples..." class="global-search">
-                <button class="search-btn">
+                <input type="text" placeholder="Search across all samples..." id="globalSearch" class="global-search">
+                <button class="search-btn" id="globalSearchBtn">
                     <i class="fas fa-search"></i>
                 </button>
+                <!-- Search results dropdown -->
+                <div class="search-results" id="searchResults">
+                    <!-- Results will appear here -->
+                </div>
             </div>
         </div>
         <div class="header-controls">
@@ -87,17 +91,133 @@
     <!-- Custom page scripts -->
     {% block scripts %}{% endblock %}
     
-    <!-- Script to ensure disposal functions work correctly on all pages -->
+    <!-- Global functionality script -->
     <script>
-        // Verify disposal functionality is ready when page loads
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Base template: Checking if disposal functionality is ready');
+            // Set up global search
+            const globalSearch = document.getElementById('globalSearch');
+            const searchBtn = document.getElementById('globalSearchBtn');
+            const searchResults = document.getElementById('searchResults');
             
-            // Check if the current page is the container page
-            const isContainerPage = window.location.pathname.includes('/containers');
+            // Minimum characters for search
+            const minSearchLength = 2;
             
-            if (!isContainerPage && typeof showDisposalModal !== 'function') {
-                console.error('Disposal functionality not loaded properly');
+            // Search timeout for debouncing
+            let searchTimeout = null;
+            
+            if (globalSearch && searchResults) {
+                // Function to perform search
+                const performSearch = (query) => {
+                    if (query.length < minSearchLength) {
+                        searchResults.classList.remove('active');
+                        return;
+                    }
+                    
+                    // Show loading indicator
+                    searchResults.innerHTML = '<div class="search-loading"><i class="fas fa-spinner fa-spin me-2"></i>Searching...</div>';
+                    searchResults.classList.add('active');
+                    
+                    // Make API request to search endpoint
+                    fetch(`/api/search?q=${encodeURIComponent(query)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            // Process search results
+                            if (data.success && data.results && data.results.length > 0) {
+                                searchResults.innerHTML = ''; // Clear previous results
+                                
+                                // Append each result
+                                data.results.forEach(result => {
+                                    const resultItem = document.createElement('div');
+                                    resultItem.className = 'search-result-item';
+                                    resultItem.innerHTML = `
+                                        <div class="result-title">${result.title}</div>
+                                        <div class="result-subtitle">${result.subtitle || ''}</div>
+                                        <div class="result-meta">
+                                            <span class="result-type ${result.result_type.toLowerCase()}">${result.result_type}</span>
+                                            <span class="result-status ${result.status.toLowerCase()}">${result.status}</span>
+                                        </div>
+                                    `;
+                                    
+                                    // Add click handler
+                                    resultItem.addEventListener('click', () => {
+                                        // Navigate to URL or handle click
+                                        if (result.url) {
+                                            window.location.href = result.url;
+                                        } else if (result.result_type === 'Sample') {
+                                            window.location.href = `/storage?search=${encodeURIComponent(result.title)}`;
+                                        } else if (result.result_type === 'Location') {
+                                            window.location.href = `/storage?location=${result.id.replace('LOC-', '')}`;
+                                        } else if (result.result_type === 'Test') {
+                                            window.location.href = `/testing`;
+                                        }
+                                        
+                                        // Hide results
+                                        searchResults.classList.remove('active');
+                                    });
+                                    
+                                    searchResults.appendChild(resultItem);
+                                });
+                            } else {
+                                // No results message
+                                searchResults.innerHTML = `
+                                    <div class="search-no-results">
+                                        <i class="fas fa-search me-2"></i>
+                                        No results found for "${query}"
+                                    </div>
+                                `;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Search error:', error);
+                            searchResults.innerHTML = `
+                                <div class="search-no-results">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    Error performing search
+                                </div>
+                            `;
+                        });
+                };
+                
+                // Search input event handler with debounce
+                globalSearch.addEventListener('input', () => {
+                    const query = globalSearch.value.trim();
+                    
+                    // Clear any pending timeout
+                    if (searchTimeout) {
+                        clearTimeout(searchTimeout);
+                    }
+                    
+                    // Set new timeout
+                    searchTimeout = setTimeout(() => {
+                        performSearch(query);
+                    }, 300); // 300ms debounce
+                });
+                
+                // Search button click handler
+                searchBtn.addEventListener('click', () => {
+                    const query = globalSearch.value.trim();
+                    if (query.length >= minSearchLength) {
+                        performSearch(query);
+                    }
+                });
+                
+                // Enter key handler
+                globalSearch.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        const query = globalSearch.value.trim();
+                        if (query.length >= minSearchLength) {
+                            // Direct navigation to storage with search term for Enter key
+                            window.location.href = `/storage?search=${encodeURIComponent(query)}`;
+                        }
+                    }
+                });
+                
+                // Close search when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!globalSearch.contains(e.target) && !searchResults.contains(e.target) && !searchBtn.contains(e.target)) {
+                        searchResults.classList.remove('active');
+                    }
+                });
             }
         });
     </script>

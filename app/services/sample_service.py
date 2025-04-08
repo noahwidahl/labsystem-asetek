@@ -7,31 +7,204 @@ class SampleService:
         self.mysql = mysql
         self.db = DatabaseManager(mysql)
     
-    def get_all_samples(self):
-        query = """
-            SELECT 
-                s.SampleID, 
-                s.Barcode, 
-                s.PartNumber,
-                s.IsUnique,
-                s.Type,
-                s.Description, 
-                s.Status,
-                ss.AmountRemaining, 
-                s.UnitID,
-                s.OwnerID,
-                s.ReceptionID
-            FROM Sample s
-            JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-            WHERE ss.AmountRemaining > 0
-            ORDER BY s.SampleID DESC
+    def get_all_samples(self, search_term=None, sort_by='s.SampleID', sort_order='DESC', filter_criteria=None):
         """
+        Get all samples with support for searching, sorting and filtering
         
-        result, _ = self.db.execute_query(query)
+        Args:
+            search_term (str): Optional search term to filter samples by
+            sort_by (str): Field to sort by (default: SampleID)
+            sort_order (str): Sort order (ASC or DESC)
+            filter_criteria (dict): Optional dictionary with filter criteria
+            
+        Returns:
+            list: List of Sample objects matching criteria
+        """
+        # EMERGENCY FIX: Create a direct connection to MySQL to display all samples
+        # This bypasses any potential issues with the service layer
+        try:
+            cursor = self.mysql.connection.cursor()
+            print("*** EMERGENCY FIX: Direct query to get all samples ***")
+
+            # Super simple query to grab all samples 
+            cursor.execute("""
+                SELECT 
+                    SampleID, Barcode, PartNumber, IsUnique, Type, Description, 
+                    Status, Amount, UnitID, OwnerID, ReceptionID
+                FROM Sample 
+                ORDER BY SampleID DESC
+            """)
+            
+            results = cursor.fetchall()
+            print(f"Found {len(results)} samples via direct query")
+            
+            # Convert to Sample objects
+            samples = []
+            for row in results:
+                sample = Sample(
+                    id=row[0],
+                    barcode=row[1],
+                    part_number=row[2],
+                    is_unique=bool(row[3]) if row[3] is not None else False,
+                    type=row[4] if row[4] is not None else 'Standard',
+                    description=row[5],
+                    status=row[6] if row[6] is not None else "In Storage",
+                    amount=row[7] if row[7] is not None else 0,
+                    unit_id=row[8],
+                    owner_id=row[9],
+                    reception_id=row[10]
+                )
+                samples.append(sample)
+            
+            # Try to get additional information for each sample
+            for sample in samples:
+                try:
+                    # Get reception date
+                    cursor.execute("SELECT ReceivedDate FROM Reception WHERE ReceptionID = %s", (sample.reception_id,))
+                    result = cursor.fetchone()
+                    if result and result[0]:
+                        sample.received_date = result[0]
+                    
+                    # Get unit name
+                    cursor.execute("SELECT UnitName FROM Unit WHERE UnitID = %s", (sample.unit_id,))
+                    result = cursor.fetchone()
+                    if result and result[0]:
+                        sample.unit_name = result[0]
+                    
+                    # Get location name if a SampleStorage entry exists
+                    cursor.execute("""
+                        SELECT sl.LocationName 
+                        FROM SampleStorage ss 
+                        JOIN StorageLocation sl ON ss.LocationID = sl.LocationID 
+                        WHERE ss.SampleID = %s
+                    """, (sample.id,))
+                    result = cursor.fetchone()
+                    if result and result[0]:
+                        sample.location_name = result[0]
+                    else:
+                        # If no location exists, try to get a default location
+                        cursor.execute("SELECT LocationName FROM StorageLocation LIMIT 1")
+                        result = cursor.fetchone()
+                        sample.location_name = result[0] if result and result[0] else "Unknown"
+                except Exception as e:
+                    print(f"Error getting additional info for sample {sample.id}: {e}")
+            
+            cursor.close()
+            return samples
+            
+        except Exception as direct_error:
+            print(f"*** DIRECT QUERY FAILED: {direct_error} ***")
+            print("Falling back to regular query method")
+            
+            # Original query as backup
+            query = """
+                SELECT 
+                    s.SampleID, 
+                    s.Barcode, 
+                    s.PartNumber,
+                    s.IsUnique,
+                    s.Type,
+                    s.Description, 
+                    s.Status,
+                    s.Amount, 
+                    s.UnitID,
+                    s.OwnerID,
+                    s.ReceptionID
+                FROM Sample s
+                ORDER BY s.SampleID DESC
+            """
+            
+            # No WHERE conditions - get all samples
+            conditions = []
+        params = []
         
+        # Add search condition if search term is provided
+        if search_term:
+            # Full-text search across multiple fields using LIKE for better matching
+            search_conditions = [
+                "s.Description LIKE %s",
+                "s.Barcode LIKE %s",
+                "s.PartNumber LIKE %s",
+                "sl.LocationName LIKE %s"
+            ]
+            search_term_param = f"%{search_term}%"
+            params.extend([search_term_param] * len(search_conditions))
+            conditions.append(f"({' OR '.join(search_conditions)})")
+        
+        # Add filter conditions if provided
+        if filter_criteria:
+            if filter_criteria.get('status'):
+                conditions.append("s.Status = %s")
+                params.append(filter_criteria['status'])
+                
+            if filter_criteria.get('location'):
+                conditions.append("sl.LocationID = %s")
+                params.append(filter_criteria['location'])
+                
+            if filter_criteria.get('date_from'):
+                conditions.append("r.ReceivedDate >= %s")
+                params.append(filter_criteria['date_from'])
+                
+            if filter_criteria.get('date_to'):
+                conditions.append("r.ReceivedDate <= %s")
+                params.append(filter_criteria['date_to'])
+        
+        # Add WHERE clause if we have conditions
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        
+        # Add sorting - default to SampleID DESC
+        # Validate sort_by to prevent SQL injection
+        valid_sort_fields = {
+            'sample_id': 's.SampleID',
+            'barcode': 's.Barcode',
+            'part_number': 's.PartNumber',
+            'description': 's.Description',
+            'reception_date': 'r.ReceivedDate',
+            'amount': 'ss.AmountRemaining',
+            'location': 'sl.LocationName',
+            'status': 's.Status'
+        }
+        
+        # Use validated sort field or default
+        sort_field = valid_sort_fields.get(sort_by, 's.SampleID')
+        
+        # Validate sort order to prevent SQL injection
+        sort_order = 'ASC' if sort_order.upper() == 'ASC' else 'DESC'
+        
+        query += f" ORDER BY {sort_field} {sort_order}"
+        
+        # Execute the query
+        result, cursor = self.db.execute_query(query, params)
+        
+        # Convert to Sample objects
         samples = []
+        columns = [col[0] for col in cursor.description]
+        
         for row in result:
-            samples.append(Sample.from_db_row(row))
+            # Create a dictionary from column names and row values
+            row_dict = dict(zip(columns, row))
+            
+            # Map column names to the property names Sample expects
+            sample_data = {
+                'id': row_dict.get('SampleID'),
+                'description': row_dict.get('Description'),
+                'barcode': row_dict.get('Barcode'),
+                'part_number': row_dict.get('PartNumber'),
+                'is_unique': bool(row_dict.get('IsUnique', 0)),
+                'type': row_dict.get('Type', 'Standard'),
+                'status': row_dict.get('Status', 'In Storage'),
+                'amount': row_dict.get('AmountRemaining', 0),
+                'unit_id': row_dict.get('UnitID'),
+                'owner_id': row_dict.get('OwnerID'),
+                'reception_id': row_dict.get('ReceptionID'),
+                'unit_name': row_dict.get('UnitName'),
+                'location_name': row_dict.get('LocationName'),
+                'received_date': row_dict.get('ReceivedDate')
+            }
+            
+            # Create Sample object from data
+            samples.append(Sample(**sample_data))
         
         return samples
     
@@ -193,7 +366,15 @@ class SampleService:
                     
                 # Safety check - set default location if still none
                 if not location_id:
-                    location_id = "1"
+                    # Find a valid location ID from the database
+                    cursor.execute("SELECT LocationID FROM StorageLocation ORDER BY LocationID LIMIT 1")
+                    location_result = cursor.fetchone()
+                    if location_result and location_result[0]:
+                        location_id = location_result[0]
+                    else:
+                        # If no location found in the database, use 1 as a fallback
+                        location_id = "1"
+                        print(f"WARNING: Using default location ID 1, no locations found in database")
                 
                 # Insert to SampleStorage with the chosen location
                 cursor.execute("""

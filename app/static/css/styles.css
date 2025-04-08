@@ -1375,6 +1375,139 @@ body {
     }
 }
 
+/* Global search styling */
+.search-container {
+    position: relative;
+}
+
+.search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    background: white;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    z-index: 1000;
+    max-height: 400px;
+    overflow-y: auto;
+    display: none;
+}
+
+.search-results.active {
+    display: block;
+}
+
+.search-result-item {
+    padding: 10px 15px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.search-result-item:hover {
+    background-color: #f8f9fa;
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.result-title {
+    font-weight: 500;
+    color: #343a40;
+    margin-bottom: 2px;
+}
+
+.result-subtitle {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.result-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 5px;
+}
+
+.result-type {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: #e9ecef;
+    color: #495057;
+}
+
+.result-type.sample {
+    background: #e3f2fd;
+    color: #0d6efd;
+}
+
+.result-type.location {
+    background: #fff3cd;
+    color: #fd7e14;
+}
+
+.result-type.test {
+    background: #d1e7dd;
+    color: #198754;
+}
+
+.result-status {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: #4CAF50;
+    color: white;
+}
+
+.result-status.active {
+    background: #4CAF50;
+}
+
+.result-status.disposed {
+    background: #F44336;
+}
+
+.result-status.completed {
+    background: #2196F3;
+}
+
+.search-no-results {
+    padding: 15px;
+    text-align: center;
+    color: #6c757d;
+}
+
+.search-loading {
+    padding: 15px;
+    text-align: center;
+    color: #6c757d;
+}
+
+/* Sample table styling */
+#samplesTable th.sortable {
+    cursor: pointer;
+    position: relative;
+}
+
+#samplesTable th.sortable:hover {
+    background-color: #f8f9fa;
+}
+
+#samplesTable th i.fas {
+    margin-left: 5px;
+    font-size: 0.8rem;
+}
+
+/* Filter active indicators */
+.filter-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
 /* Message overlay for container page */
 .message-overlay {
     position: fixed;

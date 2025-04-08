@@ -10,10 +10,10 @@
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h2>Sample Overview</h2>
                     <div>
-                        <button class="btn btn-outline-primary me-2">
+                        <button class="btn btn-outline-primary me-2" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="false" aria-controls="filterCollapse">
                             <i class="fas fa-filter"></i> Filter
                         </button>
-                        <button class="btn btn-outline-primary">
+                        <button class="btn btn-outline-primary" id="exportBtn">
                             <i class="fas fa-download"></i> Export
                         </button>
                     </div>
@@ -21,23 +21,185 @@
             </div>
         </div>
         
+        <!-- Search and filter area -->
+        <div class="collapse mb-4" id="filterCollapse">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Search & Filter Options</h5>
+                </div>
+                <div class="card-body">
+                    <form id="filterForm" method="GET" action="{{ url_for('sample.storage') }}">
+                        <div class="row g-3">
+                            <!-- Search field -->
+                            <div class="col-md-6">
+                                <label for="search" class="form-label">Search Samples</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                    <input type="text" class="form-control" id="search" name="search" placeholder="Search by description, part number, barcode..." value="{{ current_search }}">
+                                </div>
+                                <div class="form-text">Searches across part numbers, descriptions, and barcodes</div>
+                            </div>
+                            
+                            <!-- Filter by status -->
+                            <div class="col-md-3">
+                                <label for="status" class="form-label">Status</label>
+                                <select class="form-select" id="status" name="status">
+                                    <option value="">All Statuses</option>
+                                    {% for status in statuses %}
+                                    <option value="{{ status }}" {% if filter_criteria and filter_criteria.status == status %}selected{% endif %}>{{ status }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Filter by location -->
+                            <div class="col-md-3">
+                                <label for="location" class="form-label">Location</label>
+                                <select class="form-select" id="location" name="location">
+                                    <option value="">All Locations</option>
+                                    {% for location in locations %}
+                                    <option value="{{ location.LocationID }}" {% if filter_criteria and filter_criteria.location == location.LocationID|string %}selected{% endif %}>{{ location.LocationName }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Date range filters -->
+                            <div class="col-md-3">
+                                <label for="date_from" class="form-label">From Date</label>
+                                <input type="date" class="form-control" id="date_from" name="date_from" value="{{ filter_criteria.date_from if filter_criteria and filter_criteria.date_from else '' }}">
+                            </div>
+                            
+                            <div class="col-md-3">
+                                <label for="date_to" class="form-label">To Date</label>
+                                <input type="date" class="form-control" id="date_to" name="date_to" value="{{ filter_criteria.date_to if filter_criteria and filter_criteria.date_to else '' }}">
+                            </div>
+                            
+                            <!-- Sorting options -->
+                            <div class="col-md-3">
+                                <label for="sort_by" class="form-label">Sort By</label>
+                                <select class="form-select" id="sort_by" name="sort_by">
+                                    <option value="sample_id" {% if current_sort_by == 'sample_id' %}selected{% endif %}>Sample ID</option>
+                                    <option value="part_number" {% if current_sort_by == 'part_number' %}selected{% endif %}>Part Number</option>
+                                    <option value="description" {% if current_sort_by == 'description' %}selected{% endif %}>Description</option>
+                                    <option value="reception_date" {% if current_sort_by == 'reception_date' %}selected{% endif %}>Reception Date</option>
+                                    <option value="amount" {% if current_sort_by == 'amount' %}selected{% endif %}>Amount</option>
+                                    <option value="location" {% if current_sort_by == 'location' %}selected{% endif %}>Location</option>
+                                    <option value="status" {% if current_sort_by == 'status' %}selected{% endif %}>Status</option>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-3">
+                                <label for="sort_order" class="form-label">Sort Order</label>
+                                <select class="form-select" id="sort_order" name="sort_order">
+                                    <option value="ASC" {% if current_sort_order == 'ASC' %}selected{% endif %}>Ascending</option>
+                                    <option value="DESC" {% if current_sort_order == 'DESC' %}selected{% endif %}>Descending</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Submit buttons -->
+                            <div class="col-12 d-flex justify-content-end gap-2 mt-4">
+                                <a href="{{ url_for('sample.storage') }}" class="btn btn-outline-secondary">Clear Filters</a>
+                                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Active filters display -->
+        {% if current_search or filter_criteria %}
+        <div class="mb-4">
+            <div class="d-flex align-items-center">
+                <h6 class="mb-0 me-2">Active Filters:</h6>
+                {% if current_search %}
+                <span class="badge bg-primary me-2">Search: {{ current_search }}</span>
+                {% endif %}
+                
+                {% if filter_criteria and filter_criteria.status %}
+                <span class="badge bg-info me-2">Status: {{ filter_criteria.status }}</span>
+                {% endif %}
+                
+                {% if filter_criteria and filter_criteria.location %}
+                <span class="badge bg-info me-2">Location: {{ locations|selectattr('LocationID', 'eq', filter_criteria.location|int)|map(attribute='LocationName')|first }}</span>
+                {% endif %}
+                
+                {% if filter_criteria and filter_criteria.date_from %}
+                <span class="badge bg-info me-2">From: {{ filter_criteria.date_from }}</span>
+                {% endif %}
+                
+                {% if filter_criteria and filter_criteria.date_to %}
+                <span class="badge bg-info me-2">To: {{ filter_criteria.date_to }}</span>
+                {% endif %}
+                
+                <a href="{{ url_for('sample.storage') }}" class="btn btn-sm btn-outline-danger ms-auto">Clear All</a>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Sample results -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">Samples in Storage</h5>
+                <h5 class="mb-0">
+                    Samples in Storage 
+                    {% if samples %}
+                    <span class="badge bg-secondary">{{ samples|length }}</span>
+                    {% endif %}
+                </h5>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0">
+                    <table class="table table-hover mb-0" id="samplesTable">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>Part Number</th>
-                                <th>Description</th>
-                                <th>Reception</th>
-                                <th>Amount</th>
-                                <th>Location</th>
-                                <th>Registered</th>
-                                <th>Status</th>
+                                <!-- Sortable column headers -->
+                                <th class="sortable" data-sort="sample_id">
+                                    ID
+                                    {% if current_sort_by == 'sample_id' %}
+                                    <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
+                                    {% endif %}
+                                </th>
+                                <th class="sortable" data-sort="part_number">
+                                    Part Number
+                                    {% if current_sort_by == 'part_number' %}
+                                    <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
+                                    {% endif %}
+                                </th>
+                                <th class="sortable" data-sort="description">
+                                    Description
+                                    {% if current_sort_by == 'description' %}
+                                    <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
+                                    {% endif %}
+                                </th>
+                                <th class="sortable" data-sort="reception_date">
+                                    Reception
+                                    {% if current_sort_by == 'reception_date' %}
+                                    <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
+                                    {% endif %}
+                                </th>
+                                <th class="sortable" data-sort="amount">
+                                    Amount
+                                    {% if current_sort_by == 'amount' %}
+                                    <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
+                                    {% endif %}
+                                </th>
+                                <th class="sortable" data-sort="location">
+                                    Location
+                                    {% if current_sort_by == 'location' %}
+                                    <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
+                                    {% endif %}
+                                </th>
+                                <th class="sortable" data-sort="reception_date">
+                                    Registered
+                                    {% if current_sort_by == 'reception_date' %}
+                                    <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
+                                    {% endif %}
+                                </th>
+                                <th class="sortable" data-sort="status">
+                                    Status
+                                    {% if current_sort_by == 'status' %}
+                                    <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
+                                    {% endif %}
+                                </th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -62,7 +224,7 @@
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="8" class="text-center">No samples found</td>
+                                    <td colspan="9" class="text-center">No samples found</td>
                                 </tr>
                             {% endif %}
                         </tbody>
@@ -72,4 +234,86 @@
         </div>
     </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle sorting on column headers
+    document.querySelectorAll('th.sortable').forEach(header => {
+        header.addEventListener('click', function() {
+            const sortBy = this.dataset.sort;
+            let sortOrder = 'ASC';
+            
+            // If already sorted by this column, toggle sort order
+            if (sortBy === '{{ current_sort_by }}') {
+                sortOrder = '{{ current_sort_order }}' === 'ASC' ? 'DESC' : 'ASC';
+            }
+            
+            // Update form and submit
+            document.getElementById('sort_by').value = sortBy;
+            document.getElementById('sort_order').value = sortOrder;
+            document.getElementById('filterForm').submit();
+        });
+    });
+    
+    // Export functionality
+    document.getElementById('exportBtn').addEventListener('click', function() {
+        exportTableToCSV('samples_export.csv');
+    });
+    
+    // Function to export table data to CSV
+    function exportTableToCSV(filename) {
+        const table = document.getElementById('samplesTable');
+        let csv = [];
+        const rows = table.querySelectorAll('tr');
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = [], cols = rows[i].querySelectorAll('td, th');
+            
+            for (let j = 0; j < cols.length - 1; j++) { // Skip the Actions column
+                // Get the text content, remove any icons and trim
+                let content = cols[j].textContent.replace(/[\n\r]+/g, ' ').trim();
+                
+                // If it's a header with sort icons, clean those out
+                if (cols[j].querySelector('i.fas')) {
+                    content = content.replace(/[▲▼↑↓]/, '').trim();
+                }
+                
+                // Quote the content to handle commas
+                row.push(`"${content}"`);
+            }
+            csv.push(row.join(','));
+        }
+        
+        // Download CSV file
+        downloadCSV(csv.join('\n'), filename);
+    }
+    
+    function downloadCSV(csv, filename) {
+        const csvFile = new Blob([csv], {type: "text/csv"});
+        const downloadLink = document.createElement("a");
+        
+        // Create a download link
+        downloadLink.download = filename;
+        downloadLink.href = window.URL.createObjectURL(csvFile);
+        downloadLink.style.display = "none";
+        
+        // Add to DOM, trigger click, and remove
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+    }
+    
+    // Add event listener to the search field to submit the form on press
+    const searchField = document.getElementById('search');
+    if (searchField) {
+        searchField.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('filterForm').submit();
+            }
+        });
+    }
+});
+</script>
 {% endblock %}
