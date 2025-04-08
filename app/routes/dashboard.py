@@ -68,7 +68,14 @@ def init_dashboard(blueprint, mysql):
             new_today = cursor.fetchone()[0] or 0
             
             # Get number of active tests
-            cursor.execute("SELECT COUNT(*) FROM Test")
+            cursor.execute("""
+                SELECT COUNT(*) FROM Test t
+                WHERE t.CreatedDate > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+                AND NOT EXISTS (
+                    SELECT 1 FROM History h 
+                    WHERE h.TestID = t.TestID AND h.ActionType = 'Test completed'
+                )
+            """)
             active_tests_count = cursor.fetchone()[0] or 0
             
             # Get recent history
