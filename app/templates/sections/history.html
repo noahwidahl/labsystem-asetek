@@ -1,58 +1,702 @@
 {% extends "base.html" %}
 
-{% block title %}History - Laboratory Sample System{% endblock %}
+{% block title %}Chain of Custody - Laboratory Sample System{% endblock %}
 
 {% block content %}
 <section id="history" class="content-section">
-    <div class="section-header">
-        <h2>History</h2>
-        <div class="history-filters">
-            <input type="text" class="form-control" placeholder="Search for sample ID...">
-            <select class="form-control">
-                <option>All types</option>
-                <option>Received</option>
-                <option>Test</option>
-                <option>Disposed</option>
-            </select>
-            <button class="btn btn-secondary">
-                <i class="fas fa-filter"></i> Filter
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <h2>Chain of Custody</h2>
+        <div class="d-flex">
+            <button class="btn btn-outline-primary me-2" data-bs-toggle="collapse" data-bs-target="#advancedFilters">
+                <i class="fas fa-sliders-h"></i> Advanced Filters
+            </button>
+            <button id="exportCsv" class="btn btn-outline-secondary">
+                <i class="fas fa-file-export"></i> Export
             </button>
         </div>
     </div>
 
-    <div class="chain-of-custody">
-        {% if history_items %}
-            {% for item in history_items %}
-            <div class="custody-item">
-                <div class="custody-timeline">
-                    <div class="timeline-date">{{ item.Timestamp }}</div>
-                    <div class="timeline-connector"></div>
-                </div>
-                <div class="custody-content">
-                    <div class="custody-header">
-                        <span class="custody-type {{ item.ActionType|lower }}">{{ item.ActionType }}</span>
-                        <span class="custody-id">ID: {{ item.SampleDesc }}</span>
+    <!-- Basic Search -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light"><i class="fas fa-search"></i></span>
+                        <input type="text" id="searchSample" class="form-control" placeholder="Search by sample ID..." aria-label="Search">
                     </div>
-                    <div class="custody-details">
-                        {{ item.Notes }}
-                        <br>
-                        Handled by: {{ item.UserName }}
+                </div>
+                <div class="col-md-3">
+                    <select id="filterActionType" class="form-select">
+                        <option value="">All actions</option>
+                        <option value="Received">Received</option>
+                        <option value="Test">Test</option>
+                        <option value="Disposed">Disposed</option>
+                        <option value="Storage">Storage</option>
+                        <option value="Transfer">Transfer</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select id="filterUser" class="form-select">
+                        <option value="">All users</option>
+                        {% if history_items %}
+                            {% set users = [] %}
+                            {% for item in history_items %}
+                                {% if item.UserName not in users %}
+                                    {% set _ = users.append(item.UserName) %}
+                                    <option value="{{ item.UserName }}">{{ item.UserName }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button id="applyFilters" class="btn btn-primary w-100">
+                        <i class="fas fa-filter"></i> Filter
+                    </button>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Filters (Collapsed by default) -->
+    <div class="collapse mb-4" id="advancedFilters">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Advanced Search Options</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="dateFrom" class="form-label">Date From</label>
+                        <input type="date" id="dateFrom" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="dateTo" class="form-label">Date To</label>
+                        <input type="date" id="dateTo" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="filterLocation" class="form-label">Storage Location</label>
+                        <select id="filterLocation" class="form-select">
+                            <option value="">All locations</option>
+                            <!-- Will be populated via JS -->
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="filterNotes" class="form-label">Notes Contains</label>
+                        <input type="text" id="filterNotes" class="form-control" placeholder="Enter keywords...">
                     </div>
                 </div>
             </div>
-            {% endfor %}
-        {% else %}
-            <div class="custody-item">
-                <div class="custody-timeline">
-                    <div class="timeline-date">No history</div>
+        </div>
+    </div>
+
+    <!-- Results Summary -->
+    <div class="alert alert-info mb-4" id="resultsSummary">
+        Showing all history records. Apply filters to narrow down results.
+    </div>
+
+    <!-- Timeline -->
+    <div class="chain-of-custody-container card shadow">
+        <div class="card-body p-0">
+            <div class="chain-of-custody">
+                {% if history_items %}
+                    {% for item in history_items %}
+                    <div class="custody-item" 
+                         data-sample="{{ item.SampleDesc }}" 
+                         data-action="{{ item.ActionType }}" 
+                         data-user="{{ item.UserName }}">
+                        <div class="custody-timeline">
+                            <div class="timeline-icon action-{{ item.ActionType|lower }}">
+                                {% if item.ActionType == "Received" %}
+                                <i class="fas fa-inbox"></i>
+                                {% elif item.ActionType == "Test" %}
+                                <i class="fas fa-flask"></i>
+                                {% elif item.ActionType == "Disposed" %}
+                                <i class="fas fa-trash-alt"></i>
+                                {% elif item.ActionType == "Storage" %}
+                                <i class="fas fa-box"></i>
+                                {% elif item.ActionType == "Transfer" %}
+                                <i class="fas fa-exchange-alt"></i>
+                                {% else %}
+                                <i class="fas fa-history"></i>
+                                {% endif %}
+                            </div>
+                            <div class="timeline-date">{{ item.Timestamp }}</div>
+                        </div>
+                        <div class="custody-content">
+                            <div class="custody-header d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="custody-type badge {{ item.ActionType|lower }}">{{ item.ActionType }}</span>
+                                    <span class="custody-id ms-2 fw-bold">{{ item.SampleDesc }}</span>
+                                </div>
+                                <button class="btn btn-sm btn-outline-secondary btn-details" 
+                                        data-log-id="{{ item.LogID }}"
+                                        data-bs-toggle="tooltip"
+                                        title="View complete details">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="custody-details mt-2">
+                                {{ item.Notes }}
+                                <div class="custody-user mt-1 text-muted">
+                                    <i class="fas fa-user me-1"></i> {{ item.UserName }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="custody-item">
+                        <div class="custody-timeline">
+                            <div class="timeline-icon">
+                                <i class="fas fa-exclamation-circle"></i>
+                            </div>
+                            <div class="timeline-date">No history</div>
+                        </div>
+                        <div class="custody-content">
+                            <div class="custody-details">
+                                <div class="alert alert-light mb-0">
+                                    There is no recorded history in the system yet.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Load More Button -->
+    <div class="text-center mt-4 mb-4" id="loadMoreContainer">
+        <button id="loadMore" class="btn btn-outline-primary">
+            <i class="fas fa-sync me-2"></i> Load More Records
+        </button>
+    </div>
+
+    <!-- Details Modal -->
+    <div class="modal fade" id="historyDetailsModal" tabindex="-1" aria-labelledby="historyDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="historyDetailsModalLabel">Chain of Custody Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="custody-content">
-                    <div class="custody-details">
-                        There is no recorded history in the system yet.
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-info-circle me-2"></i>Event Information</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <th>Action Type:</th>
+                                    <td id="modal-action-type"></td>
+                                </tr>
+                                <tr>
+                                    <th>Date & Time:</th>
+                                    <td id="modal-timestamp"></td>
+                                </tr>
+                                <tr>
+                                    <th>Performed By:</th>
+                                    <td id="modal-user"></td>
+                                </tr>
+                                <tr>
+                                    <th>Notes:</th>
+                                    <td id="modal-notes"></td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-vial me-2"></i>Sample Information</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <th>Sample ID:</th>
+                                    <td id="modal-sample-id"></td>
+                                </tr>
+                                <tr>
+                                    <th>Description:</th>
+                                    <td id="modal-sample-desc"></td>
+                                </tr>
+                                <tr>
+                                    <th>Current Status:</th>
+                                    <td id="modal-sample-status"></td>
+                                </tr>
+                                <tr>
+                                    <th>Current Location:</th>
+                                    <td id="modal-sample-location"></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <h6><i class="fas fa-history me-2"></i>Complete Sample History</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Action</th>
+                                        <th>User</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="modal-sample-history">
+                                    <!-- Will be populated via JS -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="viewSampleBtn">View Sample Details</button>
+                </div>
             </div>
-        {% endif %}
+        </div>
     </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Current page for load more functionality
+    let currentPage = 1;
+    
+    // Store all history items for filtering
+    let allHistoryItems = [];
+    
+    // Initial load of history items from the server
+    document.querySelectorAll('.custody-item').forEach(item => {
+        allHistoryItems.push({
+            element: item,
+            sample: item.getAttribute('data-sample'),
+            action: item.getAttribute('data-action'),
+            user: item.getAttribute('data-user')
+        });
+    });
+    
+    // Load users into the filter dropdown
+    const userFilter = document.getElementById('filterUser');
+    const users = [...new Set(allHistoryItems.map(item => item.user))].filter(Boolean);
+    users.forEach(user => {
+        const option = document.createElement('option');
+        option.value = user;
+        option.textContent = user;
+        userFilter.appendChild(option);
+    });
+    
+    // Apply filters button click handler
+    document.getElementById('applyFilters').addEventListener('click', function() {
+        applyFilters();
+    });
+    
+    // Search input enter key handler
+    document.getElementById('searchSample').addEventListener('keyup', function(e) {
+        if (e.key === 'Enter') {
+            applyFilters();
+        }
+    });
+    
+    // Advanced filters - date inputs
+    document.getElementById('dateFrom').addEventListener('change', function() {
+        if (document.getElementById('dateTo').value && this.value) {
+            applyFilters();
+        }
+    });
+    
+    document.getElementById('dateTo').addEventListener('change', function() {
+        if (document.getElementById('dateFrom').value && this.value) {
+            applyFilters();
+        }
+    });
+    
+    // Filter function
+    function applyFilters() {
+        const searchTerm = document.getElementById('searchSample').value.toLowerCase();
+        const actionType = document.getElementById('filterActionType').value;
+        const user = document.getElementById('filterUser').value;
+        const dateFrom = document.getElementById('dateFrom').value;
+        const dateTo = document.getElementById('dateTo').value;
+        const notes = document.getElementById('filterNotes').value.toLowerCase();
+        
+        let filteredCount = 0;
+        
+        allHistoryItems.forEach(item => {
+            let show = true;
+            
+            // Apply sample filter
+            if (searchTerm && !item.sample.toLowerCase().includes(searchTerm)) {
+                show = false;
+            }
+            
+            // Apply action type filter
+            if (actionType && item.action !== actionType) {
+                show = false;
+            }
+            
+            // Apply user filter
+            if (user && item.user !== user) {
+                show = false;
+            }
+            
+            // TODO: Implement date filtering and notes filtering with server-side API
+            
+            // Show/hide the item
+            if (show) {
+                item.element.style.display = '';
+                filteredCount++;
+            } else {
+                item.element.style.display = 'none';
+            }
+        });
+        
+        // Update results summary
+        const resultsSummary = document.getElementById('resultsSummary');
+        if (filteredCount === allHistoryItems.length) {
+            resultsSummary.textContent = `Showing all ${filteredCount} history records.`;
+        } else {
+            resultsSummary.textContent = `Showing ${filteredCount} of ${allHistoryItems.length} history records based on your filters.`;
+        }
+    }
+    
+    // Load more button
+    document.getElementById('loadMore').addEventListener('click', function() {
+        const loadMoreBtn = this;
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Loading...';
+        
+        currentPage++;
+        
+        // Make AJAX request to get more history records
+        fetch(`/api/history?page=${currentPage}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Add new items to the DOM and the allHistoryItems array
+                    const historyContainer = document.querySelector('.chain-of-custody');
+                    
+                    data.history_items.forEach(item => {
+                        // Create new custody item element (similar structure to the template)
+                        // For demonstration, showing pseudocode:
+                        const newItem = createCustodyItemElement(item);
+                        historyContainer.appendChild(newItem);
+                        
+                        // Add to allHistoryItems array
+                        allHistoryItems.push({
+                            element: newItem,
+                            sample: item.SampleDesc,
+                            action: item.ActionType,
+                            user: item.UserName
+                        });
+                    });
+                    
+                    // Hide load more button if no more records
+                    if (data.history_items.length < 20) {  // Assuming page size of 20
+                        document.getElementById('loadMoreContainer').style.display = 'none';
+                    }
+                    
+                    // Reapply filters after loading new items
+                    applyFilters();
+                } else {
+                    // Show error
+                    showToast('error', 'Error', 'Failed to load more records');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading more records:', error);
+                showToast('error', 'Error', 'Failed to load more records');
+            })
+            .finally(() => {
+                loadMoreBtn.disabled = false;
+                loadMoreBtn.innerHTML = '<i class="fas fa-sync me-2"></i> Load More Records';
+            });
+    });
+    
+    // Details modal functionality
+    document.querySelectorAll('.btn-details').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const logId = this.getAttribute('data-log-id');
+            
+            // Show spinner in modal while loading
+            document.getElementById('modal-action-type').innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
+            document.getElementById('modal-timestamp').innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
+            
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('historyDetailsModal'));
+            modal.show();
+            
+            // Make AJAX request to get detailed information
+            fetch(`/api/history/details/${logId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Fill modal with data
+                        document.getElementById('modal-action-type').textContent = data.details.ActionType;
+                        document.getElementById('modal-timestamp').textContent = data.details.Timestamp;
+                        document.getElementById('modal-user').textContent = data.details.UserName;
+                        document.getElementById('modal-notes').textContent = data.details.Notes;
+                        
+                        document.getElementById('modal-sample-id').textContent = data.details.SampleDesc;
+                        document.getElementById('modal-sample-desc').textContent = data.sample_info?.Description || 'N/A';
+                        document.getElementById('modal-sample-status').textContent = data.sample_info?.Status || 'N/A';
+                        document.getElementById('modal-sample-location').textContent = data.sample_info?.Location || 'N/A';
+                        
+                        // Update the View Sample button
+                        const viewSampleBtn = document.getElementById('viewSampleBtn');
+                        if (data.sample_info?.SampleID) {
+                            viewSampleBtn.style.display = '';
+                            viewSampleBtn.onclick = () => {
+                                window.location.href = `/samples/${data.sample_info.SampleID}`;
+                            };
+                        } else {
+                            viewSampleBtn.style.display = 'none';
+                        }
+                        
+                        // Fill sample history table
+                        const historyTable = document.getElementById('modal-sample-history');
+                        historyTable.innerHTML = '';
+                        
+                        if (data.sample_history && data.sample_history.length > 0) {
+                            data.sample_history.forEach(historyItem => {
+                                const row = document.createElement('tr');
+                                
+                                const dateCell = document.createElement('td');
+                                dateCell.textContent = historyItem.Timestamp;
+                                row.appendChild(dateCell);
+                                
+                                const actionCell = document.createElement('td');
+                                const actionBadge = document.createElement('span');
+                                actionBadge.className = `badge ${historyItem.ActionType.toLowerCase()}`;
+                                actionBadge.textContent = historyItem.ActionType;
+                                actionCell.appendChild(actionBadge);
+                                row.appendChild(actionCell);
+                                
+                                const userCell = document.createElement('td');
+                                userCell.textContent = historyItem.UserName;
+                                row.appendChild(userCell);
+                                
+                                const notesCell = document.createElement('td');
+                                notesCell.textContent = historyItem.Notes;
+                                row.appendChild(notesCell);
+                                
+                                historyTable.appendChild(row);
+                            });
+                        } else {
+                            const row = document.createElement('tr');
+                            const cell = document.createElement('td');
+                            cell.colSpan = 4;
+                            cell.textContent = 'No history available for this sample';
+                            cell.className = 'text-center';
+                            row.appendChild(cell);
+                            historyTable.appendChild(row);
+                        }
+                    } else {
+                        // Show error in modal
+                        document.getElementById('modal-action-type').textContent = 'Error';
+                        document.getElementById('modal-notes').textContent = data.error || 'Failed to load details';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading details:', error);
+                    document.getElementById('modal-action-type').textContent = 'Error';
+                    document.getElementById('modal-notes').textContent = 'Failed to load details';
+                });
+        });
+    });
+    
+    // Export to CSV functionality
+    document.getElementById('exportCsv').addEventListener('click', function() {
+        // Get current filter state
+        const searchTerm = document.getElementById('searchSample').value;
+        const actionType = document.getElementById('filterActionType').value;
+        const user = document.getElementById('filterUser').value;
+        const dateFrom = document.getElementById('dateFrom').value;
+        const dateTo = document.getElementById('dateTo').value;
+        const notes = document.getElementById('filterNotes').value;
+        
+        // Build query parameters
+        const params = new URLSearchParams();
+        if (searchTerm) params.append('search', searchTerm);
+        if (actionType) params.append('action', actionType);
+        if (user) params.append('user', user);
+        if (dateFrom) params.append('dateFrom', dateFrom);
+        if (dateTo) params.append('dateTo', dateTo);
+        if (notes) params.append('notes', notes);
+        
+        // Redirect to export endpoint
+        window.location.href = `/api/history/export?${params.toString()}`;
+    });
+    
+    // Helper function to create a custody item element (pseudocode for the AJAX loaded items)
+    function createCustodyItemElement(item) {
+        // This is pseudocode to show how we'd create elements for newly loaded items
+        // In a real implementation, we'd create the DOM elements or use a template
+        
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'custody-item';
+        itemDiv.setAttribute('data-sample', item.SampleDesc);
+        itemDiv.setAttribute('data-action', item.ActionType);
+        itemDiv.setAttribute('data-user', item.UserName);
+        
+        // Create timeline div
+        const timelineDiv = document.createElement('div');
+        timelineDiv.className = 'custody-timeline';
+        
+        // Create icon div
+        const iconDiv = document.createElement('div');
+        iconDiv.className = `timeline-icon action-${item.ActionType.toLowerCase()}`;
+        
+        // Add icon based on action type
+        const icon = document.createElement('i');
+        switch(item.ActionType) {
+            case 'Received':
+                icon.className = 'fas fa-inbox';
+                break;
+            case 'Test':
+                icon.className = 'fas fa-flask';
+                break;
+            case 'Disposed':
+                icon.className = 'fas fa-trash-alt';
+                break;
+            case 'Storage':
+                icon.className = 'fas fa-box';
+                break;
+            case 'Transfer':
+                icon.className = 'fas fa-exchange-alt';
+                break;
+            default:
+                icon.className = 'fas fa-history';
+        }
+        
+        iconDiv.appendChild(icon);
+        timelineDiv.appendChild(iconDiv);
+        
+        // Create date div
+        const dateDiv = document.createElement('div');
+        dateDiv.className = 'timeline-date';
+        dateDiv.textContent = item.Timestamp;
+        timelineDiv.appendChild(dateDiv);
+        
+        // Add timeline to item
+        itemDiv.appendChild(timelineDiv);
+        
+        // Create content div
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'custody-content';
+        
+        // Create header div
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'custody-header d-flex justify-content-between align-items-center';
+        
+        // Create header left side div
+        const headerLeftDiv = document.createElement('div');
+        
+        // Create type span
+        const typeSpan = document.createElement('span');
+        typeSpan.className = `custody-type badge ${item.ActionType.toLowerCase()}`;
+        typeSpan.textContent = item.ActionType;
+        headerLeftDiv.appendChild(typeSpan);
+        
+        // Create ID span
+        const idSpan = document.createElement('span');
+        idSpan.className = 'custody-id ms-2 fw-bold';
+        idSpan.textContent = item.SampleDesc;
+        headerLeftDiv.appendChild(idSpan);
+        
+        headerDiv.appendChild(headerLeftDiv);
+        
+        // Create details button
+        const detailsBtn = document.createElement('button');
+        detailsBtn.className = 'btn btn-sm btn-outline-secondary btn-details';
+        detailsBtn.setAttribute('data-log-id', item.LogID);
+        detailsBtn.setAttribute('data-bs-toggle', 'tooltip');
+        detailsBtn.setAttribute('title', 'View complete details');
+        
+        const detailsIcon = document.createElement('i');
+        detailsIcon.className = 'fas fa-info-circle';
+        detailsBtn.appendChild(detailsIcon);
+        
+        // Add click handler to details button
+        detailsBtn.addEventListener('click', function() {
+            // Same click handler as we added earlier
+            // ...
+        });
+        
+        headerDiv.appendChild(detailsBtn);
+        contentDiv.appendChild(headerDiv);
+        
+        // Create details div
+        const detailsDiv = document.createElement('div');
+        detailsDiv.className = 'custody-details mt-2';
+        detailsDiv.textContent = item.Notes;
+        
+        // Create user div
+        const userDiv = document.createElement('div');
+        userDiv.className = 'custody-user mt-1 text-muted';
+        
+        const userIcon = document.createElement('i');
+        userIcon.className = 'fas fa-user me-1';
+        userDiv.appendChild(userIcon);
+        
+        userDiv.appendChild(document.createTextNode(' ' + item.UserName));
+        detailsDiv.appendChild(userDiv);
+        
+        contentDiv.appendChild(detailsDiv);
+        itemDiv.appendChild(contentDiv);
+        
+        return itemDiv;
+    }
+    
+    // Helper function to show toast messages
+    function showToast(type, title, message) {
+        // Create toast element
+        const toastEl = document.createElement('div');
+        toastEl.className = `custom-toast ${type}-toast`;
+        
+        // Create toast content
+        toastEl.innerHTML = `
+            <div class="toast-icon">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'exclamation-triangle'}"></i>
+            </div>
+            <div class="toast-content">
+                <div class="toast-title">${title}</div>
+                <div class="toast-message">${message}</div>
+            </div>
+            <button class="toast-close">&times;</button>
+        `;
+        
+        // Append to body
+        document.body.appendChild(toastEl);
+        
+        // Show toast
+        setTimeout(() => {
+            toastEl.classList.add('show');
+        }, 10);
+        
+        // Set auto-hide
+        setTimeout(() => {
+            toastEl.classList.remove('show');
+            setTimeout(() => {
+                toastEl.remove();
+            }, 300);
+        }, 5000);
+        
+        // Add close button handler
+        toastEl.querySelector('.toast-close').addEventListener('click', () => {
+            toastEl.classList.remove('show');
+            setTimeout(() => {
+                toastEl.remove();
+            }, 300);
+        });
+    }
+});
+</script>
 {% endblock %}

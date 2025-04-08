@@ -950,6 +950,232 @@ body {
     border-radius: 10px;
 }
 
+/* Chain of Custody / History Page Styles */
+.chain-of-custody-container {
+    background-color: white;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.chain-of-custody {
+    position: relative;
+    padding: 1.5rem;
+}
+
+/* Ensure no vertical line is displayed */
+.chain-of-custody::before {
+    display: none;
+}
+
+/* Vertical timeline connector removed as requested */
+
+.custody-item {
+    display: flex;
+    margin-bottom: 2rem;
+    position: relative;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.custody-item:last-child {
+    margin-bottom: 0;
+}
+
+.custody-timeline {
+    position: relative;
+    width: 6rem;
+    min-width: 6rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.timeline-icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    background-color: #f8f9fa;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 0 0 4px white, 0 0 0 5px #e9ecef;
+    z-index: 1;
+    color: #6c757d;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Timeline icon colors based on action type */
+.timeline-icon.action-received {
+    background-color: #e3f2fd;
+    color: #1976d2;
+}
+
+.timeline-icon.action-test {
+    background-color: #e8f5e9;
+    color: #388e3c;
+}
+
+.timeline-icon.action-disposed {
+    background-color: #ffebee;
+    color: #d32f2f;
+}
+
+.timeline-icon.action-storage {
+    background-color: #fffde7;
+    color: #fbc02d;
+}
+
+.timeline-icon.action-transfer {
+    background-color: #e8eaf6;
+    color: #3f51b5;
+}
+
+.timeline-date {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #6c757d;
+    text-align: center;
+}
+
+.custody-content {
+    flex: 1;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.custody-content:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+}
+
+.custody-header {
+    margin-bottom: 0.5rem;
+}
+
+.custody-type {
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.25rem 0.75rem;
+    border-radius: 50px;
+}
+
+/* Badge colors for different action types */
+.badge.received {
+    background-color: #1976d2;
+    color: white;
+}
+
+.badge.test {
+    background-color: #388e3c;
+    color: white;
+}
+
+.badge.disposed {
+    background-color: #d32f2f;
+    color: white;
+}
+
+.badge.storage {
+    background-color: #fbc02d;
+    color: #212529;
+}
+
+.badge.transfer {
+    background-color: #3f51b5;
+    color: white;
+}
+
+.custody-id {
+    color: #495057;
+}
+
+.custody-details {
+    font-size: 0.95rem;
+    color: #495057;
+    line-height: 1.6;
+}
+
+.custody-user {
+    font-size: 0.85rem;
+}
+
+/* History filters */
+.history-filters {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.history-filters .form-control,
+.history-filters .form-select {
+    border-radius: 50px;
+    padding-left: 1rem;
+}
+
+.history-filters .input-group {
+    flex: 1;
+}
+
+.history-filters .input-group-text {
+    border-top-left-radius: 50px;
+    border-bottom-left-radius: 50px;
+    border: 0;
+}
+
+.history-filters input {
+    border-top-right-radius: 50px;
+    border-bottom-right-radius: 50px;
+}
+
+/* Load more button */
+#loadMore {
+    padding: 0.5rem 2rem;
+    font-weight: 500;
+    border-radius: 50px;
+    transition: all 0.2s ease;
+}
+
+#loadMore:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Details modal customizations */
+.modal-content {
+    border: none;
+    border-radius: 0.5rem;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+    border-bottom-color: #f0f0f0;
+}
+
+.modal-footer {
+    border-top-color: #f0f0f0;
+}
+
+/* Table in modal */
+.table-sm th {
+    font-weight: 600;
+    color: #495057;
+    width: 40%;
+}
+
+/* Export button */
+#exportCsv {
+    font-weight: 500;
+}
+
+/* Results Summary */
+#resultsSummary {
+    font-size: 0.9rem;
+    padding: 0.75rem 1rem;
+}
+
 /* Animations */
 @keyframes fadeIn {
     from {
@@ -972,6 +1198,151 @@ body {
 .storage-cell.highlight-animation {
     animation: highlight-pulse 1.5s ease-out;
     border-color: #ffc107;
+}
+
+/* Chain of Custody / History Page Styles */
+.chain-of-custody-container {
+    background-color: white;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.chain-of-custody {
+    position: relative;
+    padding: 1.5rem;
+}
+
+.custody-item {
+    display: flex;
+    margin-bottom: 2rem;
+    position: relative;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.custody-item:last-child {
+    margin-bottom: 0;
+}
+
+.custody-timeline {
+    position: relative;
+    width: 6rem;
+    min-width: 6rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.timeline-icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    background-color: #f8f9fa;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 0 0 4px white;
+    z-index: 1;
+    color: #6c757d;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Timeline icon colors based on action type */
+.timeline-icon.action-received {
+    background-color: #e3f2fd;
+    color: #1976d2;
+}
+
+.timeline-icon.action-test {
+    background-color: #e8f5e9;
+    color: #388e3c;
+}
+
+.timeline-icon.action-disposed {
+    background-color: #ffebee;
+    color: #d32f2f;
+}
+
+.timeline-icon.action-storage {
+    background-color: #fffde7;
+    color: #fbc02d;
+}
+
+.timeline-icon.action-transfer {
+    background-color: #e8eaf6;
+    color: #3f51b5;
+}
+
+.timeline-date {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #6c757d;
+    text-align: center;
+}
+
+.custody-content {
+    flex: 1;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.custody-content:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+}
+
+.custody-header {
+    margin-bottom: 0.5rem;
+}
+
+.custody-type {
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.25rem 0.75rem;
+    border-radius: 50px;
+}
+
+/* Badge colors for different action types */
+.badge.received {
+    background-color: #1976d2;
+    color: white;
+}
+
+.badge.test {
+    background-color: #388e3c;
+    color: white;
+}
+
+.badge.disposed {
+    background-color: #d32f2f;
+    color: white;
+}
+
+.badge.storage {
+    background-color: #fbc02d;
+    color: #212529;
+}
+
+.badge.transfer {
+    background-color: #3f51b5;
+    color: white;
+}
+
+.custody-id {
+    color: #495057;
+}
+
+.custody-details {
+    font-size: 0.95rem;
+    color: #495057;
+    line-height: 1.6;
+}
+
+.custody-user {
+    font-size: 0.85rem;
 }
 
 /* Responsive Adjustments */

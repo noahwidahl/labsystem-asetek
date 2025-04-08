@@ -145,7 +145,7 @@ def init_dashboard(blueprint, mysql):
             cursor.execute("""
                 SELECT 
                     h.LogID,
-                    DATE_FORMAT(h.Timestamp, '%d. %M %Y') as FormattedDate,
+                    DATE_FORMAT(h.Timestamp, '%d %b %Y %H:%i') as FormattedDate,
                     h.ActionType,
                     u.Name as UserName,
                     COALESCE(s.SampleID, ts.GeneratedIdentifier, 'N/A') as ItemID,
@@ -179,6 +179,352 @@ def init_dashboard(blueprint, mysql):
         except Exception as e:
             print(f"Error loading history: {e}")
             return render_template('sections/history.html', error="Error loading history")
+            
+    @blueprint.route('/api/history', methods=['GET'])
+    def api_get_history():
+        """API endpoint to get history records with pagination and filtering"""
+        try:
+            # Get query parameters
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 20, type=int)
+            search = request.args.get('search', '')
+            action_type = request.args.get('action', '')
+            user = request.args.get('user', '')
+            date_from = request.args.get('dateFrom', '')
+            date_to = request.args.get('dateTo', '')
+            notes = request.args.get('notes', '')
+            
+            # Start building the query
+            query = """
+                SELECT 
+                    h.LogID,
+                    DATE_FORMAT(h.Timestamp, '%d %b %Y %H:%i') as FormattedDate,
+                    h.ActionType,
+                    u.Name as UserName,
+                    COALESCE(s.SampleID, ts.GeneratedIdentifier, 'N/A') as ItemID,
+                    h.Notes,
+                    r.ReceptionID
+                FROM History h
+                LEFT JOIN User u ON h.UserID = u.UserID
+                LEFT JOIN Sample s ON h.SampleID = s.SampleID
+                LEFT JOIN TestSample ts ON h.TestID = ts.TestID
+                LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
+                WHERE 1=1
+            """
+            params = []
+            
+            # Add filters to the query
+            if search:
+                query += " AND (COALESCE(s.SampleID, ts.GeneratedIdentifier, '') LIKE %s)"
+                params.append(f"%{search}%")
+            
+            if action_type:
+                query += " AND h.ActionType = %s"
+                params.append(action_type)
+            
+            if user:
+                query += " AND u.Name = %s"
+                params.append(user)
+            
+            if date_from:
+                query += " AND DATE(h.Timestamp) >= %s"
+                params.append(date_from)
+            
+            if date_to:
+                query += " AND DATE(h.Timestamp) <= %s"
+                params.append(date_to)
+            
+            if notes:
+                query += " AND h.Notes LIKE %s"
+                params.append(f"%{notes}%")
+            
+            # Add ordering and pagination
+            query += " ORDER BY h.Timestamp DESC LIMIT %s OFFSET %s"
+            params.append(per_page)
+            params.append((page - 1) * per_page)
+            
+            # Execute the query
+            cursor = mysql.connection.cursor()
+            cursor.execute(query, params)
+            history_data = cursor.fetchall()
+            cursor.close()
+            
+            # Format the results
+            history_items = []
+            for item in history_data:
+                sample_desc = f"SMP-{item[4]}" if item[4] and item[4] != 'N/A' else 'N/A'
+                history_items.append({
+                    "LogID": item[0],
+                    "Timestamp": item[1],
+                    "ActionType": item[2],
+                    "UserName": item[3],
+                    "SampleDesc": sample_desc,
+                    "Notes": item[5],
+                    "ReceptionID": item[6] if item[6] else None
+                })
+            
+            return jsonify({
+                'success': True,
+                'history_items': history_items,
+                'page': page,
+                'per_page': per_page,
+                'has_more': len(history_items) == per_page
+            })
+            
+        except Exception as e:
+            print(f"API error when fetching history: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+    
+    @blueprint.route('/api/history/details/<int:log_id>', methods=['GET'])
+    def api_history_details(log_id):
+        """API endpoint to get detailed information about a specific history record"""
+        try:
+            cursor = mysql.connection.cursor()
+            
+            # Get the specific history record
+            query = """
+                SELECT 
+                    h.LogID,
+                    DATE_FORMAT(h.Timestamp, '%d %b %Y %H:%i') as FormattedDate,
+                    h.ActionType,
+                    u.Name as UserName,
+                    COALESCE(s.SampleID, ts.GeneratedIdentifier, 'N/A') as ItemID,
+                    h.Notes,
+                    h.SampleID,
+                    h.TestID
+                FROM History h
+                LEFT JOIN User u ON h.UserID = u.UserID
+                LEFT JOIN Sample s ON h.SampleID = s.SampleID
+                LEFT JOIN TestSample ts ON h.TestID = ts.TestID
+                WHERE h.LogID = {0}
+            """.format(log_id)
+            
+            cursor.execute(query)
+            
+            log_data = cursor.fetchone()
+            
+            if not log_data:
+                cursor.close()
+                return jsonify({
+                    'success': False,
+                    'error': 'History record not found'
+                }), 404
+            
+            # Format history record
+            sample_desc = f"SMP-{log_data[4]}" if log_data[4] and log_data[4] != 'N/A' else 'N/A'
+            log_details = {
+                "LogID": log_data[0],
+                "Timestamp": log_data[1],
+                "ActionType": log_data[2],
+                "UserName": log_data[3],
+                "SampleDesc": sample_desc,
+                "Notes": log_data[5],
+                "SampleID": log_data[6],
+                "TestID": log_data[7]
+            }
+            
+            # Get sample information if a sample is associated
+            sample_info = None
+            if log_data[6]:  # If SampleID is not null
+                sample_query = """
+                    SELECT 
+                        s.SampleID,
+                        s.Description,
+                        s.Status,
+                        s.Barcode,
+                        s.Type,
+                        sl.LocationName as Location,
+                        ss.AmountRemaining,
+                        u.Name as OwnerName
+                    FROM Sample s
+                    LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+                    LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                    LEFT JOIN User u ON s.OwnerID = u.UserID
+                    WHERE s.SampleID = {0}
+                """.format(log_data[6])
+                
+                cursor.execute(sample_query)
+                
+                sample_data = cursor.fetchone()
+                if sample_data:
+                    sample_info = {
+                        "SampleID": sample_data[0],
+                        "Description": sample_data[1],
+                        "Status": sample_data[2],
+                        "Barcode": sample_data[3],
+                        "Type": sample_data[4],
+                        "Location": sample_data[5],
+                        "Amount": sample_data[6],
+                        "Owner": sample_data[7]
+                    }
+            
+            # Get complete sample history if a sample is associated
+            sample_history = []
+            if log_data[6]:  # If SampleID is not null
+                history_query = """
+                    SELECT 
+                        h.LogID,
+                        DATE_FORMAT(h.Timestamp, '%d %b %Y %H:%i') as FormattedDate,
+                        h.ActionType,
+                        u.Name as UserName,
+                        h.Notes
+                    FROM History h
+                    LEFT JOIN User u ON h.UserID = u.UserID
+                    WHERE h.SampleID = {0}
+                    ORDER BY h.Timestamp DESC
+                """.format(log_data[6])
+                
+                cursor.execute(history_query)
+                
+                for history_row in cursor.fetchall():
+                    sample_history.append({
+                        "LogID": history_row[0],
+                        "Timestamp": history_row[1],
+                        "ActionType": history_row[2],
+                        "UserName": history_row[3],
+                        "Notes": history_row[4]
+                    })
+            
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'details': log_details,
+                'sample_info': sample_info,
+                'sample_history': sample_history
+            })
+            
+        except Exception as e:
+            print(f"API error when fetching history details: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+    
+    @blueprint.route('/api/history/export', methods=['GET'])
+    def api_export_history():
+        """API endpoint to export history records to CSV based on filters"""
+        try:
+            # Get query parameters (same as in api_get_history)
+            search = request.args.get('search', '')
+            action_type = request.args.get('action', '')
+            user = request.args.get('user', '')
+            date_from = request.args.get('dateFrom', '')
+            date_to = request.args.get('dateTo', '')
+            notes = request.args.get('notes', '')
+            
+            # Start building the query
+            query = """
+                SELECT 
+                    h.LogID,
+                    DATE_FORMAT(h.Timestamp, '%Y-%m-%d %H:%i:%s') as FormattedDate,
+                    h.ActionType,
+                    u.Name as UserName,
+                    COALESCE(s.SampleID, ts.GeneratedIdentifier, 'N/A') as ItemID,
+                    COALESCE(s.Description, 'N/A') as SampleDescription,
+                    h.Notes,
+                    COALESCE(sl.LocationName, 'N/A') as Location
+                FROM History h
+                LEFT JOIN User u ON h.UserID = u.UserID
+                LEFT JOIN Sample s ON h.SampleID = s.SampleID
+                LEFT JOIN TestSample ts ON h.TestID = ts.TestID
+                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID AND ss.AmountRemaining > 0
+                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                WHERE 1=1
+            """
+            params = []
+            
+            # Add filters to the query (same as in api_get_history)
+            if search:
+                query += " AND (COALESCE(s.SampleID, ts.GeneratedIdentifier, '') LIKE %s)"
+                params.append(f"%{search}%")
+            
+            if action_type:
+                query += " AND h.ActionType = %s"
+                params.append(action_type)
+            
+            if user:
+                query += " AND u.Name = %s"
+                params.append(user)
+            
+            if date_from:
+                query += " AND DATE(h.Timestamp) >= %s"
+                params.append(date_from)
+            
+            if date_to:
+                query += " AND DATE(h.Timestamp) <= %s"
+                params.append(date_to)
+            
+            if notes:
+                query += " AND h.Notes LIKE %s"
+                params.append(f"%{notes}%")
+            
+            # Add ordering but no limit for export
+            query += " ORDER BY h.Timestamp DESC"
+            
+            # Execute the query
+            cursor = mysql.connection.cursor()
+            cursor.execute(query, params)
+            history_data = cursor.fetchall()
+            cursor.close()
+            
+            # Prepare CSV response
+            import csv
+            import io
+            
+            csv_file = io.StringIO()
+            csv_writer = csv.writer(csv_file)
+            
+            # Write header
+            csv_writer.writerow([
+                'ID', 'Date & Time', 'Action Type', 'User', 
+                'Sample ID', 'Sample Description', 'Notes', 'Location'
+            ])
+            
+            # Write data
+            for row in history_data:
+                sample_id = f"SMP-{row[4]}" if row[4] and row[4] != 'N/A' else 'N/A'
+                csv_writer.writerow([
+                    row[0],          # LogID
+                    row[1],          # Timestamp
+                    row[2],          # ActionType
+                    row[3],          # UserName
+                    sample_id,       # SampleDesc
+                    row[5],          # SampleDescription
+                    row[6],          # Notes
+                    row[7]           # Location
+                ])
+            
+            # Create response
+            from flask import Response
+            from datetime import datetime
+            
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            response = Response(
+                csv_file.getvalue(),
+                mimetype='text/csv',
+                headers={
+                    'Content-Disposition': f'attachment; filename=history_export_{timestamp}.csv'
+                }
+            )
+            
+            return response
+            
+        except Exception as e:
+            print(f"API error when exporting history: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
     
     @blueprint.route('/api/storage-locations')
     def get_storage_locations():
