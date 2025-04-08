@@ -692,6 +692,82 @@ class TestService:
                 
                 # Handle according to disposition
                 if disposition_action == 'dispose':
+                    # Find storage for this sample
+                    cursor.execute("""
+                        SELECT StorageID
+                        FROM SampleStorage
+                        WHERE SampleID = %s
+                        ORDER BY AmountRemaining DESC
+                        LIMIT 1
+                    """, (original_sample_id,))
+                    
+                    storage_result = cursor.fetchone()
+                    storage_id = storage_result[0] if storage_result else None
+                    
+                    # Update container sample links if the sample is in any containers
+                    if storage_id:
+                        cursor.execute("""
+                            SELECT ContainerSampleID, ContainerID, Amount
+                            FROM ContainerSample 
+                            WHERE SampleStorageID = %s
+                        """, (storage_id,))
+                        
+                        container_samples = cursor.fetchall()
+                        
+                        for container_sample in container_samples:
+                            container_sample_id = container_sample[0]
+                            container_id = container_sample[1]
+                            container_amount = container_sample[2]
+                            
+                            # If amount is 1, remove the sample from container
+                            if container_amount <= 1:
+                                cursor.execute("""
+                                    DELETE FROM ContainerSample
+                                    WHERE ContainerSampleID = %s
+                                """, (container_sample_id,))
+                                
+                                # Log container update
+                                cursor.execute("""
+                                    INSERT INTO History (
+                                        Timestamp, 
+                                        ActionType, 
+                                        UserID, 
+                                        SampleID, 
+                                        Notes
+                                    )
+                                    VALUES (NOW(), %s, %s, %s, %s)
+                                """, (
+                                    'Container updated',
+                                    user_id,
+                                    original_sample_id,
+                                    f"Sample {original_sample_id} removed from container {container_id} due to test disposal"
+                                ))
+                            else:
+                                # Otherwise, reduce the amount in the container
+                                new_container_amount = container_amount - 1
+                                cursor.execute("""
+                                    UPDATE ContainerSample
+                                    SET Amount = %s
+                                    WHERE ContainerSampleID = %s
+                                """, (new_container_amount, container_sample_id))
+                                
+                                # Log container update
+                                cursor.execute("""
+                                    INSERT INTO History (
+                                        Timestamp, 
+                                        ActionType, 
+                                        UserID, 
+                                        SampleID, 
+                                        Notes
+                                    )
+                                    VALUES (NOW(), %s, %s, %s, %s)
+                                """, (
+                                    'Container updated',
+                                    user_id,
+                                    original_sample_id,
+                                    f"Sample {original_sample_id} amount reduced to {new_container_amount} in container {container_id} due to test disposal"
+                                ))
+                    
                     # Record disposal
                     cursor.execute("""
                         INSERT INTO Disposal (SampleID, UserID, DisposalDate, AmountDisposed, Notes)
@@ -958,6 +1034,82 @@ class TestService:
             generated_identifier = result[2]
             test_no = result[3]
             
+            # Find storage for this sample
+            cursor.execute("""
+                SELECT StorageID
+                FROM SampleStorage
+                WHERE SampleID = %s
+                ORDER BY AmountRemaining DESC
+                LIMIT 1
+            """, (sample_id,))
+            
+            storage_result = cursor.fetchone()
+            storage_id = storage_result[0] if storage_result else None
+            
+            # Update container sample links if the sample is in any containers
+            if storage_id:
+                cursor.execute("""
+                    SELECT ContainerSampleID, ContainerID, Amount
+                    FROM ContainerSample 
+                    WHERE SampleStorageID = %s
+                """, (storage_id,))
+                
+                container_samples = cursor.fetchall()
+                
+                for container_sample in container_samples:
+                    container_sample_id = container_sample[0]
+                    container_id = container_sample[1]
+                    container_amount = container_sample[2]
+                    
+                    # If amount is 1, remove the sample from container
+                    if container_amount <= 1:
+                        cursor.execute("""
+                            DELETE FROM ContainerSample
+                            WHERE ContainerSampleID = %s
+                        """, (container_sample_id,))
+                        
+                        # Log container update
+                        cursor.execute("""
+                            INSERT INTO History (
+                                Timestamp, 
+                                ActionType, 
+                                UserID, 
+                                SampleID, 
+                                Notes
+                            )
+                            VALUES (NOW(), %s, %s, %s, %s)
+                        """, (
+                            'Container updated',
+                            user_id,
+                            sample_id,
+                            f"Sample {sample_id} removed from container {container_id} due to disposal"
+                        ))
+                    else:
+                        # Otherwise, reduce the amount in the container
+                        new_container_amount = container_amount - 1
+                        cursor.execute("""
+                            UPDATE ContainerSample
+                            SET Amount = %s
+                            WHERE ContainerSampleID = %s
+                        """, (new_container_amount, container_sample_id))
+                        
+                        # Log container update
+                        cursor.execute("""
+                            INSERT INTO History (
+                                Timestamp, 
+                                ActionType, 
+                                UserID, 
+                                SampleID, 
+                                Notes
+                            )
+                            VALUES (NOW(), %s, %s, %s, %s)
+                        """, (
+                            'Container updated',
+                            user_id,
+                            sample_id,
+                            f"Sample {sample_id} amount reduced to {new_container_amount} in container {container_id} due to disposal"
+                        ))
+            
             # Record disposal
             cursor.execute("""
                 INSERT INTO Disposal (SampleID, UserID, DisposalDate, AmountDisposed, Notes)
@@ -1162,6 +1314,82 @@ class TestService:
                 sample_id = sample[1]
                 generated_identifier = sample[2]
                 description = sample[3]
+                
+                # Find storage for this sample
+                cursor.execute("""
+                    SELECT StorageID
+                    FROM SampleStorage
+                    WHERE SampleID = %s
+                    ORDER BY AmountRemaining DESC
+                    LIMIT 1
+                """, (sample_id,))
+                
+                storage_result = cursor.fetchone()
+                storage_id = storage_result[0] if storage_result else None
+                
+                # Update container sample links if the sample is in any containers
+                if storage_id:
+                    cursor.execute("""
+                        SELECT ContainerSampleID, ContainerID, Amount
+                        FROM ContainerSample 
+                        WHERE SampleStorageID = %s
+                    """, (storage_id,))
+                    
+                    container_samples = cursor.fetchall()
+                    
+                    for container_sample in container_samples:
+                        container_sample_id = container_sample[0]
+                        container_id = container_sample[1]
+                        container_amount = container_sample[2]
+                        
+                        # If amount is 1, remove the sample from container
+                        if container_amount <= 1:
+                            cursor.execute("""
+                                DELETE FROM ContainerSample
+                                WHERE ContainerSampleID = %s
+                            """, (container_sample_id,))
+                            
+                            # Log container update
+                            cursor.execute("""
+                                INSERT INTO History (
+                                    Timestamp, 
+                                    ActionType, 
+                                    UserID, 
+                                    SampleID, 
+                                    Notes
+                                )
+                                VALUES (NOW(), %s, %s, %s, %s)
+                            """, (
+                                'Container updated',
+                                user_id,
+                                sample_id,
+                                f"Sample {sample_id} removed from container {container_id} due to bulk disposal"
+                            ))
+                        else:
+                            # Otherwise, reduce the amount in the container
+                            new_container_amount = container_amount - 1
+                            cursor.execute("""
+                                UPDATE ContainerSample
+                                SET Amount = %s
+                                WHERE ContainerSampleID = %s
+                            """, (new_container_amount, container_sample_id))
+                            
+                            # Log container update
+                            cursor.execute("""
+                                INSERT INTO History (
+                                    Timestamp, 
+                                    ActionType, 
+                                    UserID, 
+                                    SampleID, 
+                                    Notes
+                                )
+                                VALUES (NOW(), %s, %s, %s, %s)
+                            """, (
+                                'Container updated',
+                                user_id,
+                                sample_id,
+                                f"Sample {sample_id} amount reduced to {new_container_amount} in container {container_id} due to bulk disposal"
+                            ))
                 
                 # Record disposal
                 cursor.execute("""

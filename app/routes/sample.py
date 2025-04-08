@@ -211,24 +211,27 @@ def init_sample(blueprint, mysql):
             cursor = mysql.connection.cursor()
             
             # Get active samples with their storage location and remaining amount
+            # Modified query to use LEFT JOIN and handle serial numbers for unique samples
             cursor.execute("""
                 SELECT 
                     s.SampleID, 
                     s.Description, 
                     s.Barcode,
-                    s.PartNumber,
+                    IFNULL(s.PartNumber, '') as PartNumber,
                     ss.AmountRemaining,
-                    sl.LocationName,
-                    u.Name as OwnerName,
-                    un.UnitName as Unit
+                    IFNULL(sl.LocationName, 'Unknown') as LocationName,
+                    IFNULL(u.Name, 'Unknown') as OwnerName,
+                    IFNULL(un.UnitName, 'pcs') as Unit,
+                    IF(s.IsUnique=1, 1, 0) as IsUnique
                 FROM Sample s
-                JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-                JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
                 LEFT JOIN User u ON s.OwnerID = u.UserID
                 LEFT JOIN Unit un ON s.UnitID = un.UnitID
                 WHERE s.Status = 'In Storage'
-                AND ss.AmountRemaining > 0
+                AND (ss.AmountRemaining > 0 OR ss.AmountRemaining IS NULL)
                 ORDER BY s.SampleID DESC
+                LIMIT 100
             """)
             
             columns = [col[0] for col in cursor.description]
@@ -240,12 +243,31 @@ def init_sample(blueprint, mysql):
                 # Format sample ID for display
                 sample_dict['SampleIDFormatted'] = f"SMP-{sample_dict['SampleID']}"
                 
+                # If AmountRemaining is NULL, set it to 1 as a fallback
+                if sample_dict['AmountRemaining'] is None:
+                    sample_dict['AmountRemaining'] = 1
+                
                 # Ensure unit is always available
                 if not sample_dict.get('Unit'):
                     sample_dict['Unit'] = 'pcs'
                 elif sample_dict['Unit'].lower() == 'stk':
                     sample_dict['Unit'] = 'pcs'
+                
+                # For unique samples, get serial numbers
+                if sample_dict.get('IsUnique') == 1:
+                    # Get serial numbers for unique samples
+                    serial_query = """
+                        SELECT SerialNumber 
+                        FROM SampleSerialNumber 
+                        WHERE SampleID = %s AND Status = 'Active'
+                    """
+                    cursor.execute(serial_query, (sample_dict['SampleID'],))
+                    serials = [row[0] for row in cursor.fetchall()]
+                    sample_dict['SerialNumbers'] = serials
                     
+                    # For unique samples, amount is the number of active serial numbers
+                    sample_dict['AmountRemaining'] = len(serials) if serials else 1
+                
                 samples.append(sample_dict)
                 
             cursor.close()
@@ -259,10 +281,10 @@ def init_sample(blueprint, mysql):
             import traceback
             traceback.print_exc()
             return jsonify({
-                'success': True,  # Return success to avoid JS errors
+                'success': False,
                 'samples': [],
                 'error': str(e)
-            })
+            }), 500
     
     @blueprint.route('/api/recentDisposals')
     def get_recent_disposals():
@@ -385,6 +407,69 @@ def init_sample(blueprint, mysql):
                     SET AmountRemaining = %s 
                     WHERE StorageID = %s
                 """, (new_amount, storage_id))
+                
+                # Update container sample links if the sample is in any containers
+                cursor.execute("""
+                    SELECT ContainerSampleID, ContainerID, Amount
+                    FROM ContainerSample 
+                    WHERE SampleStorageID = %s
+                """, (storage_id,))
+                
+                container_samples = cursor.fetchall()
+                
+                for container_sample in container_samples:
+                    container_sample_id = container_sample[0]
+                    container_id = container_sample[1]
+                    container_amount = container_sample[2]
+                    
+                    # If we're disposing all or more than what's in the container, delete the link
+                    if disposal_amount >= container_amount:
+                        cursor.execute("""
+                            DELETE FROM ContainerSample
+                            WHERE ContainerSampleID = %s
+                        """, (container_sample_id,))
+                        
+                        # Log container update
+                        cursor.execute("""
+                            INSERT INTO History (
+                                Timestamp, 
+                                ActionType, 
+                                UserID, 
+                                SampleID, 
+                                Notes
+                            )
+                            VALUES (NOW(), %s, %s, %s, %s)
+                        """, (
+                            'Container updated',
+                            user_id,
+                            data['sampleId'],
+                            f"Sample {data['sampleId']} removed from container {container_id} due to disposal"
+                        ))
+                    else:
+                        # Otherwise, reduce the amount in the container
+                        new_container_amount = container_amount - disposal_amount
+                        cursor.execute("""
+                            UPDATE ContainerSample
+                            SET Amount = %s
+                            WHERE ContainerSampleID = %s
+                        """, (new_container_amount, container_sample_id))
+                        
+                        # Log container update
+                        cursor.execute("""
+                            INSERT INTO History (
+                                Timestamp, 
+                                ActionType, 
+                                UserID, 
+                                SampleID, 
+                                Notes
+                            )
+                            VALUES (NOW(), %s, %s, %s, %s)
+                        """, (
+                            'Container updated',
+                            user_id,
+                            data['sampleId'],
+                            f"Sample {data['sampleId']} amount reduced to {new_container_amount} in container {container_id} due to disposal"
+                        ))
                 
                 # If all amount is disposed, update sample status
                 if new_amount == 0:

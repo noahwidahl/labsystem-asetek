@@ -24,10 +24,36 @@ function showDisposalModal(event) {
     try {
         // Get available samples and recent disposals
         Promise.all([
-            fetch('/api/activeSamples').then(response => response.json()),
-            fetch('/api/recentDisposals').then(response => response.json())
+            fetch('/api/activeSamples')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data.success) {
+                        throw new Error(data.error || "Failed to fetch samples");
+                    }
+                    return data;
+                }),
+            fetch('/api/recentDisposals')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data.success) {
+                        throw new Error(data.error || "Failed to fetch disposal history");
+                    }
+                    return data;
+                })
         ])
         .then(([samplesData, disposalsData]) => {
+            console.log("Active samples data:", samplesData);
+            
             // Update dropdown with available samples
             populateDisposalSampleSelect(samplesData.samples || []);
             
@@ -45,7 +71,7 @@ function showDisposalModal(event) {
         })
         .catch(error => {
             console.error("Could not fetch data:", error);
-            alert("Could not fetch data. Please try again.");
+            showErrorMessageDisposal(`Could not fetch data: ${error.message || "Unknown error"}`);
         });
     } catch (error) {
         console.error('Error in showDisposalModal:', error);
@@ -63,13 +89,46 @@ function populateDisposalSampleSelect(samples) {
         sampleSelect.remove(1);
     }
     
+    // Check if there are any samples
+    if (!samples || samples.length === 0) {
+        const option = document.createElement('option');
+        option.value = "";
+        option.textContent = "No samples available for disposal";
+        option.disabled = true;
+        sampleSelect.appendChild(option);
+        
+        // Display a user-friendly message
+        showWarningMessage("No samples available for disposal. Please register new samples first.");
+        return;
+    }
+    
     // Add samples to dropdown
     samples.forEach(sample => {
+        // Skip if essential data is missing
+        if (!sample.SampleID || !sample.Description) return;
+        
         const option = document.createElement('option');
         option.value = sample.SampleID;
-        option.textContent = `${sample.SampleIDFormatted} - ${sample.Description} (${sample.AmountRemaining} ${sample.Unit})`;
+        
+        // Format the display text with available information
+        let displayText = `${sample.SampleIDFormatted || `SMP-${sample.SampleID}`} - ${sample.Description}`;
+        
+        // Add amount and unit if available
+        if (sample.AmountRemaining) {
+            const unit = sample.Unit || 'pcs';
+            displayText += ` (${sample.AmountRemaining} ${unit})`;
+        }
+        
+        // Add location if available and not "Unknown"
+        if (sample.LocationName && sample.LocationName !== "Unknown") {
+            displayText += ` - ${sample.LocationName}`;
+        }
+        
+        option.textContent = displayText;
         sampleSelect.appendChild(option);
     });
+    
+    console.log(`Populated disposal sample select with ${samples.length} samples`);
 }
 
 // Populate table with recent disposals
