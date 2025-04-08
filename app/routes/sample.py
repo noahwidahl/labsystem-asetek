@@ -204,3 +204,234 @@ def init_sample(blueprint, mysql):
             import traceback
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500
+            
+    @blueprint.route('/api/activeSamples')
+    def get_active_samples():
+        try:
+            cursor = mysql.connection.cursor()
+            
+            # Get active samples with their storage location and remaining amount
+            cursor.execute("""
+                SELECT 
+                    s.SampleID, 
+                    s.Description, 
+                    s.Barcode,
+                    s.PartNumber,
+                    ss.AmountRemaining,
+                    sl.LocationName,
+                    u.Name as OwnerName,
+                    un.UnitName as Unit
+                FROM Sample s
+                JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+                JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                LEFT JOIN User u ON s.OwnerID = u.UserID
+                LEFT JOIN Unit un ON s.UnitID = un.UnitID
+                WHERE s.Status = 'In Storage'
+                AND ss.AmountRemaining > 0
+                ORDER BY s.SampleID DESC
+            """)
+            
+            columns = [col[0] for col in cursor.description]
+            samples = []
+            
+            for row in cursor.fetchall():
+                sample_dict = dict(zip(columns, row))
+                
+                # Format sample ID for display
+                sample_dict['SampleIDFormatted'] = f"SMP-{sample_dict['SampleID']}"
+                
+                # Ensure unit is always available
+                if not sample_dict.get('Unit'):
+                    sample_dict['Unit'] = 'pcs'
+                elif sample_dict['Unit'].lower() == 'stk':
+                    sample_dict['Unit'] = 'pcs'
+                    
+                samples.append(sample_dict)
+                
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'samples': samples
+            })
+        except Exception as e:
+            print(f"API error getting active samples: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': True,  # Return success to avoid JS errors
+                'samples': [],
+                'error': str(e)
+            })
+    
+    @blueprint.route('/api/recentDisposals')
+    def get_recent_disposals():
+        try:
+            cursor = mysql.connection.cursor()
+            
+            # Get recent disposal history
+            cursor.execute("""
+                SELECT 
+                    h.LogID,
+                    DATE_FORMAT(h.Timestamp, '%Y-%m-%d %H:%i') as DisposalDate,
+                    CONCAT('SMP-', h.SampleID) as SampleID,
+                    SUBSTRING_INDEX(h.Notes, ':', 1) as AmountDisposed,
+                    u.Name as DisposedBy
+                FROM History h
+                JOIN User u ON h.UserID = u.UserID
+                WHERE h.ActionType = 'Disposed'
+                ORDER BY h.Timestamp DESC
+                LIMIT 10
+            """)
+            
+            columns = [col[0] for col in cursor.description]
+            disposals = []
+            
+            for row in cursor.fetchall():
+                disposal_dict = dict(zip(columns, row))
+                
+                # Clean up amount disposed - extract just the number if possible
+                amount_str = disposal_dict.get('AmountDisposed', '')
+                if 'Amount' in amount_str:
+                    try:
+                        # Try to extract the number from format like "Amount: 5"
+                        import re
+                        amount_match = re.search(r'Amount:\s*(\d+)', amount_str)
+                        if amount_match:
+                            disposal_dict['AmountDisposed'] = amount_match.group(1)
+                    except:
+                        # Keep original if parsing fails
+                        pass
+                        
+                disposals.append(disposal_dict)
+                
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'disposals': disposals
+            })
+        except Exception as e:
+            print(f"API error getting recent disposals: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': True,  # Return success to avoid JS errors
+                'disposals': [],
+                'error': str(e)
+            })
+    
+    @blueprint.route('/api/createDisposal', methods=['POST'])
+    def create_disposal():
+        try:
+            data = request.json
+            
+            # Validate required fields
+            if not data.get('sampleId'):
+                return jsonify({'success': False, 'error': 'Sample ID is required'}), 400
+                
+            if not data.get('amount') or int(data.get('amount', 0)) <= 0:
+                return jsonify({'success': False, 'error': 'Valid amount is required'}), 400
+                
+            # Get user ID
+            user_id = data.get('userId')
+            if not user_id:
+                # Try to get current user
+                current_user = get_current_user()
+                user_id = current_user['UserID']
+                
+            if not user_id:
+                return jsonify({'success': False, 'error': 'User ID is required'}), 400
+                
+            # Create transaction
+            cursor = mysql.connection.cursor()
+            
+            try:
+                # Begin transaction
+                cursor.execute("START TRANSACTION")
+                
+                # Get current amount from storage
+                cursor.execute("""
+                    SELECT StorageID, AmountRemaining 
+                    FROM SampleStorage 
+                    WHERE SampleID = %s 
+                    AND AmountRemaining > 0
+                """, (data['sampleId'],))
+                
+                storage_result = cursor.fetchone()
+                
+                if not storage_result:
+                    cursor.execute("ROLLBACK")
+                    return jsonify({
+                        'success': False,
+                        'error': 'No available storage for this sample'
+                    }), 400
+                    
+                storage_id = storage_result[0]
+                amount_remaining = storage_result[1]
+                disposal_amount = int(data['amount'])
+                
+                if disposal_amount > amount_remaining:
+                    cursor.execute("ROLLBACK")
+                    return jsonify({
+                        'success': False,
+                        'error': f'Requested amount ({disposal_amount}) exceeds available amount ({amount_remaining})'
+                    }), 400
+                    
+                # Update storage amount
+                new_amount = amount_remaining - disposal_amount
+                cursor.execute("""
+                    UPDATE SampleStorage 
+                    SET AmountRemaining = %s 
+                    WHERE StorageID = %s
+                """, (new_amount, storage_id))
+                
+                # If all amount is disposed, update sample status
+                if new_amount == 0:
+                    cursor.execute("""
+                        UPDATE Sample 
+                        SET Status = 'Disposed' 
+                        WHERE SampleID = %s
+                    """, (data['sampleId'],))
+                    
+                # Log the disposal in history
+                notes = data.get('notes') or "Disposed through system"
+                notes = f"Amount: {disposal_amount} - {notes}"
+                
+                cursor.execute("""
+                    INSERT INTO History (
+                        Timestamp, 
+                        ActionType, 
+                        UserID, 
+                        SampleID, 
+                        Notes
+                    )
+                    VALUES (NOW(), %s, %s, %s, %s)
+                """, (
+                    'Disposed',
+                    user_id,
+                    data['sampleId'],
+                    notes
+                ))
+                
+                # Commit transaction
+                cursor.execute("COMMIT")
+                
+                return jsonify({
+                    'success': True,
+                    'message': f"Successfully disposed {disposal_amount} units of sample SMP-{data['sampleId']}"
+                })
+                
+            except Exception as tx_error:
+                # Rollback transaction on error
+                cursor.execute("ROLLBACK")
+                raise tx_error
+                
+            finally:
+                cursor.close()
+                
+        except Exception as e:
+            print(f"API error creating disposal: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500

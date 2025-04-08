@@ -1,18 +1,18 @@
-// Funktioner til håndtering af kassation
+// Functions for handling disposal
 
-// Vis kassationsmodal
+// Show disposal modal
 function showDisposalModal(event) {
-    // Forhindre standard link-handling
+    // Prevent standard link handling
     if (event) event.preventDefault();
     
-    // Tjek om Bootstrap er tilgængeligt
+    // Check if Bootstrap is available
     if (typeof bootstrap === 'undefined') {
         console.error('Bootstrap is not loaded. Cannot show modal.');
         alert('An error occurred. Please try reloading the page.');
         return;
     }
     
-    // Tjek om modal-elementet eksisterer
+    // Check if modal element exists
     const modalElement = document.getElementById('disposalModal');
     if (!modalElement) {
         console.error('Modal element not found:', 'disposalModal');
@@ -20,21 +20,21 @@ function showDisposalModal(event) {
         return;
     }
     
-    // Forsøg at hente data
+    // Attempt to fetch data
     try {
-        // Hent tilgængelige prøver og seneste kassationer
+        // Get available samples and recent disposals
         Promise.all([
             fetch('/api/activeSamples').then(response => response.json()),
             fetch('/api/recentDisposals').then(response => response.json())
         ])
         .then(([samplesData, disposalsData]) => {
-            // Opdater dropdown med tilgængelige prøver
+            // Update dropdown with available samples
             populateDisposalSampleSelect(samplesData.samples || []);
             
-            // Opdater tabel med seneste kassationer
+            // Update table with recent disposals
             populateRecentDisposalsTable(disposalsData.disposals || []);
             
-            // Vis modal
+            // Show modal
             try {
                 const modal = new bootstrap.Modal(modalElement);
                 modal.show();
@@ -53,17 +53,17 @@ function showDisposalModal(event) {
     }
 }
 
-// Populer dropdown med tilgængelige prøver
+// Populate dropdown with available samples
 function populateDisposalSampleSelect(samples) {
     const sampleSelect = document.getElementById('sampleSelect');
     if (!sampleSelect) return;
     
-    // Ryd dropdown bortset fra den første tomme option
+    // Clear dropdown except for the first empty option
     while (sampleSelect.options.length > 1) {
         sampleSelect.remove(1);
     }
     
-    // Tilføj prøver til dropdown
+    // Add samples to dropdown
     samples.forEach(sample => {
         const option = document.createElement('option');
         option.value = sample.SampleID;
@@ -72,20 +72,20 @@ function populateDisposalSampleSelect(samples) {
     });
 }
 
-// Populer tabel med seneste kassationer
+// Populate table with recent disposals
 function populateRecentDisposalsTable(disposals) {
     const tableBody = document.getElementById('disposalTableBody');
     if (!tableBody) return;
     
-    // Ryd tabellen
+    // Clear the table
     tableBody.innerHTML = '';
     
     if (disposals.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Ingen nylige kassationer</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="4" class="text-center">No recent disposals</td></tr>';
         return;
     }
     
-    // Populer tabellen med kassationer
+    // Populate the table with disposals
     disposals.forEach(disposal => {
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -98,12 +98,12 @@ function populateRecentDisposalsTable(disposals) {
     });
 }
 
-// Formatter dato til dansk format
+// Format date to the international format
 function formatDate(dateString) {
-    if (!dateString) return 'Ukendt';
+    if (!dateString) return 'Unknown';
     
     const date = new Date(dateString);
-    return date.toLocaleDateString('da-DK', {
+    return date.toLocaleDateString('en-US', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric'
@@ -141,15 +141,15 @@ function updateDisposalAmount() {
     }
 }
 
-// Opret kassation
+// Create disposal
 function createDisposal() {
-    // Hent input-værdier
+    // Get input values
     const sampleId = document.getElementById('sampleSelect').value;
     const amount = parseInt(document.getElementById('disposalAmount').value) || 0;
     const disposalUser = document.getElementById('disposalUser').value;
     const notes = document.getElementById('disposalNotes').value;
     
-    // Valider input
+    // Validate input
     if (!sampleId) {
         showErrorMessageDisposal("Please select a sample");
         return;
@@ -165,15 +165,15 @@ function createDisposal() {
         return;
     }
     
-    // Opret kassationsdata
+    // Create disposal data
     const disposalData = {
         sampleId: sampleId,
         amount: amount,
         userId: disposalUser,
-        notes: notes || "Kasseret via systemet"
+        notes: notes || "Disposed via system"
     };
     
-    // Send til server
+    // Send to server
     fetch('/api/createDisposal', {
         method: 'POST',
         headers: {
@@ -184,13 +184,13 @@ function createDisposal() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showSuccessMessage("Kassation er registreret succesfuldt!");
+            showSuccessMessage("Disposal has been registered successfully!");
             
-            // Luk modal og genindlæs siden
+            // Close modal and reload page
             const modal = bootstrap.Modal.getInstance(document.getElementById('disposalModal'));
             if (modal) modal.hide();
             
-            // Genindlæs siden efter kort pause
+            // Reload page after short pause
             setTimeout(() => {
                 window.location.reload();
             }, 1500);
@@ -439,7 +439,7 @@ function showSuccessMessage(message) {
             <i class="fas fa-check-circle"></i>
         </div>
         <div class="toast-content">
-            <div class="toast-title">Succes</div>
+            <div class="toast-title">Success</div>
             <div class="toast-message">${message}</div>
         </div>
         <button class="toast-close" onclick="this.parentElement.remove()">
@@ -448,24 +448,24 @@ function showSuccessMessage(message) {
     `;
     document.body.appendChild(successToast);
 
-    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    // Add 'show' class after a short delay (for animation effect)
     setTimeout(() => successToast.classList.add('show'), 10);
 
-    // Fjern automatisk efter 3 sekunder
+    // Remove automatically after 3 seconds
     setTimeout(() => {
         successToast.classList.remove('show');
         setTimeout(() => successToast.remove(), 300);
     }, 3000);
 }
 
-// Vis advarsel hvis man forsøger at bruge flere prøver end tilgængelig
+// Show warning if trying to use more samples than available
 function validateSampleAmount(input) {
     const max = parseInt(input.getAttribute('max')) || 0;
     const value = parseInt(input.value) || 0;
     
     if (value > max) {
         input.value = max;
-        showWarningMessage(`Maksimalt ${max} enheder tilgængelige`);
+        showWarningMessage(`Maximum ${max} units available`);
     } else if (value < 1) {
         input.value = 1;
     }
@@ -479,7 +479,7 @@ function showWarningMessage(message) {
             <i class="fas fa-exclamation-triangle"></i>
         </div>
         <div class="toast-content">
-            <div class="toast-title">Advarsel</div>
+            <div class="toast-title">Warning</div>
             <div class="toast-message">${message}</div>
         </div>
         <button class="toast-close" onclick="this.parentElement.remove()">
@@ -488,10 +488,10 @@ function showWarningMessage(message) {
     `;
     document.body.appendChild(warningToast);
 
-    // Tilføj 'show' klasse efter en kort forsinkelse (for animationseffekt)
+    // Add 'show' class after a short delay (for animation effect)
     setTimeout(() => warningToast.classList.add('show'), 10);
 
-    // Fjern automatisk efter 4 sekunder
+    // Remove automatically after 4 seconds
     setTimeout(() => {
         warningToast.classList.remove('show');
         setTimeout(() => warningToast.remove(), 300);
@@ -513,9 +513,9 @@ function showLoadingOverlay() {
     overlay.innerHTML = `
         <div class="loading-spinner">
             <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Indlæser...</span>
+                <span class="visually-hidden">Loading...</span>
             </div>
-            <div class="loading-text mt-2">Behandler...</div>
+            <div class="loading-text mt-2">Processing...</div>
         </div>
     `;
     
@@ -533,10 +533,10 @@ function hideLoadingOverlay() {
     }
 }
 
-// Opdateret disposeAllTestSamples funktion
+// Updated disposeAllTestSamples function
 function disposeAllTestSamples(testId) {
-    confirmAction(`Er du sikker på at du vil kassere ALLE prøver i test ${testId}?`, function() {
-        // Vis indlæsningsindikator
+    confirmAction(`Are you sure you want to dispose ALL samples in test ${testId}?`, function() {
+        // Show loading indicator
         showLoadingOverlay();
         
         fetch('/api/disposeAllTestSamples', {
@@ -548,13 +548,13 @@ function disposeAllTestSamples(testId) {
         })
         .then(response => response.json())
         .then(data => {
-            // Skjul indlæsningsindikator
+            // Hide loading indicator
             hideLoadingOverlay();
             
             if (data.success) {
-                showSuccessMessage(`Alle prøver i test ${testId} er kasseret!`);
+                showSuccessMessage(`All samples in test ${testId} have been disposed!`);
                 
-                // Genindlæs siden efter kort pause
+                // Reload page after short pause
                 setTimeout(() => {
                     window.location.reload();
                 }, 1500);
@@ -563,7 +563,7 @@ function disposeAllTestSamples(testId) {
             }
         })
         .catch(error => {
-            // Skjul indlæsningsindikator
+            // Hide loading indicator
             hideLoadingOverlay();
             showErrorMessageDisposal(`An error occurred: ${error}`);
         });
