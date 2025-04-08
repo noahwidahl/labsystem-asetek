@@ -539,7 +539,7 @@ def init_sample(blueprint, mysql):
                     h.LogID,
                     DATE_FORMAT(h.Timestamp, '%Y-%m-%d %H:%i') as DisposalDate,
                     CONCAT('SMP-', h.SampleID) as SampleID,
-                    SUBSTRING_INDEX(h.Notes, ':', 1) as AmountDisposed,
+                    h.Notes as DisposalNotes,
                     u.Name as DisposedBy
                 FROM History h
                 JOIN User u ON h.UserID = u.UserID
@@ -554,18 +554,19 @@ def init_sample(blueprint, mysql):
             for row in cursor.fetchall():
                 disposal_dict = dict(zip(columns, row))
                 
-                # Clean up amount disposed - extract just the number if possible
-                amount_str = disposal_dict.get('AmountDisposed', '')
-                if 'Amount' in amount_str:
-                    try:
-                        # Try to extract the number from format like "Amount: 5"
-                        import re
-                        amount_match = re.search(r'Amount:\s*(\d+)', amount_str)
-                        if amount_match:
-                            disposal_dict['AmountDisposed'] = amount_match.group(1)
-                    except:
-                        # Keep original if parsing fails
-                        pass
+                # Extract amount from notes format: "Amount: X - notes"
+                notes = disposal_dict.get('DisposalNotes', '')
+                try:
+                    # Use regex to extract the amount number
+                    import re
+                    amount_match = re.search(r'Amount:\s*(\d+)', notes)
+                    if amount_match:
+                        disposal_dict['AmountDisposed'] = amount_match.group(1)
+                    else:
+                        disposal_dict['AmountDisposed'] = 'Unknown'
+                except:
+                    # Keep a default in case regex fails
+                    disposal_dict['AmountDisposed'] = 'Unknown'
                         
                 recent_disposals.append(disposal_dict)
                 

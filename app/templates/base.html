@@ -64,10 +64,6 @@
                 <i class="fas fa-history"></i>
                 <span>History</span>
             </a>
-        </div>
-        
-        <div class="nav-section mt-4">
-            <div class="nav-header px-3 text-muted small">TOOLS</div>
             <a href="{{ url_for('sample.disposal_page') }}" class="nav-item {% if request.path == url_for('sample.disposal_page') %}active{% endif %}">
                 <i class="fas fa-trash-alt"></i>
                 <span>Disposal</span>
