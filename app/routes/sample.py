@@ -66,23 +66,19 @@ def init_sample(blueprint, mysql):
     @blueprint.route('/storage')
     def storage():
         try:
-            # DIRECT DB ACCESS: Completely bypass sample_service to get reliable data
+            # Database data approach
             cursor = mysql.connection.cursor()
-            print("DIRECT ACCESS: Getting all samples from the database")
             
-            # Get all samples
+            # Get all samples with relevant data in one query
             cursor.execute("""
                 SELECT 
                     s.SampleID, 
                     s.Description, 
                     s.Status, 
-                    s.Amount, 
+                    COALESCE(ss.AmountRemaining, s.Amount) as Amount,
                     s.PartNumber, 
-                    s.UnitID, 
-                    s.ReceptionID,
-                    r.ReceivedDate,
                     u.UnitName,
-                    ss.LocationID,
+                    r.ReceivedDate,
                     sl.LocationName
                 FROM Sample s
                 LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
@@ -92,10 +88,46 @@ def init_sample(blueprint, mysql):
                 ORDER BY s.SampleID DESC
             """)
             
-            sample_rows = cursor.fetchall()
-            print(f"DIRECT ACCESS: Found {len(sample_rows)} samples")
+            # Convert to format template expects
+            samples_for_template = []
             
-            # Get all locations for filter dropdown
+            for row in cursor.fetchall():
+                # Extract data with safe defaults
+                sample_id = row[0]
+                description = row[1] or 'No description'
+                status = row[2] or 'Unknown'
+                amount = row[3] or 0
+                part_number = row[4] or '-'
+                unit_name = row[5] or 'pcs'
+                reception_date = row[6]
+                location_name = row[7] or 'Unknown'
+                
+                # Standardize unit name (stk to pcs)
+                if unit_name.lower() == 'stk':
+                    unit_name = 'pcs'
+                
+                # Format dates
+                reception_str = reception_date.strftime('%Y-%m-%d') if reception_date else 'Unknown'
+                registered_str = reception_date.strftime('%Y-%m-%d %H:%M') if reception_date else 'Unknown'
+                
+                # Create sample record
+                sample_data = {
+                    "ID": f"SMP-{sample_id}",
+                    "PartNumber": part_number,
+                    "Description": description,
+                    "Reception": reception_str,
+                    "Amount": f"{amount} {unit_name}",
+                    "Location": location_name,
+                    "Registered": registered_str,
+                    "Status": status
+                }
+                
+                samples_for_template.append(sample_data)
+                
+            print(f"Found {len(samples_for_template)} samples in database")
+            
+            # Get locations for filter dropdown
+            cursor = mysql.connection.cursor()
             cursor.execute("SELECT LocationID, LocationName FROM StorageLocation ORDER BY LocationName")
             locations = [dict(LocationID=row[0], LocationName=row[1]) for row in cursor.fetchall()]
             
@@ -109,158 +141,11 @@ def init_sample(blueprint, mysql):
             sort_by = 'sample_id'
             sort_order = 'DESC'
             
-            # Convert to format used by template
-            samples_for_template = []
-            
-            # Get column names for easier access
-            columns = [col[0] for col in cursor.description]
-            
-            for row in sample_rows:
-                # Convert row to dict
-                sample_dict = dict(zip(columns, row))
-                
-                # Extract values with defaults for safety
-                sample_id = sample_dict.get('SampleID')
-                description = sample_dict.get('Description', 'No description')
-                status = sample_dict.get('Status', 'Unknown')
-                amount = sample_dict.get('Amount', 0)
-                part_number = sample_dict.get('PartNumber', '-')
-                
-                # Get reception date
-                reception_date = sample_dict.get('ReceivedDate')
-                
-                # Get unit
-                unit_name = sample_dict.get('UnitName', 'pcs')
-                if unit_name and unit_name.lower() == 'stk':
-                    unit_name = 'pcs'
-                
-                # Get location
-                location_name = sample_dict.get('LocationName', 'Unknown')
-                
-                # Apply simple filtering if search term provided
-                if search_term and not (
-                    (description and search_term.lower() in description.lower()) or
-                    (part_number and search_term.lower() in str(part_number).lower()) or
-                    (location_name and search_term.lower() in location_name.lower())
-                ):
-                    continue  # Skip this sample
-                
-                # Apply simple status filtering
-                status_filter = request.args.get('status')
-                if status_filter and status != status_filter:
-                    continue  # Skip this sample
-                
-                # Format the sample data
-                sample_data = {
-                    "ID": f"SMP-{sample_id}",
-                    "PartNumber": part_number,
-                    "Description": description,
-                    "Reception": reception_date.strftime('%Y-%m-%d') if reception_date else "Unknown",
-                    "Amount": f"{amount} {unit_name}",
-                    "Location": location_name,
-                    "Registered": reception_date.strftime('%Y-%m-%d %H:%M') if reception_date else "Unknown",
-                    "Status": status
-                }
-                
-                samples_for_template.append(sample_data)
-                
-            print(f"DIRECT ACCESS: Prepared {len(samples_for_template)} samples for template")
+            # Debug info
+            print(f"Using {len(samples_for_template)} hardcoded samples")
             
             # Return the template with all the data
             cursor.close()
-            return render_template(
-                'sections/storage.html', 
-                samples=samples_for_template,
-                locations=locations,
-                statuses=statuses,
-                current_search=search_term,
-                current_sort_by=sort_by,
-                current_sort_order=sort_order,
-                filter_criteria=filter_criteria
-            )
-        except Exception as e:
-            print(f"CRITICAL ERROR in storage page: {e}")
-            import traceback
-            traceback.print_exc()
-            return render_template('sections/storage.html', 
-                                error=f"Error loading samples: {e}")
-            
-            # Get all locations for filter dropdown
-            cursor = mysql.connection.cursor()
-            cursor.execute("SELECT LocationID, LocationName FROM StorageLocation ORDER BY LocationName")
-            locations = [dict(LocationID=row[0], LocationName=row[1]) for row in cursor.fetchall()]
-            
-            # Get status options for filter dropdown
-            cursor.execute("SELECT DISTINCT Status FROM Sample")
-            statuses = [row[0] for row in cursor.fetchall()]
-            
-            # Debug information
-            print(f"Found {len(samples)} samples matching criteria")
-            for i, sample in enumerate(samples[:3]):  # Print first 3 for debugging
-                print(f"Sample {i+1}: ID={sample.id}, Description={sample.description}, Status={sample.status}")
-            
-            # Convert to format used by template
-            samples_for_template = []
-            for sample in samples:
-                try:
-                    # Get unit name - ensuring consistent unit name
-                    unit = "pcs"
-                    if hasattr(sample, 'unit_name') and sample.unit_name:
-                        unit = sample.unit_name
-                        if unit.lower() == "stk":
-                            unit = "pcs"
-                    else:
-                        # Fallback if not in the joined query
-                        cursor.execute("SELECT UnitName FROM Unit WHERE UnitID = %s", (sample.unit_id,))
-                        unit_result = cursor.fetchone()
-                        unit = unit_result[0] if unit_result else "pcs"
-                        if unit and unit.lower() == "stk":
-                            unit = "pcs"
-                    
-                    # Get location - may already be available from the join
-                    location = "Unknown"
-                    if hasattr(sample, 'location_name') and sample.location_name:
-                        location = sample.location_name
-                    
-                    # Get reception date - may already be available from the join
-                    reception_date = None
-                    if hasattr(sample, 'received_date') and sample.received_date:
-                        reception_date = sample.received_date
-                    else:
-                        # Fallback if not in the joined query
-                        cursor.execute("SELECT ReceivedDate FROM Reception WHERE ReceptionID = %s", (sample.reception_id,))
-                        reception_result = cursor.fetchone()
-                        reception_date = reception_result[0] if reception_result else None
-                        
-                    # Debug information for each sample processed
-                    print(f"Processing sample {sample.id}: reception_date={reception_date}, location={location}, unit={unit}")
-                except Exception as sample_error:
-                    print(f"Error processing sample {sample.id if hasattr(sample, 'id') else 'unknown'}: {sample_error}")
-                    # Set default values
-                    reception_date = None
-                    location = "Unknown"
-                    unit = "pcs"
-                
-                # Get Amount from SampleStorage if available, otherwise use sample.amount
-                amount = getattr(sample, 'amount', 0)
-                
-                # Safe access to properties with fallbacks for robustness
-                sample_data = {
-                    "ID": f"SMP-{getattr(sample, 'id', '?')}",
-                    "PartNumber": getattr(sample, 'part_number', '-'),
-                    "Description": getattr(sample, 'description', 'No description'),
-                    "Reception": reception_date.strftime('%Y-%m-%d') if reception_date else "Unknown",
-                    "Amount": f"{amount} {unit}",
-                    "Location": location,
-                    "Registered": reception_date.strftime('%Y-%m-%d %H:%M') if reception_date else "Unknown",
-                    "Status": getattr(sample, 'status', 'Unknown')
-                }
-                
-                samples_for_template.append(sample_data)
-            
-            cursor.close()
-            
-            # Pass all data to template including sorting and filter state
             return render_template(
                 'sections/storage.html', 
                 samples=samples_for_template,
@@ -604,15 +489,6 @@ def init_sample(blueprint, mysql):
                 'error': str(e),
                 'results': []
             }), 500
-        except Exception as e:
-            print(f"API error getting recent disposals: {e}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({
-                'success': True,  # Return success to avoid JS errors
-                'disposals': [],
-                'error': str(e)
-            })
     
     @blueprint.route('/api/createDisposal', methods=['POST'])
     def create_disposal():
