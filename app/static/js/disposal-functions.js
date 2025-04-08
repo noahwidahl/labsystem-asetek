@@ -2,6 +2,8 @@
 
 // Show disposal modal
 function showDisposalModal(event) {
+    console.log("disposal-functions.js: showDisposalModal called");
+    
     // Prevent standard link handling
     if (event) event.preventDefault();
     
@@ -19,6 +21,8 @@ function showDisposalModal(event) {
         alert('Modal not found. Please contact the administrator.');
         return;
     }
+    
+    console.log("disposal-functions.js: Modal element found, proceeding with data load");
     
     // Attempt to fetch data
     try {
@@ -733,16 +737,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Initialiser funktioner når siden indlæses
 document.addEventListener('DOMContentLoaded', function() {
-    // Tilføj event listeners til kassationsmodal
-    const disposalLink = document.querySelector('a[href="#"][onclick="showDisposalModal(event)"]');
-    if (disposalLink) {
-        disposalLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            showDisposalModal();
-        });
+    // Tjek om siden er container-administration
+    const isContainerPage = window.location.pathname.includes('/containers');
+    
+    // Hvis det er container-siden, lad container-management.js håndtere disposal-modalen
+    if (!isContainerPage) {
+        // Tilføj event listeners til kassationsmodal kun for ikke-container sider
+        const disposalLink = document.querySelector('a[href="#"][onclick="showDisposalModal(event)"]');
+        if (disposalLink) {
+            // Fjern den oprindelige onclick for at undgå at den bliver kaldt to gange
+            const originalOnClick = disposalLink.getAttribute('onclick');
+            disposalLink.removeAttribute('onclick');
+            
+            disposalLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showDisposalModal();
+            });
+        }
+    } else {
+        console.log("Container side detekteret - disposal modal håndteres af container-management.js");
     }
     
-    // Tilføj event listener til prøvevalg i kassationsmodal
+    // Tilføj event listener til prøvevalg i kassationsmodal - dette er altid nødvendigt
     const sampleSelect = document.getElementById('sampleSelect');
     if (sampleSelect) {
         sampleSelect.addEventListener('change', updateDisposalAmount);

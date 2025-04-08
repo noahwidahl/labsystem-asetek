@@ -1,0 +1,404 @@
+{% extends "base.html" %}
+
+{% block title %}Disposal - Laboratory Sample System{% endblock %}
+
+{% block content %}
+<section id="disposal" class="content-section">
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Sample Disposal</h2>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Register New Disposal</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group mb-3">
+                            <label for="sampleSelect">Select Sample</label>
+                            <select class="form-control" id="sampleSelect" required>
+                                <option value="">Select sample</option>
+                                <!-- Will be populated dynamically via JavaScript -->
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="disposalAmount">Amount</label>
+                            <input type="number" class="form-control" id="disposalAmount" min="1" required>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="disposalUser">Disposed By</label>
+                            <select class="form-control" id="disposalUser" required>
+                                {% if current_user %}
+                                    <option value="{{ current_user.UserID }}">{{ current_user.Name }}</option>
+                                {% endif %}
+                                
+                                {% for user in users %}
+                                    {% if not current_user or user.UserID != current_user.UserID %}
+                                        <option value="{{ user.UserID }}">{{ user.Name }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="disposalNotes">Notes</label>
+                            <textarea class="form-control" id="disposalNotes" rows="3" placeholder="Enter any relevant notes about this disposal"></textarea>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="button" class="btn btn-danger" onclick="createDisposal()">Register Disposal</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Recent Disposals</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Sample ID</th>
+                                        <th>Date</th>
+                                        <th>Amount</th>
+                                        <th>User</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="disposalTableBody">
+                                    {% if recent_disposals %}
+                                        {% for disposal in recent_disposals %}
+                                        <tr>
+                                            <td>{{ disposal.SampleID }}</td>
+                                            <td>{{ disposal.DisposalDate }}</td>
+                                            <td>{{ disposal.AmountDisposed }}</td>
+                                            <td>{{ disposal.DisposedBy }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="4" class="text-center">No recent disposals</td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// When the page loads, fetch the active samples
+document.addEventListener('DOMContentLoaded', function() {
+    // Fetch active samples for the dropdown
+    fetchActiveSamples();
+    
+    // Add event listener to sample select for updating amount input
+    const sampleSelect = document.getElementById('sampleSelect');
+    if (sampleSelect) {
+        sampleSelect.addEventListener('change', updateDisposalAmount);
+    }
+});
+
+// Fetch active samples from the server
+function fetchActiveSamples() {
+    fetch('/api/activeSamples')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log("Active samples data:", data);
+            
+            if (data.success) {
+                populateSampleSelect(data.samples || []);
+            } else {
+                showErrorMessage(data.error || "Failed to fetch samples");
+            }
+        })
+        .catch(error => {
+            console.error("Error fetching active samples:", error);
+            showErrorMessage("Error loading samples: " + error.message);
+        });
+}
+
+// Populate the sample select dropdown
+function populateSampleSelect(samples) {
+    const sampleSelect = document.getElementById('sampleSelect');
+    if (!sampleSelect) return;
+    
+    // Clear dropdown except for the first empty option
+    while (sampleSelect.options.length > 1) {
+        sampleSelect.remove(1);
+    }
+    
+    // Check if there are any samples
+    if (!samples || samples.length === 0) {
+        const option = document.createElement('option');
+        option.value = "";
+        option.textContent = "No samples available for disposal";
+        option.disabled = true;
+        sampleSelect.appendChild(option);
+        
+        // Display a user-friendly message
+        showWarningMessage("No samples available for disposal. Please register new samples first.");
+        return;
+    }
+    
+    // Add samples to dropdown
+    samples.forEach(sample => {
+        // Skip if essential data is missing
+        if (!sample.SampleID || !sample.Description) return;
+        
+        const option = document.createElement('option');
+        option.value = sample.SampleID;
+        
+        // Format the display text with available information
+        let displayText = `${sample.SampleIDFormatted || `SMP-${sample.SampleID}`} - ${sample.Description}`;
+        
+        // Add amount and unit if available
+        if (sample.AmountRemaining) {
+            const unit = sample.Unit || 'pcs';
+            displayText += ` (${sample.AmountRemaining} ${unit})`;
+        }
+        
+        // Add location if available and not "Unknown"
+        if (sample.LocationName && sample.LocationName !== "Unknown") {
+            displayText += ` - ${sample.LocationName}`;
+        }
+        
+        option.textContent = displayText;
+        sampleSelect.appendChild(option);
+    });
+    
+    console.log(`Populated disposal sample select with ${samples.length} samples`);
+}
+
+// Update disposal amount when sample is selected
+function updateDisposalAmount() {
+    const sampleSelect = document.getElementById('sampleSelect');
+    const disposalAmount = document.getElementById('disposalAmount');
+    
+    if (!sampleSelect || !disposalAmount) return;
+    
+    // If no sample selected, disable amount field
+    if (!sampleSelect.value) {
+        disposalAmount.disabled = true;
+        disposalAmount.value = '';
+        return;
+    }
+    
+    // Enable amount field
+    disposalAmount.disabled = false;
+    
+    // Find selected sample from dropdown text
+    const selectedOption = sampleSelect.options[sampleSelect.selectedIndex];
+    const optionText = selectedOption.textContent;
+    
+    // Try to extract maximum amount from text with regex
+    const match = optionText.match(/\((\d+)/);
+    if (match && match[1]) {
+        const maxAmount = parseInt(match[1]);
+        disposalAmount.max = maxAmount;
+        disposalAmount.value = 1;
+        disposalAmount.placeholder = `Max: ${maxAmount}`;
+    }
+}
+
+// Create disposal
+function createDisposal() {
+    // Get input values
+    const sampleId = document.getElementById('sampleSelect').value;
+    const amount = parseInt(document.getElementById('disposalAmount').value) || 0;
+    const disposalUser = document.getElementById('disposalUser').value;
+    const notes = document.getElementById('disposalNotes').value;
+    
+    // Validate input
+    if (!sampleId) {
+        showErrorMessage("Please select a sample");
+        return;
+    }
+    
+    if (amount <= 0) {
+        showErrorMessage("Amount must be greater than 0");
+        return;
+    }
+    
+    if (!disposalUser) {
+        showErrorMessage("Please select a user");
+        return;
+    }
+    
+    // Create disposal data
+    const disposalData = {
+        sampleId: sampleId,
+        amount: amount,
+        userId: disposalUser,
+        notes: notes || "Disposed via system"
+    };
+    
+    // Show loading indicator
+    showLoadingOverlay("Registering disposal...");
+    
+    // Send to server
+    fetch('/api/createDisposal', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(disposalData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Hide loading indicator
+        hideLoadingOverlay();
+        
+        if (data.success) {
+            showSuccessMessage("Disposal has been registered successfully!");
+            
+            // Reload page after short pause
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showErrorMessage(`Error during disposal: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        // Hide loading indicator
+        hideLoadingOverlay();
+        showErrorMessage(`An error occurred: ${error}`);
+    });
+}
+
+// Message functions for displaying errors and success
+function showSuccessMessage(message) {
+    const successToast = document.createElement('div');
+    successToast.className = 'custom-toast success-toast';
+    successToast.innerHTML = `
+        <div class="toast-icon">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="toast-content">
+            <div class="toast-title">Success</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    document.body.appendChild(successToast);
+
+    // Add 'show' class after a short delay (for animation effect)
+    setTimeout(() => successToast.classList.add('show'), 10);
+
+    // Remove automatically after 3 seconds
+    setTimeout(() => {
+        successToast.classList.remove('show');
+        setTimeout(() => successToast.remove(), 300);
+    }, 3000);
+}
+
+function showErrorMessage(message) {
+    const errorToast = document.createElement('div');
+    errorToast.className = 'custom-toast error-toast';
+    errorToast.innerHTML = `
+        <div class="toast-icon">
+            <i class="fas fa-exclamation-circle"></i>
+        </div>
+        <div class="toast-content">
+            <div class="toast-title">Error</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    document.body.appendChild(errorToast);
+
+    // Add 'show' class after a short delay (for animation effect)
+    setTimeout(() => errorToast.classList.add('show'), 10);
+
+    // Remove automatically after 5 seconds
+    setTimeout(() => {
+        errorToast.classList.remove('show');
+        setTimeout(() => errorToast.remove(), 300);
+    }, 5000);
+}
+
+function showWarningMessage(message) {
+    const warningToast = document.createElement('div');
+    warningToast.className = 'custom-toast warning-toast';
+    warningToast.innerHTML = `
+        <div class="toast-icon">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="toast-content">
+            <div class="toast-title">Warning</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    document.body.appendChild(warningToast);
+
+    // Add 'show' class after a short delay (for animation effect)
+    setTimeout(() => warningToast.classList.add('show'), 10);
+
+    // Remove automatically after 4 seconds
+    setTimeout(() => {
+        warningToast.classList.remove('show');
+        setTimeout(() => warningToast.remove(), 300);
+    }, 4000);
+}
+
+// Show loading overlay
+function showLoadingOverlay(message) {
+    // Check if overlay already exists
+    if (document.getElementById('loadingOverlay')) {
+        return;
+    }
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'loadingOverlay';
+    overlay.className = 'loading-overlay';
+    overlay.innerHTML = `
+        <div class="loading-spinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div class="loading-text mt-2">${message || 'Processing...'}</div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+}
+
+// Hide loading overlay
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.classList.add('fade-out');
+        setTimeout(() => {
+            overlay.remove();
+        }, 300);
+    }
+}
+</script>
+{% endblock %}

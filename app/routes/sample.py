@@ -520,3 +520,67 @@ def init_sample(blueprint, mysql):
             import traceback
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500
+            
+    @blueprint.route('/disposal')
+    def disposal_page():
+        """
+        Render the dedicated disposal page
+        """
+        try:
+            cursor = mysql.connection.cursor()
+            
+            # Get users for disposal selector
+            cursor.execute("SELECT UserID, Name FROM User")
+            users = [dict(UserID=row[0], Name=row[1]) for row in cursor.fetchall()]
+            
+            # Get recent disposals for display
+            cursor.execute("""
+                SELECT 
+                    h.LogID,
+                    DATE_FORMAT(h.Timestamp, '%Y-%m-%d %H:%i') as DisposalDate,
+                    CONCAT('SMP-', h.SampleID) as SampleID,
+                    SUBSTRING_INDEX(h.Notes, ':', 1) as AmountDisposed,
+                    u.Name as DisposedBy
+                FROM History h
+                JOIN User u ON h.UserID = u.UserID
+                WHERE h.ActionType = 'Disposed'
+                ORDER BY h.Timestamp DESC
+                LIMIT 10
+            """)
+            
+            columns = [col[0] for col in cursor.description]
+            recent_disposals = []
+            
+            for row in cursor.fetchall():
+                disposal_dict = dict(zip(columns, row))
+                
+                # Clean up amount disposed - extract just the number if possible
+                amount_str = disposal_dict.get('AmountDisposed', '')
+                if 'Amount' in amount_str:
+                    try:
+                        # Try to extract the number from format like "Amount: 5"
+                        import re
+                        amount_match = re.search(r'Amount:\s*(\d+)', amount_str)
+                        if amount_match:
+                            disposal_dict['AmountDisposed'] = amount_match.group(1)
+                    except:
+                        # Keep original if parsing fails
+                        pass
+                        
+                recent_disposals.append(disposal_dict)
+                
+            cursor.close()
+            
+            # Get current user
+            current_user = get_current_user()
+            
+            return render_template('sections/disposal.html', 
+                                  users=users,
+                                  recent_disposals=recent_disposals,
+                                  current_user=current_user)
+        except Exception as e:
+            print(f"Error loading disposal page: {e}")
+            import traceback
+            traceback.print_exc()
+            return render_template('sections/disposal.html', 
+                                  error="Error loading disposal page")

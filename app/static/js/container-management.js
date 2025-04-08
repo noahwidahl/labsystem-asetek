@@ -44,6 +44,28 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Setup container type selection change
     setupContainerTypeSelection();
+    
+    // Add an event listener to the disposal link in the sidebar navigation using the ID
+    const disposalLink = document.getElementById('disposalLink');
+    if (disposalLink) {
+        console.log("Container page: Found disposal link - replacing click handler");
+        
+        // Remove any existing click handler by cloning and replacing the node
+        const newDisposalLink = disposalLink.cloneNode(true);
+        disposalLink.parentNode.replaceChild(newDisposalLink, disposalLink);
+        
+        // Add a fresh click handler that will call our container-specific function
+        newDisposalLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log("Container disposal link clicked - showing container-specific disposal modal");
+            showContainerDisposalModal();
+        });
+        
+        // Remove the onclick attribute to prevent double execution
+        newDisposalLink.removeAttribute('onclick');
+    } else {
+        console.error("Container page: Could not find disposal link with ID 'disposalLink'");
+    }
 });
 
 function setupFilterButtons() {
@@ -410,6 +432,14 @@ function showSuccessMessage(message) {
 }
 
 function showErrorMessage(message) {
+    // Check if there's a global showErrorMessageDisposal function
+    if (typeof showErrorMessageDisposal === 'function') {
+        // Use the global function instead to avoid conflicts
+        showErrorMessageDisposal(message);
+        return;
+    }
+    
+    // Fallback in case the global function isn't available
     const errorToast = document.createElement('div');
     errorToast.className = 'custom-toast error-toast';
     errorToast.innerHTML = `
@@ -541,5 +571,135 @@ function setupContainerTypeSelection() {
             capacityInput.value = typeData.capacity;
             capacityInput.placeholder = `Default: ${typeData.capacity}`;
         }
+    }
+}
+
+// Custom function to show disposal modal specifically from the container page
+// This ensures compatibility with the container management code
+function showContainerDisposalModal() {
+    console.log("Container management: showContainerDisposalModal called");
+    
+    // Check if Bootstrap is available
+    if (typeof bootstrap === 'undefined') {
+        console.error('Bootstrap is not loaded. Cannot show modal.');
+        alert('An error occurred. Please try reloading the page.');
+        return;
+    }
+    
+    // Check if modal element exists
+    const modalElement = document.getElementById('disposalModal');
+    if (!modalElement) {
+        console.error('Modal element not found:', 'disposalModal');
+        alert('Modal not found. Please contact the administrator.');
+        return;
+    }
+    
+    console.log("Container management: Starting to load disposal modal data");
+    
+    // Modify this from the original showDisposalModal function to handle any
+    // container-specific issues with the disposal modal
+    
+    // Show loading indicator
+    showOverlayMessage("Loading samples...");
+    
+    // Get available samples and recent disposals with explicit handling
+    Promise.all([
+        // Use explicit fetch with full error handling for active samples
+        fetch('/api/activeSamples')
+            .then(response => {
+                if (!response.ok) {
+                    console.error(`Server error: ${response.status} ${response.statusText}`);
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Active samples response:", data);
+                
+                // Check for success flag
+                if (!data.success) {
+                    throw new Error(data.error || "Failed to get active samples");
+                }
+                
+                return data;
+            }),
+            
+        // Fetch recent disposals
+        fetch('/api/recentDisposals')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                return response.json();
+            })
+    ])
+    .then(([samplesData, disposalsData]) => {
+        // Hide loading message
+        hideOverlayMessage();
+        
+        console.log("Sample data fetched for disposal modal:", samplesData);
+        
+        // Update dropdown with available samples using the function from disposal-functions.js
+        if (typeof populateDisposalSampleSelect === 'function') {
+            populateDisposalSampleSelect(samplesData.samples || []);
+        } else {
+            console.error("populateDisposalSampleSelect function not available");
+        }
+        
+        // Update table with recent disposals
+        if (typeof populateRecentDisposalsTable === 'function') {
+            populateRecentDisposalsTable(disposalsData.disposals || []);
+        } else {
+            console.error("populateRecentDisposalsTable function not available");
+        }
+        
+        // Show modal
+        try {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+        } catch (modalError) {
+            console.error('Error showing modal:', modalError);
+            alert('Could not show modal. Please try reloading the page.');
+        }
+    })
+    .catch(error => {
+        // Hide loading message
+        hideOverlayMessage();
+        
+        console.error("Error fetching disposal data:", error);
+        showErrorMessage(`Could not load disposal data: ${error.message}`);
+    });
+}
+
+// Helper function to show a message overlay during loading
+function showOverlayMessage(message) {
+    // Create overlay if it doesn't exist
+    if (!document.getElementById('messageOverlay')) {
+        const overlay = document.createElement('div');
+        overlay.id = 'messageOverlay';
+        overlay.className = 'message-overlay';
+        overlay.innerHTML = `
+            <div class="overlay-content">
+                <div class="spinner-border text-light" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="overlay-message mt-2">${message}</div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    } else {
+        // Update message if overlay exists
+        document.querySelector('#messageOverlay .overlay-message').textContent = message;
+    }
+}
+
+// Helper function to hide message overlay
+function hideOverlayMessage() {
+    const overlay = document.getElementById('messageOverlay');
+    if (overlay) {
+        overlay.classList.add('fade-out');
+        setTimeout(() => {
+            overlay.remove();
+        }, 300);
     }
 }
