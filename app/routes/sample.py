@@ -66,36 +66,8 @@ def init_sample(blueprint, mysql):
     @blueprint.route('/storage')
     def storage():
         try:
-            # Hardcoded samples - de virker altid!
-            samples_for_template = [
-                {
-                    "ID": "SMP-4",
-                    "PartNumber": "test",
-                    "Description": "test",
-                    "Amount": "2 pcs",
-                    "Location": "1.5.1",
-                    "Registered": "08-04-2025 14:46",
-                    "Status": "In Storage"
-                },
-                {
-                    "ID": "SMP-3",
-                    "PartNumber": "Test123",
-                    "Description": "test",
-                    "Amount": "2 pcs",
-                    "Location": "1.6.4",
-                    "Registered": "08-04-2025 13:16",
-                    "Status": "In Storage"
-                },
-                {
-                    "ID": "SMP-1",
-                    "PartNumber": "Partnumber123",
-                    "Description": "TestSampleinContainer",
-                    "Amount": "10 pcs",
-                    "Location": "1.1.1",
-                    "Registered": "08-04-2025 13:13",
-                    "Status": "In Storage"
-                }
-            ]
+            # Initialize empty array for samples
+            samples_for_template = []
             
             # Get filter parameters
             filter_criteria = {}
@@ -180,10 +152,12 @@ def init_sample(blueprint, mysql):
                     
                     print("Using real database data")
                 else:
-                    print("No samples found in database, using hardcoded data")
+                    print("No samples found in database")
+                    # No hardcoded data anymore, just empty array
             except Exception as e:
                 print(f"Error fetching database data: {e}")
-                print("Continuing with hardcoded data")
+                import traceback
+                traceback.print_exc()
                 
             # Apply search filter
             if search:
