@@ -229,20 +229,76 @@ function removeSection(rackNum, sectionNum) {
         return;
     }
     
-    // Confirm deletion
-    if (!confirm(`Are you sure you want to remove Section ${sectionNum} from Rack ${rackNum}? This will delete all shelf locations in this section.`)) {
-        return;
-    }
+    // Create a custom confirmation dialog instead of the browser's default
+    const confirmDialog = document.createElement('div');
+    confirmDialog.className = 'modal fade custom-confirm-dialog';
+    confirmDialog.setAttribute('tabindex', '-1');
+    confirmDialog.innerHTML = `
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Confirm Section Removal</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to remove Section ${sectionNum} from Rack ${rackNum}?</p>
+                    <p class="text-danger"><strong>Warning:</strong> This will delete all shelf locations in this section.</p>
+                    <div class="sample-warning d-none mt-3 alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <span>This section contains samples. Removing it will make these samples inaccessible.</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger confirm-remove-btn">Remove Section</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(confirmDialog);
+    
+    // Initialize the modal
+    const modalInstance = new bootstrap.Modal(confirmDialog);
     
     // Check if section has samples
     const section = document.getElementById(`section-${rackNum}-${sectionNum}`);
     const sampleBadges = section.querySelectorAll('.badge.bg-primary');
     
     if (sampleBadges.length > 0) {
-        if (!confirm(`Warning: This section contains samples. Removing it will make these samples inaccessible. Continue?`)) {
-            return;
-        }
+        // Show the sample warning
+        confirmDialog.querySelector('.sample-warning').classList.remove('d-none');
     }
+    
+    // Handle confirmation
+    confirmDialog.querySelector('.confirm-remove-btn').addEventListener('click', function() {
+        modalInstance.hide();
+        
+        // After modal is hidden, proceed with removal
+        setTimeout(() => {
+            document.body.removeChild(confirmDialog);
+            proceedWithSectionRemoval(rackNum, sectionNum);
+        }, 300);
+    });
+    
+    // Handle dismiss
+    confirmDialog.addEventListener('hidden.bs.modal', function() {
+        setTimeout(() => {
+            if (document.body.contains(confirmDialog)) {
+                document.body.removeChild(confirmDialog);
+            }
+        }, 300);
+    });
+    
+    // Show the modal
+    modalInstance.show();
+}
+
+// Function to actually remove the section after confirmation
+function proceedWithSectionRemoval(rackNum, sectionNum) {
+    
+    // Show loading overlay
+    showLoadingOverlay();
     
     // Call API to remove section
     fetch('/api/storage/remove-section', {
@@ -257,17 +313,89 @@ function removeSection(rackNum, sectionNum) {
     })
     .then(response => response.json())
     .then(data => {
+        // Hide loading overlay
+        hideLoadingOverlay();
+        
         if (data.success) {
-            showSuccessMessage(`Section ${sectionNum} removed from Rack ${rackNum}`);
+            // Create a floating success message that appears in center of the screen
+            const successMessage = document.createElement('div');
+            successMessage.className = 'position-fixed top-50 start-50 translate-middle p-3 bg-success text-white rounded shadow-lg notification-popup';
+            successMessage.style.zIndex = '2000';
+            successMessage.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-check-circle me-2 fa-lg"></i>
+                    <strong>Success!</strong>
+                </div>
+                <div class="mt-2">Section ${sectionNum} removed from Rack ${rackNum}</div>
+            `;
+            document.body.appendChild(successMessage);
             
             // Remove the section from the UI
-            section.remove();
+            const section = document.getElementById(`section-${rackNum}-${sectionNum}`);
+            if (section) {
+                section.remove();
+            }
+            
+            // Remove the success message after a delay
+            setTimeout(() => {
+                successMessage.classList.add('fade-out');
+                setTimeout(() => {
+                    if (document.body.contains(successMessage)) {
+                        document.body.removeChild(successMessage);
+                    }
+                }, 500);
+            }, 3000);
         } else {
-            showErrorMessage(`Failed to remove section: ${data.error}`);
+            // Create a floating error message
+            const errorMessage = document.createElement('div');
+            errorMessage.className = 'position-fixed top-50 start-50 translate-middle p-3 bg-danger text-white rounded shadow-lg notification-popup';
+            errorMessage.style.zIndex = '2000';
+            errorMessage.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-exclamation-circle me-2 fa-lg"></i>
+                    <strong>Error!</strong>
+                </div>
+                <div class="mt-2">Failed to remove section: ${data.error}</div>
+            `;
+            document.body.appendChild(errorMessage);
+            
+            // Remove the error message after a delay
+            setTimeout(() => {
+                errorMessage.classList.add('fade-out');
+                setTimeout(() => {
+                    if (document.body.contains(errorMessage)) {
+                        document.body.removeChild(errorMessage);
+                    }
+                }, 500);
+            }, 5000);
         }
     })
     .catch(error => {
-        showErrorMessage(`Error: ${error.message}`);
+        // Hide loading overlay
+        hideLoadingOverlay();
+        
+        // Create a floating error message for the exception
+        const errorMessage = document.createElement('div');
+        errorMessage.className = 'position-fixed top-50 start-50 translate-middle p-3 bg-danger text-white rounded shadow-lg notification-popup';
+        errorMessage.style.zIndex = '2000';
+        errorMessage.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="fas fa-exclamation-circle me-2 fa-lg"></i>
+                <strong>Error!</strong>
+            </div>
+            <div class="mt-2">An error occurred: ${error.message}</div>
+        `;
+        document.body.appendChild(errorMessage);
+        
+        // Remove the error message after a delay
+        setTimeout(() => {
+            errorMessage.classList.add('fade-out');
+            setTimeout(() => {
+                if (document.body.contains(errorMessage)) {
+                    document.body.removeChild(errorMessage);
+                }
+            }, 500);
+        }, 5000);
     });
 }
 

@@ -832,6 +832,41 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
     // Keep track of the cell for pre-selected location
     let preSelectedCell = null;
     
+    // Add fixed button bar at the bottom for navigation
+    let buttonBar = document.querySelector('.fixed-button-bar');
+    if (!buttonBar) {
+        buttonBar = document.createElement('div');
+        buttonBar.className = 'fixed-button-bar position-sticky bottom-0 bg-white border-top py-3 px-4 d-flex justify-content-between';
+        buttonBar.style.zIndex = '1000';
+        buttonBar.style.marginTop = 'auto';
+        buttonBar.innerHTML = `
+            <button type="button" class="btn btn-secondary" id="fixedPrevButton">
+                <i class="fas fa-arrow-left me-2"></i>Back
+            </button>
+            <button type="button" class="btn btn-primary" id="fixedNextButton">
+                Next<i class="fas fa-arrow-right ms-2"></i>
+            </button>
+        `;
+        
+        // Find the parent to attach the button bar to
+        const storageSelector = document.querySelector('.storage-selector');
+        if (storageSelector) {
+            storageSelector.style.paddingBottom = '70px'; // Make room for the fixed bar
+            storageSelector.appendChild(buttonBar);
+            
+            // Add event listeners to buttons
+            buttonBar.querySelector('#fixedPrevButton').addEventListener('click', function() {
+                const prevButton = document.getElementById('prevButton');
+                if (prevButton) prevButton.click();
+            });
+            
+            buttonBar.querySelector('#fixedNextButton').addEventListener('click', function() {
+                const nextButton = document.getElementById('nextButton');
+                if (nextButton) nextButton.click();
+            });
+        }
+    }
+    
     // Create rack sections
     Object.keys(organizedLocations).sort((a, b) => parseInt(a) - parseInt(b)).forEach(reolNum => {
         const reolSection = document.createElement('div');
@@ -841,7 +876,7 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
         const isSelectedRack = (window.selectedRackNum === reolNum) || (preSelectedLocationId && preSelectedLocationId.toString().startsWith(reolNum));
         
         const reolHeader = document.createElement('div');
-        reolHeader.className = 'mb-2 d-flex justify-content-between align-items-center';
+        reolHeader.className = 'mb-2 d-flex justify-content-between align-items-center bg-light p-2 rounded';
         
         // Create clickable header with toggle functionality
         const titleSpan = document.createElement('h5');
@@ -849,12 +884,8 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
         titleSpan.className = 'mb-0';
         titleSpan.style.cursor = 'pointer';
         
-        const toggleIcon = document.createElement('i');
-        toggleIcon.className = isSelectedRack ? 'fas fa-chevron-down ms-2' : 'fas fa-chevron-right ms-2';
-        
         // Add rack header elements
         reolHeader.appendChild(titleSpan);
-        reolHeader.appendChild(toggleIcon);
         reolSection.appendChild(reolHeader);
         
         // Create container for sections
@@ -865,11 +896,23 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
         // Add toggle functionality to header
         reolHeader.addEventListener('click', () => {
             if (sektionsContainer.style.display === 'none') {
+                // Collapse all other racks first
+                if (!event.ctrlKey) { // Unless ctrl key is pressed (for multiple expanding)
+                    const allSektionsContainers = document.querySelectorAll('.reol-section .d-flex.flex-wrap');
+                    
+                    allSektionsContainers.forEach(container => {
+                        if (container !== sektionsContainer) {
+                            container.style.display = 'none';
+                        }
+                    });
+                }
+                
+                // Now expand this rack
                 sektionsContainer.style.display = 'flex';
-                toggleIcon.className = 'fas fa-chevron-down ms-2';
+                reolHeader.classList.add('bg-primary', 'text-white');
             } else {
                 sektionsContainer.style.display = 'none';
-                toggleIcon.className = 'fas fa-chevron-right ms-2';
+                reolHeader.classList.remove('bg-primary', 'text-white');
             }
         });
         
@@ -1043,15 +1086,38 @@ function setupStorageGrid() {
     const containerLocationSelect = document.getElementById('containerLocation');
     let selectedLocationId = null;
     
+    // Reset the saved rack number
+    window.selectedRackNum = null;
+    window.allRacksCollapsed = true;
+    
     // First check if we have a selected container location from existing container
     if (selectedContainerLocation && selectedContainerLocation.LocationID) {
         selectedLocationId = selectedContainerLocation.LocationID;
-        console.log("Using location from existing container:", selectedLocationId, selectedContainerLocation.LocationName);
+        
+        // Parse the location name to get the rack number
+        if (selectedContainerLocation.LocationName) {
+            const parts = selectedContainerLocation.LocationName.split('.');
+            if (parts.length >= 1) {
+                window.selectedRackNum = parts[0];
+            }
+        }
+        
+        console.log("Using location from existing container:", selectedLocationId, selectedContainerLocation.LocationName, "Rack:", window.selectedRackNum);
     }
     // Otherwise use the selected container location from the new container form
     else if (containerLocationSelect && containerLocationSelect.value) {
         selectedLocationId = containerLocationSelect.value;
-        console.log("Using pre-selected location from container form:", selectedLocationId);
+        
+        // Try to extract rack number
+        if (containerLocationSelect.selectedOptions && containerLocationSelect.selectedOptions[0]) {
+            const locationText = containerLocationSelect.selectedOptions[0].textContent;
+            const match = locationText.match(/(\d+)\.(\d+)\.(\d+)/);
+            if (match) {
+                window.selectedRackNum = match[1];
+            }
+        }
+        
+        console.log("Using pre-selected location from container form:", selectedLocationId, "Rack:", window.selectedRackNum);
     }
 
     // Fetch storage locations from API

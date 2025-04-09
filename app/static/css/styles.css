@@ -471,6 +471,33 @@ body {
     box-shadow: 0 0 0 1px #e74c3c !important;
 }
 
+/* Notification popup styling */
+.notification-popup {
+    opacity: 1;
+    transition: opacity 0.5s ease;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3) !important;
+    min-width: 300px;
+    max-width: 450px;
+}
+
+.notification-popup.fade-out {
+    opacity: 0;
+}
+
+/* Custom confirm dialog */
+.custom-confirm-dialog .modal-header {
+    padding: 0.75rem 1rem;
+}
+
+.custom-confirm-dialog .modal-body {
+    padding: 1.5rem;
+}
+
+.custom-confirm-dialog .modal-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #dee2e6;
+}
+
 /* Toast notifications */
 .custom-toast {
     position: fixed;
@@ -572,6 +599,33 @@ body {
 
 .field-error:focus {
     box-shadow: 0 0 0 1px #e74c3c !important;
+}
+
+/* Notification popup styling */
+.notification-popup {
+    opacity: 1;
+    transition: opacity 0.5s ease;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3) !important;
+    min-width: 300px;
+    max-width: 450px;
+}
+
+.notification-popup.fade-out {
+    opacity: 0;
+}
+
+/* Custom confirm dialog */
+.custom-confirm-dialog .modal-header {
+    padding: 0.75rem 1rem;
+}
+
+.custom-confirm-dialog .modal-body {
+    padding: 1.5rem;
+}
+
+.custom-confirm-dialog .modal-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #dee2e6;
 }
 
 /* Package locations styles */
