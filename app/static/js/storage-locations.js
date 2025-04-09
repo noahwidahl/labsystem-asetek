@@ -56,7 +56,7 @@ function updateStorageOverview(locations) {
             <h5 class="mb-0">Rack ${rackNum}</h5>
             <div class="rack-controls">
                 <button class="btn btn-sm btn-outline-secondary me-2" onclick="toggleRackView(${rackNum})">
-                    <i class="fas fa-chevron-down" id="rack-toggle-${rackNum}"></i>
+                    <i class="fas fa-chevron-right" id="rack-toggle-${rackNum}"></i>
                 </button>
                 <button class="btn btn-sm btn-outline-primary" onclick="addSection(${rackNum})">
                     <i class="fas fa-plus"></i> Add Section
@@ -68,7 +68,7 @@ function updateStorageOverview(locations) {
         const rackBody = document.createElement('div');
         rackBody.className = 'card-body p-3';
         rackBody.id = `rack-body-${rackNum}`;
-        rackBody.style.display = 'block'; // Vis rackbody som standard
+        rackBody.style.display = 'none'; // Hide rack body by default
         
         const sectionsContainer = document.createElement('div');
         sectionsContainer.className = 'sections-container row g-3';

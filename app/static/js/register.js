@@ -837,13 +837,41 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
         const reolSection = document.createElement('div');
         reolSection.className = 'reol-section mb-4';
         
-        const reolHeader = document.createElement('h5');
-        reolHeader.textContent = `Rack ${reolNum}`;
-        reolHeader.className = 'mb-2';
+        // Determine if this rack should be expanded
+        const isSelectedRack = (window.selectedRackNum === reolNum) || (preSelectedLocationId && preSelectedLocationId.toString().startsWith(reolNum));
+        
+        const reolHeader = document.createElement('div');
+        reolHeader.className = 'mb-2 d-flex justify-content-between align-items-center';
+        
+        // Create clickable header with toggle functionality
+        const titleSpan = document.createElement('h5');
+        titleSpan.textContent = `Rack ${reolNum}`;
+        titleSpan.className = 'mb-0';
+        titleSpan.style.cursor = 'pointer';
+        
+        const toggleIcon = document.createElement('i');
+        toggleIcon.className = isSelectedRack ? 'fas fa-chevron-down ms-2' : 'fas fa-chevron-right ms-2';
+        
+        // Add rack header elements
+        reolHeader.appendChild(titleSpan);
+        reolHeader.appendChild(toggleIcon);
         reolSection.appendChild(reolHeader);
         
+        // Create container for sections
         const sektionsContainer = document.createElement('div');
         sektionsContainer.className = 'd-flex flex-wrap';
+        sektionsContainer.style.display = isSelectedRack ? 'flex' : 'none';
+        
+        // Add toggle functionality to header
+        reolHeader.addEventListener('click', () => {
+            if (sektionsContainer.style.display === 'none') {
+                sektionsContainer.style.display = 'flex';
+                toggleIcon.className = 'fas fa-chevron-down ms-2';
+            } else {
+                sektionsContainer.style.display = 'none';
+                toggleIcon.className = 'fas fa-chevron-right ms-2';
+            }
+        });
         
         // For each section in the rack
         Object.keys(organizedLocations[reolNum]).sort((a, b) => parseInt(a) - parseInt(b)).forEach(sektionNum => {
@@ -956,6 +984,7 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
 // Organize locations by structure
 function organizeLocationsByStructure(locations) {
     const organized = {};
+    let selectedRackNum = null;
     
     locations.forEach(location => {
         let reolNum, sektionNum, hyldeNum;
@@ -987,7 +1016,19 @@ function organizeLocationsByStructure(locations) {
         
         // Store location in organizational structure
         organized[reolNum][sektionNum][hyldeNum] = location;
+        
+        // Check if this is the selected location
+        if (selectedContainerLocation && selectedContainerLocation.LocationID == location.LocationID) {
+            selectedRackNum = reolNum;
+        }
     });
+    
+    // Store the selected rack number for later use
+    if (selectedRackNum) {
+        window.selectedRackNum = selectedRackNum;
+    }
+    
+    return organized;
     
     return organized;
 }
