@@ -334,11 +334,55 @@ class SampleService:
                 
                 # Calculate amount per package
                 total_amount = int(sample_data.get('totalAmount', 0))
-                amount_per_package = int(sample_data.get('amountPerPackage', total_amount // package_count)) if is_multi_package else total_amount
+                # Handle amount differently based on what type of registration we're doing
                 
-                # Adjust last package if there's a remainder
-                if i == package_count - 1 and not is_multi_package and total_amount % package_count != 0:
-                    amount_per_package += total_amount % package_count
+                # Initialize with a default that will be overridden
+                amount_per_package = 0
+                
+                # Case 1: Multiple containers (one per package)
+                if create_multi_containers:
+                    # For one container per package, each sample should have the amountPerPackage directly
+                    # This is crucial to ensure each sample+container has the right amount
+                    amount_per_package = int(sample_data.get('amountPerPackage', 1))
+                    print(f"DEBUG: Package {i+1} of {package_count} with createMultipleContainers=True gets amount={amount_per_package}")
+                
+                # Case 2: Multiple packages with multiple samples
+                elif is_multi_package:
+                    # For standard multiple samples (no multiple containers)
+                    amount_per_package = int(sample_data.get('amountPerPackage', 1)) 
+                    print(f"DEBUG: Package {i+1} of {package_count} multi-package case gets amount={amount_per_package}")
+                
+                # Case 3: Standard single sample
+                else:
+                    # Single sample - use total amount directly
+                    amount_per_package = total_amount
+                    print(f"DEBUG: Single sample case uses total amount={amount_per_package}")
+                    
+                    # Adjust last package if there's a remainder
+                    if i == package_count - 1 and total_amount % package_count != 0:
+                        amount_per_package += total_amount % package_count
+                        
+                print(f"DEBUG: Using amount {amount_per_package} for package {i+1} of {package_count}")
+                
+                # Generate a good description for this package
+                base_description = sample_data.get('description', '')
+                package_suffix = ""
+                
+                # Add simple number suffix if we have multiple packages
+                if package_count > 1:
+                    package_suffix = f" {i+1}"
+                
+                # Full description combining base + package info
+                full_description = base_description + package_suffix
+                
+                print(f"DEBUG: Using description '{full_description}' for package {i+1}")
+                
+                # Set the correct amount value for this sample/container
+                # When using multiple containers (one per package), the amount should be
+                # the value of amountPerPackage, not the total amount
+                amount_value = amount_per_package
+                
+                print(f"DEBUG: Sample {i+1} of {package_count} with amount={amount_value}")
                 
                 # Insert the sample in Sample table
                 cursor.execute("""
@@ -360,9 +404,9 @@ class SampleService:
                     sample_data.get('partNumber', ''),
                     1 if sample_data.get('hasSerialNumbers') else 0,
                     sample_data.get('sampleType', 'Standard'),
-                    sample_data.get('description') + (f" (Package {i+1})" if is_multi_package and package_count > 1 else ""),
+                    full_description,
                     "In Storage",
-                    amount_per_package,
+                    amount_value,
                     sample_data.get('unit'),
                     sample_data.get('owner'),
                     reception_id
@@ -383,11 +427,16 @@ class SampleService:
                 # Try to get location from container locations first if creating one container per package
                 if create_multi_containers and sample_data.get('containerLocations'):
                     container_locs = sample_data.get('containerLocations', [])
+                    print(f"DEBUG: Available container locations: {container_locs}")
+                    
                     # Find matching package
                     container_loc = next((loc for loc in container_locs if str(loc.get('packageNumber', '')) == str(i+1)), None)
+                    
                     if container_loc and container_loc.get('locationId'):
                         location_id = container_loc.get('locationId')
                         print(f"DEBUG: Using container location {location_id} for package {i+1} from containerLocations array")
+                    else:
+                        print(f"WARNING: No matching container location found for package {i+1} in containerLocations array")
                 
                 # Fall back to package locations
                 if not location_id and different_locations and package_locations:
@@ -415,6 +464,7 @@ class SampleService:
                         print(f"WARNING: Using default location ID 1, no locations found in database")
                 
                 # Insert to SampleStorage with the chosen location
+                # Use the same amount value for consistency with the Sample table
                 cursor.execute("""
                     INSERT INTO SampleStorage (
                         SampleID, 
@@ -426,7 +476,7 @@ class SampleService:
                 """, (
                     sample_id,
                     location_id,
-                    amount_per_package,
+                    amount_value,  # Use the same amount as in Sample table
                     sample_data.get('expiryDate')
                 ))
                 
@@ -515,7 +565,7 @@ class SampleService:
                                 container_desc = sample_data.get('description', 'Container')
                                 print(f"DEBUG: Container description was empty, using sample description: {container_desc}")
                             if package_count > 1:
-                                container_desc += f" (Package {i+1})"
+                                container_desc += f" {i+1}"
                             
                             # Use 'container' table directly
                             table_name = "container"
@@ -573,13 +623,19 @@ class SampleService:
                                 if default_type_result:
                                     container_type_id = default_type_result[0]
                             
-                            # Get capacity from parameters or default to amount_per_package
-                            # If creating a new container type, use its capacity value instead
+                            # Get capacity from parameters or use amount_per_package
+                            # If creating a new container type, use its capacity value
                             if sample_data.get('newContainerType'):
                                 capacity = sample_data.get('newContainerType').get('capacity') or amount_per_package
                                 print(f"DEBUG: Using capacity {capacity} from new container type for container")
+                            # If user specified container capacity, use that
+                            elif sample_data.get('containerCapacity'):
+                                capacity = sample_data.get('containerCapacity')
+                                print(f"DEBUG: Using user-specified capacity {capacity} for container")
+                            # Otherwise use the amount per package
                             else:
-                                capacity = sample_data.get('containerCapacity') or amount_per_package
+                                capacity = amount_per_package
+                                print(f"DEBUG: Using amount_per_package {capacity} as default container capacity")
                             
                             # Get location from parameters or use the one already determined
                             # Check for multiple container locations
@@ -674,6 +730,13 @@ class SampleService:
                         # Connect samples to the container
                         # Ensure that we're using the exact amount provided by the user
                         # Use amount_per_package for the current package/container
+                        
+                        # When using one container per package, use the same amount value for consistency
+                        container_amount = amount_value
+                        
+                        # Debug output
+                        print(f"DEBUG: Adding sample {sample_id} to container {container_id} with amount {container_amount}")
+                        
                         cursor.execute("""
                             INSERT INTO ContainerSample (
                                 SampleStorageID,
@@ -684,7 +747,7 @@ class SampleService:
                         """, (
                             storage_id,
                             container_id,
-                            amount_per_package  # Use amount for this specific package/container
+                            container_amount  # Use amount for this specific package/container
                         ))
                         
                         # Log container creation

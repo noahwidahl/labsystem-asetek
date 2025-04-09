@@ -231,6 +231,18 @@
           "TypeName": "Cardboard box",
           "DefaultCapacity": 35,
           "Description": "Cardboard box with Sample xx"
+        },
+        {
+          "ContainerTypeID": 4,
+          "TypeName": "aszaszas",
+          "DefaultCapacity": 123123,
+          "Description": "Test"
+        },
+        {
+          "ContainerTypeID": 5,
+          "TypeName": "Detgoddu box",
+          "DefaultCapacity": 500,
+          "Description": "Ajjjaaa"
         }
       ]
     },

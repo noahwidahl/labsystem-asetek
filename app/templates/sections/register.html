@@ -182,6 +182,17 @@
                             </label>
                             <small class="text-muted d-block ms-4">Place each package at a different location</small>
                         </div>
+
+                        <!-- Amounts Explanation -->
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Amount information:</strong>
+                            <ul class="mb-0 mt-1">
+                                <li>Each package will contain the number of samples specified in "Samples per Package"</li>
+                                <li>When using "One container per package", each container will hold the amount from its package</li>
+                            </ul>
+                        </div>
+
                     </div>
                 </div>
 
@@ -619,6 +630,9 @@
                 } else if (oneContainerPerPackage && oneContainerPerPackage.checked) {
                     // Creating one container per package
                     formData.createMultipleContainers = true;
+                    formData.isMultiPackage = true;  // CRITICAL: Explicitly set this flag to true
+                    formData.sampleType = 'multiple'; // CRITICAL: Ensure backend knows this is multiple samples
+                    
                     // Get container description and log it for debugging
                     const containerDesc = document.getElementById('containerDescription')?.value || '';
                     formData.containerDescription = containerDesc || formData.description || 'Container';
@@ -628,6 +642,14 @@
                     if (!formData.containerDescription) {
                         formData.containerDescription = 'Container';   
                     }
+                    
+                    // Set package count and amount per package explicitly
+                    const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
+                    const amountPerPackage = parseInt(document.querySelector('[name="amountPerPackage"]')?.value) || 1;
+                    formData.packageCount = packageCount;
+                    formData.amountPerPackage = amountPerPackage;
+                    console.log(`DEBUG: Using ${packageCount} packages with ${amountPerPackage} samples per package`);
+                    
                     console.log(`DEBUG: Using container description for multiple samples: '${formData.containerDescription}'`);
                     formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
                     formData.containerTypeId = document.getElementById('containerType')?.value || '';
@@ -644,8 +666,6 @@
                         console.log('DEBUG: Package locations for multiple containers:', packageLocations);
                         
                         // Ensure we have the right number of locations for all packages
-                        const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
-                        
                         if (packageLocations.length !== packageCount) {
                             alert(`Error: You need to select ${packageCount} locations for your packages. Currently selected: ${packageLocations.length}`);
                             
@@ -656,13 +676,17 @@
                             return false;
                         }
                         
+                        // Sort package locations by package number to ensure they're in order
+                        const sortedLocations = [...packageLocations].sort((a, b) => 
+                            parseInt(a.packageNumber) - parseInt(b.packageNumber));
+                        
                         // Set both formats for backend compatibility
-                        formData.containerLocations = packageLocations.map(loc => ({
+                        formData.containerLocations = sortedLocations.map(loc => ({
                             packageNumber: loc.packageNumber,
                             locationId: loc.locationId
                         }));
                         formData.differentLocations = true; // Explicitly set flag for backend processing
-                        formData.packageLocations = packageLocations.map(loc => ({
+                        formData.packageLocations = sortedLocations.map(loc => ({
                             packageNumber: loc.packageNumber,
                             locationId: loc.locationId
                         }));
@@ -670,8 +694,9 @@
                         // Log packaged data
                         console.log('DEBUG: Sending container locations:', formData.containerLocations);
                         
-                        // Set createMultipleContainers as true to ensure we create one container per location
+                        // CRITICAL FLAGS - set all needed flags to ensure multiple samples are created
                         formData.createMultipleContainers = true;
+                        formData.createSingleContainer = false; // Ensure this is NOT set for multiple containers
                     } else {
                         console.error("PackageLocations module not available but oneContainerPerPackage is checked");
                         alert("Error: Package location tracking is not available. Please refresh the page and try again.");
@@ -791,6 +816,7 @@
 
 <!-- Load core validation module first - has critical functions -->
 <script src="{{ url_for('static', filename='js/register-validation.js') }}"></script>
+
 
 <!-- Make sure core functions are available before proceeding -->
 <script>
