@@ -3,11 +3,13 @@ function updateStorageOverview(locations) {
     const storageContainer = document.querySelector('.storage-grid');
     if (!storageContainer) return;
     
+    // Clear existing content
     storageContainer.innerHTML = '';
     
     // Group locations by rack and section
     const rackSectionMap = {};
     
+    // Process each location
     locations.forEach(location => {
         let rackNum, sectionNum, shelfNum;
         

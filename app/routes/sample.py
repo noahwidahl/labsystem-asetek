@@ -135,24 +135,25 @@ def init_sample(blueprint, mysql):
             
             # Først prøver vi at hente data fra databasen
             try:
-                # Meget enkel forespørgsel der burde virke
+                # Hent alle samples inklusive disposed samples
                 query = """
                 SELECT 
                     s.SampleID, 
                     s.PartNumber, 
                     s.Description, 
                     DATE_FORMAT(r.ReceivedDate, '%Y-%m-%d') AS Reception,
-                    ss.AmountRemaining, 
+                    CASE 
+                        WHEN s.Status = 'Disposed' THEN 0
+                        ELSE IFNULL(ss.AmountRemaining, 0)
+                    END AS AmountRemaining, 
                     'pcs' as Unit,
-                    sl.LocationName, 
+                    IFNULL(sl.LocationName, 'Disposed') as LocationName, 
                     DATE_FORMAT(r.ReceivedDate, '%Y-%m-%d %H:%i') AS Registered,
                     s.Status 
                 FROM Sample s
-                JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-                JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
                 JOIN Reception r ON s.ReceptionID = r.ReceptionID
-                WHERE s.Status = 'In Storage'
-                AND ss.AmountRemaining > 0
+                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
                 """
                 
                 cursor.execute(query)

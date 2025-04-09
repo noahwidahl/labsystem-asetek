@@ -212,7 +212,13 @@
                                     <td>{{ sample.Amount }}</td>
                                     <td>{{ sample.Location }}</td>
                                     <td>{{ sample.Registered }}</td>
-                                    <td><span class="badge bg-primary">{{ sample.Status }}</span></td>
+                                    <td>
+                                        {% if sample.Status == 'Disposed' %}
+                                        <span class="badge bg-danger">{{ sample.Status }}</span>
+                                        {% else %}
+                                        <span class="badge bg-primary">{{ sample.Status }}</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <button class="btn btn-sm btn-secondary">Details</button>
                                         <button class="btn btn-sm btn-outline-primary">Move</button>

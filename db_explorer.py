@@ -9,9 +9,9 @@ def get_db_structure_and_sample_data():
         # Opret forbindelse til databasen
         connection = mysql.connector.connect(
             host='localhost',
-            user='root',  # Erstat med din faktiske bruger
-            password='0LLEbr0dR00T!',  # Erstat med din faktiske adgangskode
-            database='lab_system'  # Erstat med dit faktiske databasenavn
+            user='root',
+            password='0LLEbr0dR00T!',
+            database='lab_system'
         )
         
         if connection.is_connected():
