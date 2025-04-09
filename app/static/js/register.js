@@ -832,7 +832,23 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
     // Keep track of the cell for pre-selected location
     let preSelectedCell = null;
     
-    // Add fixed button bar at the bottom for navigation
+    // Add fixed button bar at the bottom for navigation and hide the original buttons
+    const originalPrevButton = document.getElementById('prevButton');
+    const originalNextButton = document.getElementById('nextButton');
+    
+    // Get text from original next button (could be "Next" or "Save")
+    const nextButtonText = originalNextButton ? originalNextButton.textContent.trim() : "Save";
+    const isLastStep = nextButtonText.toLowerCase().includes('save');
+    
+    // Hide original navigation buttons if they exist
+    if (originalPrevButton) originalPrevButton.style.display = 'none';
+    if (originalNextButton) originalNextButton.style.display = 'none';
+    
+    // Find the form navigation container and hide it
+    const formNavigation = document.querySelector('.form-navigation');
+    if (formNavigation) formNavigation.style.display = 'none';
+    
+    // Create fixed button bar
     let buttonBar = document.querySelector('.fixed-button-bar');
     if (!buttonBar) {
         buttonBar = document.createElement('div');
@@ -844,7 +860,7 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
                 <i class="fas fa-arrow-left me-2"></i>Back
             </button>
             <button type="button" class="btn btn-primary" id="fixedNextButton">
-                Next<i class="fas fa-arrow-right ms-2"></i>
+                ${isLastStep ? 'Save' : 'Next'} ${isLastStep ? '<i class="fas fa-save ms-2"></i>' : '<i class="fas fa-arrow-right ms-2"></i>'}
             </button>
         `;
         
@@ -856,13 +872,11 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
             
             // Add event listeners to buttons
             buttonBar.querySelector('#fixedPrevButton').addEventListener('click', function() {
-                const prevButton = document.getElementById('prevButton');
-                if (prevButton) prevButton.click();
+                if (originalPrevButton) originalPrevButton.click();
             });
             
             buttonBar.querySelector('#fixedNextButton').addEventListener('click', function() {
-                const nextButton = document.getElementById('nextButton');
-                if (nextButton) nextButton.click();
+                if (originalNextButton) originalNextButton.click();
             });
         }
     }

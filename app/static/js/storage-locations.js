@@ -194,6 +194,9 @@ function addSection(rackNum) {
         return;
     }
     
+    // Show loading overlay
+    showLoadingOverlay();
+    
     // Call API to add section
     fetch('/api/storage/add-section', {
         method: 'POST',
@@ -207,17 +210,86 @@ function addSection(rackNum) {
     })
     .then(response => response.json())
     .then(data => {
+        // Hide loading overlay
+        hideLoadingOverlay();
+        
         if (data.success) {
-            showSuccessMessage(`Section ${newSectionNum} added to Rack ${rackNum}`);
+            // Create a floating success message that appears in center of the screen
+            const successMessage = document.createElement('div');
+            successMessage.className = 'position-fixed top-50 start-50 translate-middle p-3 bg-success text-white rounded shadow-lg notification-popup';
+            successMessage.style.zIndex = '2000';
+            successMessage.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-check-circle me-2 fa-lg"></i>
+                    <strong>Success!</strong>
+                </div>
+                <div class="mt-2">Section ${newSectionNum} added to Rack ${rackNum}</div>
+            `;
+            document.body.appendChild(successMessage);
             
             // Refresh the storage display
             loadStorageLocations();
+            
+            // Remove the success message after a delay
+            setTimeout(() => {
+                successMessage.classList.add('fade-out');
+                setTimeout(() => {
+                    if (document.body.contains(successMessage)) {
+                        document.body.removeChild(successMessage);
+                    }
+                }, 500);
+            }, 3000);
         } else {
-            showErrorMessage(`Failed to add section: ${data.error}`);
+            // Create a floating error message
+            const errorMessage = document.createElement('div');
+            errorMessage.className = 'position-fixed top-50 start-50 translate-middle p-3 bg-danger text-white rounded shadow-lg notification-popup';
+            errorMessage.style.zIndex = '2000';
+            errorMessage.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-exclamation-circle me-2 fa-lg"></i>
+                    <strong>Error!</strong>
+                </div>
+                <div class="mt-2">Failed to add section: ${data.error}</div>
+            `;
+            document.body.appendChild(errorMessage);
+            
+            // Remove the error message after a delay
+            setTimeout(() => {
+                errorMessage.classList.add('fade-out');
+                setTimeout(() => {
+                    if (document.body.contains(errorMessage)) {
+                        document.body.removeChild(errorMessage);
+                    }
+                }, 500);
+            }, 5000);
         }
     })
     .catch(error => {
-        showErrorMessage(`Error: ${error.message}`);
+        // Hide loading overlay
+        hideLoadingOverlay();
+        
+        // Create a floating error message for the exception
+        const errorMessage = document.createElement('div');
+        errorMessage.className = 'position-fixed top-50 start-50 translate-middle p-3 bg-danger text-white rounded shadow-lg notification-popup';
+        errorMessage.style.zIndex = '2000';
+        errorMessage.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="fas fa-exclamation-circle me-2 fa-lg"></i>
+                <strong>Error!</strong>
+            </div>
+            <div class="mt-2">An error occurred: ${error.message}</div>
+        `;
+        document.body.appendChild(errorMessage);
+        
+        // Remove the error message after a delay
+        setTimeout(() => {
+            errorMessage.classList.add('fade-out');
+            setTimeout(() => {
+                if (document.body.contains(errorMessage)) {
+                    document.body.removeChild(errorMessage);
+                }
+            }, 500);
+        }, 5000);
     });
 }
 
