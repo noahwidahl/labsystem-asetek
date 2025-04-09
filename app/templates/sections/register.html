@@ -504,6 +504,12 @@
             // Sample type
             sampleType: document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single',
             
+            // Multiple samples info
+            isMultiPackage: document.querySelector('input[name="sampleTypeOption"]:checked')?.value === 'multiple',
+            packageCount: parseInt(document.querySelector('[name="packageCount"]')?.value) || 1,
+            amountPerPackage: parseInt(document.querySelector('[name="amountPerPackage"]')?.value) || 1,
+            separateStorage: document.getElementById('separateStorage')?.checked || false,
+            
             // Amount information
             totalAmount: parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0,
             unit: document.querySelector('[name="unit"]')?.value || '',
@@ -523,6 +529,38 @@
             // Container information
             createContainers: document.querySelector('input[name="storageOption"]:checked')?.value === 'container'
         };
+        
+        // Check if we need to handle separate storage for multiple samples without containers
+        if (formData.sampleType === 'multiple' && formData.storageOption === 'direct' && formData.separateStorage) {
+            console.log("Processing separate storage locations for multiple samples (direct storage)");
+            
+            // Use PackageLocations for tracking different locations
+            if (typeof window.PackageLocations !== 'undefined') {
+                // Get selected locations
+                const packageLocations = window.PackageLocations.getSelectedLocations();
+                
+                // Ensure we have the right number of locations for all packages
+                const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
+                
+                if (packageLocations.length !== packageCount) {
+                    alert(`Error: You need to select ${packageCount} locations for your packages. Currently selected: ${packageLocations.length}`);
+                    return false;
+                }
+                
+                // Sort package locations by package number to ensure they're in order
+                const sortedLocations = [...packageLocations].sort((a, b) => 
+                    parseInt(a.packageNumber) - parseInt(b.packageNumber));
+                
+                // Add to formData
+                formData.differentLocations = true;
+                formData.packageLocations = sortedLocations.map(loc => ({
+                    packageNumber: loc.packageNumber,
+                    locationId: loc.locationId
+                }));
+                
+                console.log('DEBUG: Using separate storage locations for multiple samples:', formData.packageLocations);
+            }
+        }
         
         // Show processing message
         const toast = document.createElement('div');
@@ -1200,9 +1238,9 @@
         }
         
         // Container type checkbox toggling
-        const createContainerTypeCheckbox = document.getElementById('createContainerType');
-        if (createContainerTypeCheckbox) {
-            createContainerTypeCheckbox.addEventListener('change', function() {
+        const typeCheckbox = document.getElementById('createContainerType');
+        if (typeCheckbox) {
+            typeCheckbox.addEventListener('change', function() {
                 const containerTypeSection = document.getElementById('newContainerTypeSection');
                 if (this.checked) {
                     containerTypeSection.classList.remove('d-none');
@@ -1216,7 +1254,7 @@
             });
         }
         
-        // Function to update container location visibility based on multiple container selection
+        // Define updateContainerLocationVisibility as a local function
         function updateContainerLocationVisibility() {
             const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
             const containerLocationSection = document.getElementById('containerLocationSelectSection');
@@ -1307,29 +1345,30 @@
         }
         
         // Handle create container type checkbox to properly manage container type selection
-        const createContainerTypeCheckbox = document.getElementById('createContainerType');
-        if (createContainerTypeCheckbox && containerTypeSelect) {
-            createContainerTypeCheckbox.addEventListener('change', function() {
-                if (this.checked) {
-                    // When creating a new type, disable the container type selection
-                    containerTypeSelect.setAttribute('disabled', true);
-                    containerTypeSelect.classList.add('bg-light');
-                    // Make capacity editable (remove visual styling)
-                    if (containerCapacityInput) {
-                        containerCapacityInput.classList.remove('bg-light');
+        if (containerTypeSelect) {
+            const containerTypeCheckbox = document.getElementById('createContainerType');
+            if (containerTypeCheckbox) {
+                containerTypeCheckbox.addEventListener('change', function() {
+                    if (this.checked) {
+                        // When creating a new type, disable the container type selection
+                        containerTypeSelect.setAttribute('disabled', true);
+                        containerTypeSelect.classList.add('bg-light');
+                        // Make capacity editable (remove visual styling)
+                        if (containerCapacityInput) {
+                            containerCapacityInput.classList.remove('bg-light');
+                        }
+                    } else {
+                        // When not creating a new type, enable the container type selection
+                        containerTypeSelect.removeAttribute('disabled');
+                        containerTypeSelect.classList.remove('bg-light');
+                        
+                        // Trigger the change event to reset capacity based on selected type
+                        if (containerTypeSelect.value) {
+                            containerTypeSelect.dispatchEvent(new Event('change'));
+                        }
                     }
-                } else {
-                    // When not creating a new type, enable the container type selection
-                    containerTypeSelect.removeAttribute('disabled');
-                    containerTypeSelect.classList.remove('bg-light');
-                    
-                    // Trigger the change event to reset capacity based on selected type
-                    if (containerTypeSelect.value) {
-                        containerTypeSelect.dispatchEvent(new Event('change'));
-                    }
-                }
-            });
-        }
+                });
+            }
         }
         
         // Hijack form submission to add enhanced validation

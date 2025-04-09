@@ -66,7 +66,7 @@ def init_sample(blueprint, mysql):
     @blueprint.route('/storage')
     def storage():
         try:
-            # Get samples from the database instead of hardcoded values
+            # Initialize empty array for samples
             samples_for_template = []
             
             # Get filter parameters
@@ -152,10 +152,12 @@ def init_sample(blueprint, mysql):
                     
                     print("Using real database data")
                 else:
-                    print("No samples found in database, using hardcoded data")
+                    print("No samples found in database")
+                    # No hardcoded data anymore, just empty array
             except Exception as e:
                 print(f"Error fetching database data: {e}")
-                print("Continuing with hardcoded data")
+                import traceback
+                traceback.print_exc()
                 
             # Apply search filter
             if search:

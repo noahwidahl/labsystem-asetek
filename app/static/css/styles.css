@@ -314,7 +314,7 @@ body {
 
 .storage-cell.multi-package-available:hover {
     background-color: #f8f9fa;
-    border-color: #3498db;
+    border-color: #dee2e6;
 }
 
 .storage-cell.multi-package-selected {

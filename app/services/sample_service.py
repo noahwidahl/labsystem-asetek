@@ -334,32 +334,17 @@ class SampleService:
                 
                 # Calculate amount per package
                 total_amount = int(sample_data.get('totalAmount', 0))
-                # Handle amount differently based on what type of registration we're doing
-                
-                # Initialize with a default that will be overridden
-                amount_per_package = 0
-                
-                # Case 1: Multiple containers (one per package)
+                # Handle amount differently for multi-container vs. standard
                 if create_multi_containers:
-                    # For one container per package, each sample should have the amountPerPackage directly
-                    # This is crucial to ensure each sample+container has the right amount
+                    # For multiple containers, each sample gets the amount per package directly
                     amount_per_package = int(sample_data.get('amountPerPackage', 1))
                     print(f"DEBUG: Package {i+1} of {package_count} with createMultipleContainers=True gets amount={amount_per_package}")
-                
-                # Case 2: Multiple packages with multiple samples
-                elif is_multi_package:
-                    # For standard multiple samples (no multiple containers)
-                    amount_per_package = int(sample_data.get('amountPerPackage', 1)) 
-                    print(f"DEBUG: Package {i+1} of {package_count} multi-package case gets amount={amount_per_package}")
-                
-                # Case 3: Standard single sample
                 else:
-                    # Single sample - use total amount directly
-                    amount_per_package = total_amount
-                    print(f"DEBUG: Single sample case uses total amount={amount_per_package}")
+                    # Standard handling
+                    amount_per_package = int(sample_data.get('amountPerPackage', total_amount // package_count)) if is_multi_package else total_amount
                     
                     # Adjust last package if there's a remainder
-                    if i == package_count - 1 and total_amount % package_count != 0:
+                    if i == package_count - 1 and not is_multi_package and total_amount % package_count != 0:
                         amount_per_package += total_amount % package_count
                         
                 print(f"DEBUG: Using amount {amount_per_package} for package {i+1} of {package_count}")
