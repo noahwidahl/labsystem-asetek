@@ -215,7 +215,10 @@
                                 <div class="d-flex align-items-center">
                                     <input type="radio" name="multiContainerOption" id="oneContainerPerPackage" value="multiple" onchange="updateContainerLocationVisibility()">
                                     <label for="oneContainerPerPackage" class="ms-2 mb-0">One container per package</label>
-                                    <small class="text-muted d-block ms-4">You'll select multiple locations in the grid during the Location step</small>
+                                </div>
+                                <div class="alert alert-info mt-2" id="multiLocationInfo" style="display: none;">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span>You'll select multiple locations in the grid during the Location step - one location for each package.</span>
                                 </div>
                             </div>
                         </div>
@@ -1113,22 +1116,43 @@
         function updateContainerLocationVisibility() {
             const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
             const containerLocationSection = document.getElementById('containerLocationSelectSection');
+            const multiLocationInfo = document.getElementById('multiLocationInfo');
             
             if (oneContainerPerPackage && containerLocationSection) {
                 // Hide location dropdown when "one container per package" is selected
                 if (oneContainerPerPackage.checked) {
+                    // Hide location dropdown
                     containerLocationSection.classList.add('d-none');
                     // Remove required attribute when hidden
                     const containerLocationSelect = document.getElementById('containerLocation');
                     if (containerLocationSelect) {
                         containerLocationSelect.removeAttribute('required');
                     }
+                    
+                    // Show the multi-location info alert
+                    if (multiLocationInfo) {
+                        multiLocationInfo.style.display = 'block';
+                    }
+                    
+                    // Auto-check the "separate storage" checkbox for multiple storage
+                    const separateStorage = document.getElementById('separateStorage');
+                    if (separateStorage) {
+                        separateStorage.checked = true;
+                        // Trigger any associated events
+                        separateStorage.dispatchEvent(new Event('change'));
+                    }
                 } else {
+                    // Show location dropdown
                     containerLocationSection.classList.remove('d-none');
                     // Add required attribute when visible
                     const containerLocationSelect = document.getElementById('containerLocation');
                     if (containerLocationSelect) {
                         containerLocationSelect.setAttribute('required', 'required');
+                    }
+                    
+                    // Hide the multi-location info alert
+                    if (multiLocationInfo) {
+                        multiLocationInfo.style.display = 'none';
                     }
                 }
             }
@@ -1151,14 +1175,12 @@
                     if (!isNaN(defaultCapacity)) {
                         // Set the capacity field to the default capacity
                         containerCapacityInput.value = defaultCapacity;
-                        // Disable the capacity field when a container type is selected
-                        containerCapacityInput.setAttribute('readonly', true);
+                        // Do not make it readonly - just highlight that it has a default value
                         containerCapacityInput.classList.add('bg-light');
                     }
                 } else {
                     // If no type is selected or it has no default capacity, 
-                    // enable the capacity field again
-                    containerCapacityInput.removeAttribute('readonly');
+                    // clear formatting and value
                     containerCapacityInput.classList.remove('bg-light');
                     containerCapacityInput.value = '';
                 }
@@ -1178,9 +1200,8 @@
                     // When creating a new type, disable the container type selection
                     containerTypeSelect.setAttribute('disabled', true);
                     containerTypeSelect.classList.add('bg-light');
-                    // Make capacity editable again
+                    // Make capacity editable (remove visual styling)
                     if (containerCapacityInput) {
-                        containerCapacityInput.removeAttribute('readonly');
                         containerCapacityInput.classList.remove('bg-light');
                     }
                 } else {

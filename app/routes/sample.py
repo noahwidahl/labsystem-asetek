@@ -141,19 +141,20 @@ def init_sample(blueprint, mysql):
                     s.SampleID, 
                     s.PartNumber, 
                     s.Description, 
-                    DATE_FORMAT(r.ReceivedDate, '%Y-%m-%d') AS Reception,
+                    DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y') AS Reception,
                     CASE 
                         WHEN s.Status = 'Disposed' THEN 0
                         ELSE IFNULL(ss.AmountRemaining, 0)
                     END AS AmountRemaining, 
                     'pcs' as Unit,
                     IFNULL(sl.LocationName, 'Disposed') as LocationName, 
-                    DATE_FORMAT(r.ReceivedDate, '%Y-%m-%d %H:%i') AS Registered,
+                    DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y %H:%i') AS Registered,
                     s.Status 
                 FROM Sample s
                 JOIN Reception r ON s.ReceptionID = r.ReceptionID
                 LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
                 LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                LEFT JOIN Unit u ON s.UnitID = u.UnitID
                 """
                 
                 cursor.execute(query)
@@ -563,7 +564,7 @@ def init_sample(blueprint, mysql):
             cursor.execute("""
                 SELECT 
                     h.LogID,
-                    DATE_FORMAT(h.Timestamp, '%Y-%m-%d %H:%i') as DisposalDate,
+                    DATE_FORMAT(h.Timestamp, '%d-%m-%Y %H:%i') as DisposalDate,
                     CONCAT('SMP-', h.SampleID) as SampleID,
                     SUBSTRING_INDEX(h.Notes, ':', 1) as AmountDisposed,
                     u.Name as DisposedBy
@@ -905,7 +906,7 @@ def init_sample(blueprint, mysql):
             cursor.execute("""
                 SELECT 
                     h.LogID,
-                    DATE_FORMAT(h.Timestamp, '%Y-%m-%d %H:%i') as DisposalDate,
+                    DATE_FORMAT(h.Timestamp, '%d-%m-%Y %H:%i') as DisposalDate,
                     CONCAT('SMP-', h.SampleID) as SampleID,
                     h.Notes as DisposalNotes,
                     u.Name as DisposedBy
