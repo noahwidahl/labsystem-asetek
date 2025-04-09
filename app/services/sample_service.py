@@ -301,9 +301,16 @@ class SampleService:
             
             # Flag for container creation
             create_containers = sample_data.get('createContainers', False)
+            # Check for alternate naming
+            if not create_containers and sample_data.get('storageOption') == 'container':
+                create_containers = True
+                sample_data['createContainers'] = True
+                print("DEBUG: Setting createContainers=True based on storageOption")
+                
             container_ids = []  # List to keep track of created containers
             
             print(f"DEBUG: Creating {package_count} packages, create_containers={create_containers}")
+            print(f"DEBUG: Full sample_data for container creation: {sample_data}")
             
             # Iterate through the number of packages
             for i in range(package_count):
@@ -400,6 +407,67 @@ class SampleService:
                 
                 # Handle container functionality
                 if create_containers:
+                    print(f"DEBUG: Processing container creation with data: containerTypeId={sample_data.get('containerTypeId')}, containerDescription={sample_data.get('containerDescription')}, containerLocationId={sample_data.get('containerLocationId')}")
+                    
+                    # Verify we have the minimum required data for container creation
+                    if not sample_data.get('containerTypeId') and not sample_data.get('newContainerType'):
+                        print("DEBUG: Cannot create container - missing containerTypeId or newContainerType")
+                        # Try to find a default container type
+                        cursor.execute("SELECT ContainerTypeID FROM ContainerType LIMIT 1")
+                        result = cursor.fetchone()
+                        if result:
+                            sample_data['containerTypeId'] = result[0]
+                            print(f"DEBUG: Using default container type: {result[0]}")
+                        else:
+                            print("DEBUG: No default container type found - creating basic container type")
+                            # Create a basic container type
+                            cursor.execute("""
+                                INSERT INTO ContainerType (
+                                    TypeName,
+                                    Description,
+                                    DefaultCapacity
+                                )
+                                VALUES (%s, %s, %s)
+                            """, (
+                                "Standard Box",
+                                "Basic container type created automatically",
+                                100
+                            ))
+                            sample_data['containerTypeId'] = cursor.lastrowid
+                            print(f"DEBUG: Created basic container type: {sample_data['containerTypeId']}")
+                    
+                    # Ensure containerLocationId is set
+                    if not sample_data.get('containerLocationId'):
+                        if sample_data.get('storageLocation'):
+                            sample_data['containerLocationId'] = sample_data.get('storageLocation')
+                            print(f"DEBUG: Using storageLocation as containerLocationId: {sample_data['containerLocationId']}")
+                        else:
+                            # Get first available location
+                            cursor.execute("SELECT LocationID FROM StorageLocation LIMIT 1")
+                            result = cursor.fetchone()
+                            if result:
+                                sample_data['containerLocationId'] = result[0]
+                                print(f"DEBUG: Using first available location: {sample_data['containerLocationId']}")
+                            else:
+                                raise Exception("No storage locations found in database. Cannot create container.")
+                    
+                    # Make sure we have a container description
+                    # If not specified, first check if we're using an existing container
+                    if sample_data.get('useExistingContainer') and sample_data.get('existingContainerId'):
+                        print(f"DEBUG: Using existing container {sample_data.get('existingContainerId')}")
+                    elif not sample_data.get('containerDescription'):
+                        # If no container description provided, use the sample description as fallback
+                        sample_data['containerDescription'] = sample_data.get('description', 'Container')
+                        print(f"DEBUG: Using sample description as container name: {sample_data['containerDescription']}")
+                    else:
+                        # Make sure description is properly set and not empty
+                        container_desc = sample_data.get('containerDescription', '').strip()
+                        if not container_desc:
+                            sample_data['containerDescription'] = sample_data.get('description', 'Container')
+                            print(f"DEBUG: Container description was empty, using sample description instead: {sample_data['containerDescription']}")
+                        else:
+                            print(f"DEBUG: Using provided container description: {sample_data.get('containerDescription')}")
+                    
                     try:
                         # Check if we should use existing container
                         if sample_data.get('useExistingContainer') and sample_data.get('existingContainerId'):
@@ -411,7 +479,10 @@ class SampleService:
                             # Create new container
                             print(f"DEBUG: Creating container for package {i+1}")
                             # Use container description if provided, or default to generic container name
-                            container_desc = sample_data.get('containerDescription', 'Container')
+                            container_desc = (sample_data.get('containerDescription') or '').strip()
+                            if not container_desc:
+                                container_desc = sample_data.get('description', 'Container')
+                                print(f"DEBUG: Container description was empty, using sample description: {container_desc}")
                             if package_count > 1:
                                 container_desc += f" (Package {i+1})"
                             
@@ -480,7 +551,23 @@ class SampleService:
                                 capacity = sample_data.get('containerCapacity') or amount_per_package
                             
                             # Get location from parameters or use the one already determined
-                            container_location_id = sample_data.get('containerLocationId') or location_id
+                            # Check for multiple container locations
+                            container_location_id = None
+                            container_locations = sample_data.get('containerLocations', [])
+                            
+                            # If we have specific container locations for multiple packages
+                            if container_locations and len(container_locations) > 0:
+                                # Try to find location for this package
+                                for cl in container_locations:
+                                    if str(cl.get('packageNumber', '')) == str(i+1):
+                                        container_location_id = cl.get('locationId')
+                                        print(f"DEBUG: Using special container location {container_location_id} for package {i+1}")
+                                        break
+                                
+                            # Fallback to main container location or storage location
+                            if not container_location_id:
+                                container_location_id = sample_data.get('containerLocationId') or location_id
+                                print(f"DEBUG: Using fallback container location {container_location_id} for package {i+1}")
                             
                             # Create container with location and container type
                             if container_type_id:
@@ -539,6 +626,8 @@ class SampleService:
                             """)
                         
                         # Connect samples to the container
+                        # Ensure that we're using the exact amount provided by the user
+                        # Use amount_per_package for the current package/container
                         cursor.execute("""
                             INSERT INTO ContainerSample (
                                 SampleStorageID,
@@ -549,7 +638,7 @@ class SampleService:
                         """, (
                             storage_id,
                             container_id,
-                            amount_per_package
+                            amount_per_package  # Use amount for this specific package/container
                         ))
                         
                         # Log container creation
@@ -572,6 +661,10 @@ class SampleService:
                         print(f"DEBUG: Error creating container: {e}")
                         import traceback
                         traceback.print_exc()
+                        
+                        # Important: Re-raise exception to indicate failure
+                        # This will trigger transaction rollback
+                        raise Exception(f"Failed to create container: {e}")
             
             # Handle serial numbers if relevant
             if sample_data.get('hasSerialNumbers') and sample_data.get('serialNumbers'):

@@ -307,6 +307,46 @@ body {
     background: rgba(52, 152, 219, 0.1);
 }
 
+/* Special styling for multi-package/container selection mode */
+.storage-cell.multi-selectable-cell {
+    border-left: 3px solid #3b82f6;
+    position: relative;
+}
+
+.storage-cell.multi-package-available:hover {
+    background-color: #e6f4ff;
+    border-color: #3b82f6;
+}
+
+.storage-cell.multi-package-selected {
+    background-color: #d1e7ff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.storage-cell.multi-package-selected::after {
+    content: "✓";
+    position: absolute;
+    top: 3px;
+    right: 5px;
+    color: #3b82f6;
+    font-weight: bold;
+}
+
+/* Custom styling for container location information */
+.selected-locations-list {
+    border-left: 3px solid #3b82f6;
+    padding-left: 10px;
+}
+
+.selected-location-item {
+    display: flex;
+    align-items: center;
+    padding: 5px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+}
+
 .btn-copy {
     display: flex;
     align-items: center;

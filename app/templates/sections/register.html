@@ -21,11 +21,12 @@
                 </div>
             </div>
             <div class="progress mt-3">
-                <div class="progress-bar" role="progressbar" style="width: 25%"></div>
+                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
             </div>
         </div>
 
         <div class="registration-form">
+            <!-- Step 1: Reception Details -->
             <div class="form-step active" id="step1">
                 <h3>Reception Details</h3>
                 <div class="form-group">
@@ -56,7 +57,7 @@
                 </div>
             </div>
 
-            <!-- Step 2: Basic Information -->
+            <!-- Step 2: Sample Information -->
             <div class="form-step" id="step2">
                 <div class="copy-buttons">
                     <button type="button" class="btn-copy" id="copyLastButton">
@@ -69,115 +70,157 @@
                     </button>
                 </div>
                 <h3>Sample Information</h3>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Part number</label>
-                        <input type="text" class="form-control" name="partNumber">
-                    </div>
-                    <div class="form-group">
-                        <label>Sample name</label>
-                        <input type="text" class="form-control" name="description" required>
-                    </div>
+                
+                <!-- Basic Sample Info - Always visible -->
+                <div class="form-group">
+                    <label>Part number</label>
+                    <input type="text" class="form-control" name="partNumber">
+                </div>
+                <div class="form-group">
+                    <label>Sample name</label>
+                    <input type="text" class="form-control" name="description" required>
+                </div>
 
-                    <!-- Package Type section - restructured -->
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="isBulkSample" name="isBulkSample">
-                            <label for="isBulkSample">Bulk quantity (liquid/meter)</label>
-                        </div>
-                        
-                        <div class="checkbox-group mt-2">
-                            <input type="checkbox" id="isMultiPackage" name="isMultiPackage">
-                            <label for="isMultiPackage">Multiple packages with same type</label>
+                <!-- Sample Type Selection Card -->
+                <div class="card mb-4 mt-3">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Sample Type</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group mb-4">
+                            <label class="fw-bold mb-2">Choose Sample Type:</label>
+                            <div class="ms-3">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="sampleTypeOption" id="singleSampleOption" value="single" checked>
+                                    <label class="form-check-label" for="singleSampleOption">
+                                        <strong>Single Sample</strong>
+                                    </label>
+                                    <small class="text-muted d-block ms-4">A single item or component</small>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="sampleTypeOption" id="multiSampleOption" value="multiple">
+                                    <label class="form-check-label" for="multiSampleOption">
+                                        <strong>Multiple Identical Samples</strong>
+                                    </label>
+                                    <small class="text-muted d-block ms-4">Multiple identical items received together</small>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="sampleTypeOption" id="bulkSampleOption" value="bulk">
+                                    <label class="form-check-label" for="bulkSampleOption">
+                                        <strong>Bulk Material</strong>
+                                    </label>
+                                    <small class="text-muted d-block ms-4">Material measured in length, weight, or volume</small>
+                                </div>
+                            </div>
                         </div>
                     </div>
-
-                    <!-- "isMultiPackage" -->
-                    <div class="checkbox-group mt-2">
-                        <input type="checkbox" id="createContainers" name="createContainers">
-                        <label for="createContainers">Place samples in containers</label>
-                        <small class="text-muted d-block mt-1">Choose this if the samples should be registered in physical containers in storage</small>
+                </div>
+                
+                <!-- Storage Options Card -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Storage Option</h5>
                     </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label class="fw-bold mb-2">Choose Storage Option:</label>
+                            <div class="ms-3">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="storageOption" id="directStorageOption" value="direct" checked>
+                                    <label class="form-check-label" for="directStorageOption">
+                                        <strong>Direct Storage</strong>
+                                    </label>
+                                    <small class="text-muted d-block ms-4">Store samples directly on shelf without container</small>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="storageOption" id="containerStorageOption" value="container">
+                                    <label class="form-check-label" for="containerStorageOption">
+                                        <strong>Store in Container</strong>
+                                    </label>
+                                    <small class="text-muted d-block ms-4">Place samples in physical containers</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                    <div id="containerDetailsSection" class="container-related d-none mt-3 p-3 bg-light rounded">
-                        <h5>Container details</h5>
-                        <div class="form-group mb-3">
-                            <label>Container description <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="containerDescription" name="containerDescription" placeholder="E.g. 'Red plastic box'" required>
-                            <small class="text-muted">Default: Same as sample description</small>
+                <!-- Multiple Sample Options - Shows only for Multiple Samples -->
+                <div id="multiSampleOptions" class="d-none card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Multiple Samples Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Number of Packages</label>
+                                    <input type="number" class="form-control" name="packageCount" min="1" value="1">
+                                    <small class="text-muted">How many separate packages/boxes have you received?</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Samples per Package</label>
+                                    <input type="number" class="form-control" name="amountPerPackage" min="1" value="1">
+                                    <small class="text-muted">How many units are in each package?</small>
+                                </div>
+                            </div>
                         </div>
                         
-                        <div class="form-group mb-3">
-                            <label>Container type <span class="text-danger">*</span></label>
-                            <select class="form-control" id="containerType" required>
-                                <option value="">Select type</option>
-                                {% for type in container_types %}
-                                <option value="{{ type.ContainerTypeID }}" data-capacity="{{ type.DefaultCapacity }}">{{ type.TypeName }}</option>
-                                {% endfor %}
-                            </select>
+                        <div class="total-calculation p-2 bg-light rounded mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Total amount (automatically calculated):</span>
+                                <span id="calculatedTotal" class="fw-bold">1</span>
+                            </div>
                         </div>
                         
-                        <div class="form-group mb-3">
-                            <label>Capacity</label>
-                            <input type="number" class="form-control" id="containerCapacity" min="1" placeholder="Will use type's default capacity if not specified">
-                            <small class="text-muted">Maximum number of units this container can hold</small>
-                        </div>
-                        
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="containerIsMixed" name="containerIsMixed">
-                            <label class="form-check-label" for="containerIsMixed">
-                                Can contain mixed sample types
+                        <!-- Separate Storage Option -->
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="separateStorage" name="separateStorage" checked>
+                            <label class="form-check-label" for="separateStorage">
+                                <strong>Use separate storage for each package</strong>
                             </label>
-                        </div>
-                        
-                        <div class="form-group mb-3">
-                            <label>Storage Location <span class="text-danger">*</span></label>
-                            <select class="form-control" id="containerLocation" required>
-                                <option value="">Select location</option>
-                                {% for location in locations %}
-                                <option value="{{ location.LocationID }}">{{ location.LocationName }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" value="" id="createContainerType">
-                            <label class="form-check-label" for="createContainerType">
-                                Create new container type
-                            </label>
-                        </div>
-                        
-                        <div id="newContainerTypeSection" class="d-none border p-3 mb-3 rounded bg-light">
-                            <h6 class="mb-3">New Container Type</h6>
-                            <div class="form-group mb-3">
-                                <label>Type Name <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="newContainerTypeName" placeholder="E.g. 'Box'" required>
-                            </div>
-                            
-                            <div class="form-group mb-3">
-                                <label>Default Capacity <span class="text-danger">*</span></label>
-                                <input type="number" class="form-control" id="newContainerTypeCapacity" min="1" placeholder="Default capacity" required>
-                            </div>
-                            
-                            <div class="form-group mb-3">
-                                <label>Description</label>
-                                <textarea class="form-control" id="newContainerTypeDescription" rows="2" placeholder="Description of this type"></textarea>
-                            </div>
+                            <small class="text-muted d-block ms-4">Place each package at a different location</small>
                         </div>
                     </div>
+                </div>
 
-                    <div id="existingContainerSection" class="container-related d-none mt-3 p-3 bg-light rounded">
-                        <div class="form-group mb-3">
-                            <div class="d-flex align-items-center mb-2">
-                                <input type="radio" name="containerOption" id="newContainerOption" value="new" checked>
-                                <label for="newContainerOption" class="ms-2 mb-0">Create new container</label>
-                            </div>
-                            <div class="d-flex align-items-center">
-                                <input type="radio" name="containerOption" id="existingContainerOption" value="existing">
-                                <label for="existingContainerOption" class="ms-2 mb-0">Select existing container</label>
+                <!-- Container Options - Shows only for Container Storage -->
+                <div id="containerOptions" class="d-none card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Container Options</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- For Single Sample or Bulk Material -->
+                        <div id="singleContainerOptions">
+                            <div class="form-group mb-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <input type="radio" name="containerOption" id="newContainerOption" value="new" checked>
+                                    <label for="newContainerOption" class="ms-2 mb-0">Create new container</label>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <input type="radio" name="containerOption" id="existingContainerOption" value="existing">
+                                    <label for="existingContainerOption" class="ms-2 mb-0">Select existing container</label>
+                                </div>
                             </div>
                         </div>
                         
+                        <!-- For Multiple Samples -->
+                        <div id="multipleContainerOptions" class="d-none">
+                            <div class="form-group mb-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <input type="radio" name="multiContainerOption" id="oneContainerForAll" value="single" checked onchange="updateContainerLocationVisibility()">
+                                    <label for="oneContainerForAll" class="ms-2 mb-0">One container for all samples</label>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <input type="radio" name="multiContainerOption" id="oneContainerPerPackage" value="multiple" onchange="updateContainerLocationVisibility()">
+                                    <label for="oneContainerPerPackage" class="ms-2 mb-0">One container per package</label>
+                                    <small class="text-muted d-block ms-4">You'll select multiple locations in the grid during the Location step</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Container Selection for Existing Container -->
                         <div id="existingContainerSelectArea" class="d-none mt-3">
                             <div class="form-group">
                                 <label>Select an existing container</label>
@@ -188,113 +231,135 @@
                                 <small class="text-muted">Select a container created via Container Administration</small>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Multi-package fields - compact version -->
-                    <div id="multiplePackageFields" class="d-none">
-                        <div class="package-container p-3 bg-light rounded">
-                            <h5>Multi-package information</h5>
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Number of packages</label>
-                                        <input type="number" class="form-control" name="packageCount" min="1" value="1">
-                                        <small class="text-muted">How many separate packages/boxes have you received?</small>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Amount per package</label>
-                                        <input type="number" class="form-control" name="amountPerPackage" min="1">
-                                        <small class="text-muted">How many units are in each package?</small>
-                                    </div>
-                                </div>
+                        
+                        <!-- Container Details for New Container -->
+                        <div id="containerDetailsSection" class="mt-3">
+                            <div class="form-group mb-3">
+                                <label>Container description <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="containerDescription" name="containerDescription" placeholder="E.g. 'Red plastic box'" required>
+                                <small class="text-muted">Provide a descriptive name for the container (required)</small>
                             </div>
                             
-                            <div class="total-calculation p-2 bg-white rounded mb-3">
-                                <div class="d-flex justify-content-between">
-                                    <span>Total amount (automatically calculated):</span>
-                                    <span id="calculatedTotal" class="font-weight-bold">0</span>
-                                </div>
+                            <div class="form-group mb-3">
+                                <label>Container type <span class="text-danger">*</span></label>
+                                <select class="form-control" id="containerType" required>
+                                    <option value="">Select type</option>
+                                    {% for type in container_types %}
+                                    <option value="{{ type.ContainerTypeID }}" data-capacity="{{ type.DefaultCapacity }}">{{ type.TypeName }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
                             
-                            <!-- Container for location information -->
+                            <div class="form-group mb-3">
+                                <label>Capacity</label>
+                                <input type="number" class="form-control" id="containerCapacity" min="1" placeholder="Will use type's default capacity if not specified">
+                                <small class="text-muted">Maximum number of units this container can hold</small>
+                            </div>
+                            
                             <div class="form-check mb-3">
-                                <input class="form-check-input" type="checkbox" id="differentLocations" name="differentLocations">
-                                <label class="form-check-label" for="differentLocations">
-                                    Place packages at different locations
+                                <input class="form-check-input" type="checkbox" id="containerIsMixed" name="containerIsMixed">
+                                <label class="form-check-label" for="containerIsMixed">
+                                    Can contain mixed sample types
                                 </label>
                             </div>
-
-                            <!-- Package location summary -->
-                            <div id="packageLocationsSummary" class="d-none p-2 border rounded mb-3">
-                                <div class="package-locations-list">
-                                    <!-- Here will be a list of configured package locations -->
-                                </div>
+                            
+                            <div class="form-group mb-3" id="containerLocationSelectSection">
+                                <label>Storage Location <span class="text-danger">*</span></label>
+                                <select class="form-control" id="containerLocation" required>
+                                    <option value="">Select location</option>
+                                    {% for location in locations %}
+                                    <option value="{{ location.LocationID }}">{{ location.LocationName }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">For single container storage only. For multiple containers, you'll select locations in the grid later.</small>
                             </div>
-
-                            <!-- Show/hide area for configuring locations -->
-                            <div id="packageLocationsConfig" class="d-none">
-                                <div class="card mb-3">
-                                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                                        <h6 class="mb-0">Configure package locations</h6>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="collapseLocationsBtn">
-                                            <i class="fas fa-chevron-up"></i>
-                                        </button>
-                                    </div>
-                                    <div class="card-body" id="packageLocationsContainer">
-                                        <!-- Package location content added dynamically via JS -->
-                                    </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" value="" id="createContainerType" onchange="toggleContainerTypeSection(this)">
+                                <label class="form-check-label" for="createContainerType">
+                                    Create new container type
+                                </label>
+                            </div>
+                            
+                            <div id="newContainerTypeSection" class="d-none border p-3 mb-3 rounded bg-light">
+                                <h6 class="mb-3">New Container Type</h6>
+                                <div class="form-group mb-3">
+                                    <label>Type Name <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="newContainerTypeName" placeholder="E.g. 'Box'" required>
+                                </div>
+                                
+                                <div class="form-group mb-3">
+                                    <label>Default Capacity <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" id="newContainerTypeCapacity" min="1" placeholder="Default capacity" required>
+                                </div>
+                                
+                                <div class="form-group mb-3">
+                                    <label>Description</label>
+                                    <textarea class="form-control" id="newContainerTypeDescription" rows="2" placeholder="Description of this type"></textarea>
                                 </div>
                             </div>
                         </div>
                     </div>
-        
-                    <!-- Total amount field - now with better explanation -->
-                    <div class="form-group">
-                        <label>Total Amount</label>
-                        <input type="number" class="form-control" name="totalAmount" required min="1">
-                        <small class="text-muted" id="totalAmountHelper">Total number of units received</small>
-                    </div>
+                </div>
 
-                    <div class="form-group">
-                        <label>Unit</label>
-                        <select class="form-control" name="unit" required>
-                            <option value="">Select unit</option>
-                            {% for unit in units %}
-                            <option value="{{ unit.UnitID }}">{{ unit.UnitName }}</option>
-                            {% endfor %}
-                        </select><small class="text-muted unit-helper">When selecting "Bulk quantity" above, units other than pcs can be selected</small>
+                <!-- Serial Numbers Option -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Identification</h5>
                     </div>
-                    
-                    <div class="form-group">
-                        <label>Responsible for sample</label>
-                        <select class="form-control" name="owner" required>
-                            <option value="{{ current_user.UserID }}" selected>{{ current_user.Name }} (you)</option>
-                            {% for user in users %}
-                            {% if user.UserID != current_user.UserID %}
-                            <option value="{{ user.UserID }}">{{ user.Name }}</option>
-                            {% endif %}
-                            {% endfor %}
-                        </select>
-                        <small class="text-muted">Select the person responsible for this sample</small>
+                    <div class="card-body">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="hasSerialNumbers" name="hasSerialNumbers">
+                            <label class="form-check-label" for="hasSerialNumbers">
+                                <strong>Samples have individual serial numbers</strong>
+                            </label>
+                            <small class="text-muted d-block ms-4">Select this if each sample has a unique serial number or barcode</small>
+                        </div>
                     </div>
-                    
-                    <div class="form-group">
-                        <label>Expiry date</label>
-                        <input type="date" class="form-control" name="expiryDate">
-                        <small class="text-muted">Default: 2 months from today</small>
+                </div>
+
+                <!-- Common Fields for All Sample Types -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Total Amount</label>
+                            <input type="number" class="form-control" name="totalAmount" required min="1" value="1">
+                            <small class="text-muted" id="totalAmountHelper">Total number of units received</small>
+                        </div>
                     </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Unit</label>
+                            <select class="form-control" name="unit" required>
+                                <option value="">Select unit</option>
+                                {% for unit in units %}
+                                <option value="{{ unit.UnitID }}">{{ unit.UnitName }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted unit-helper">Units depend on sample type (pcs for items, other units for bulk)</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Responsible for sample</label>
+                    <select class="form-control" name="owner" required>
+                        <option value="{{ current_user.UserID }}" selected>{{ current_user.Name }} (you)</option>
+                        {% for user in users %}
+                        {% if user.UserID != current_user.UserID %}
+                        <option value="{{ user.UserID }}">{{ user.Name }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Select the person responsible for this sample</small>
                 </div>
                 
-                <div class="form-group mt-4">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="hasSerialNumbers" name="hasSerialNumbers">
-                        <label for="hasSerialNumbers">Samples have individual serial numbers</label>
-                        <small class="text-muted d-block mt-1">Select this if each sample has a unique serial number or barcode</small>
-                    </div>
+                <div class="form-group">
+                    <label>Expiry date</label>
+                    <input type="date" class="form-control" name="expiryDate">
+                    <small class="text-muted">Default: 2 months from today</small>
                 </div>
-
+                
                 <div class="form-group">
                     <label>Other</label>
                     <textarea class="form-control" name="other" rows="3" placeholder="Enter any remarks or other details"></textarea>
@@ -355,10 +420,20 @@
             <div class="form-step" id="step4">
                 <h3>Select Location</h3>
                 <div class="storage-selector">
-                    <!-- Info box -->
-                    <div class="alert alert-info mb-3">
+                    <!-- Info box with dynamic content based on selection -->
+                    <div class="alert alert-info mb-3" id="storageInstructions">
                         <i class="fas fa-info-circle"></i>
-                        Select storage location by clicking on an available space in the grid below.
+                        <span id="storageInstructionsText">
+                            Select storage location by clicking on an available space in the grid below.
+                        </span>
+                    </div>
+
+                    <!-- Location summary that changes based on selections -->
+                    <div id="locationSummary" class="mb-3 p-3 bg-light rounded d-none">
+                        <h5>Storage Summary</h5>
+                        <div id="locationSummaryContent">
+                            <!-- Filled dynamically based on selections -->
+                        </div>
                     </div>
 
                     <div class="storage-grid">
@@ -367,7 +442,8 @@
                 </div>
             </div>
 
-            <div class="form-navigation">
+            <!-- Navigation Buttons -->
+            <div class="form-navigation mt-4">
                 <div class="form-nav-buttons">
                     <button id="prevButton" class="btn btn-secondary" style="display: none;">Back</button>
                     <button id="nextButton" class="btn btn-primary">Next</button>
@@ -376,20 +452,828 @@
                     <div class="progress-bar" role="progressbar" style="width: 25%"></div>
                 </div>
             </div>
+
+            <!-- Preview/Summary Panel - Shows before final submission -->
+            <div id="registrationSummary" class="d-none mt-4 p-3 bg-light rounded">
+                <h4>Registration Summary</h4>
+                <div id="summaryContent">
+                    <!-- Filled dynamically before submission -->
+                </div>
+            </div>
         </div>
     </div>
 </section>
 {% endblock %}
 
 {% block scripts %}
-<!-- Include our separate registration script -->
-<script src="{{ url_for('static', filename='js/register.js') }}"></script>
+<!-- Load critical dependencies first -->
 <script src="{{ url_for('static', filename='js/package-locations.js') }}"></script>
 <script src="{{ url_for('static', filename='js/container.js') }}"></script>
+
+<!-- Define global handleFormSubmission function directly to ensure it's available -->
 <script>
+    // Define handleFormSubmission function globally to ensure it's accessible from all modules
+    window.handleFormSubmission = function() {
+        console.log('Using direct HTML handleFormSubmission function');
+        
+        // Collect form data
+        const formData = {
+            // Reception information
+            supplier: document.querySelector('[name="supplier"]')?.value || '',
+            trackingNumber: document.querySelector('[name="trackingNumber"]')?.value || '',
+            custodian: document.querySelector('input[name="custodian"]')?.value || '',
+            
+            // Sample information
+            partNumber: document.querySelector('[name="partNumber"]')?.value || '',
+            description: document.querySelector('[name="description"]')?.value || '',
+            
+            // Sample type
+            sampleType: document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single',
+            
+            // Amount information
+            totalAmount: parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0,
+            unit: document.querySelector('[name="unit"]')?.value || '',
+            
+            // Storage type
+            storageOption: document.querySelector('input[name="storageOption"]:checked')?.value || 'direct',
+            
+            // Additional fields
+            owner: document.querySelector('[name="owner"]')?.value || '',
+            expiryDate: document.querySelector('[name="expiryDate"]')?.value || '',
+            hasSerialNumbers: document.getElementById('hasSerialNumbers')?.checked || false,
+            other: document.querySelector('[name="other"]')?.value || '',
+            
+            // Location
+            storageLocation: window.registerApp?.selectedLocation || document.getElementById('selectedLocationInput')?.value || '',
+            
+            // Container information
+            createContainers: document.querySelector('input[name="storageOption"]:checked')?.value === 'container'
+        };
+        
+        // Show processing message
+        const toast = document.createElement('div');
+        toast.className = 'custom-toast success-toast show';
+        toast.innerHTML = `
+            <div class="toast-icon">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <div class="toast-content">
+                <div class="toast-title">Processing</div>
+                <div class="toast-message">Submitting your registration...</div>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        
+        // If containers are used, add container-specific data
+        if (formData.createContainers) {
+            console.log("Processing container data for API submission");
+            // For single sample or bulk sample 
+            if (formData.sampleType !== 'multiple') {
+                const existingContainerOption = document.getElementById('existingContainerOption');
+                if (existingContainerOption && existingContainerOption.checked) {
+                    // Using existing container
+                    formData.useExistingContainer = true;
+                    formData.existingContainerId = document.getElementById('existingContainerSelect')?.value;
+                    
+                    // If we have container location, use it
+                    if (window.registerApp?.selectedContainerLocation) {
+                        formData.storageLocation = window.registerApp.selectedContainerLocation.LocationID;
+                    }
+                } else {
+                    // Create new container
+                    formData.createContainers = true; // Explicitly set to match backend expectations
+                    // Ensure we have a container description - critical for container creation
+                    const containerDesc = document.getElementById('containerDescription')?.value || '';
+                    formData.containerDescription = containerDesc || formData.description || 'Container';
+                    // Clean up any leading/trailing whitespace
+                    formData.containerDescription = formData.containerDescription.trim();
+                    // Always ensure we have at least a basic name
+                    if (!formData.containerDescription) {
+                        formData.containerDescription = 'Container';   
+                    }
+                    console.log(`DEBUG: Using container description: '${formData.containerDescription}'`);
+                    formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
+                    formData.containerTypeId = document.getElementById('containerType')?.value || '';
+                    formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
+                    
+                    // Check if creating a new container type
+                    const createContainerType = document.getElementById('createContainerType')?.checked || false;
+                    if (createContainerType) {
+                        formData.newContainerType = {
+                            typeName: document.getElementById('newContainerTypeName')?.value || '',
+                            description: document.getElementById('newContainerTypeDescription')?.value || '',
+                            capacity: document.getElementById('newContainerTypeCapacity')?.value || ''
+                        };
+                    }
+                    
+                    // Get container location
+                    const containerLocationSelect = document.getElementById('containerLocation');
+                    if (containerLocationSelect && containerLocationSelect.value) {
+                        formData.containerLocationId = containerLocationSelect.value;
+                        // Also set the main storage location to the container location
+                        formData.storageLocation = containerLocationSelect.value;
+                    }
+                }
+            } else {
+                // For multiple samples
+                const oneContainerForAll = document.getElementById('oneContainerForAll');
+                const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
+                
+                if (oneContainerForAll && oneContainerForAll.checked) {
+                    // Creating one container for all samples
+                    formData.createSingleContainer = true;
+                    // Get container description and log it for debugging
+                    const containerDesc = document.getElementById('containerDescription')?.value || '';
+                    formData.containerDescription = containerDesc || formData.description || 'Container';
+                    // Clean up any leading/trailing whitespace
+                    formData.containerDescription = formData.containerDescription.trim();
+                    // Always ensure we have at least a basic name
+                    if (!formData.containerDescription) {
+                        formData.containerDescription = 'Container';   
+                    }
+                    console.log(`DEBUG: Using container description for multiple samples: '${formData.containerDescription}'`);
+                    formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
+                    formData.containerTypeId = document.getElementById('containerType')?.value || '';
+                    formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
+
+                    // Check if creating a new container type
+                    const createContainerType = document.getElementById('createContainerType')?.checked || false;
+                    if (createContainerType) {
+                        formData.newContainerType = {
+                            typeName: document.getElementById('newContainerTypeName')?.value || '',
+                            description: document.getElementById('newContainerTypeDescription')?.value || '',
+                            capacity: document.getElementById('newContainerTypeCapacity')?.value || ''
+                        };
+                    }
+                    
+                    // Container location
+                    const containerLocationSelect = document.getElementById('containerLocation');
+                    if (containerLocationSelect && containerLocationSelect.value) {
+                        formData.containerLocationId = containerLocationSelect.value;
+                        // Also set the main storage location to the container location
+                        formData.storageLocation = containerLocationSelect.value;
+                    }
+                } else if (oneContainerPerPackage && oneContainerPerPackage.checked) {
+                    // Creating one container per package
+                    formData.createMultipleContainers = true;
+                    // Get container description and log it for debugging
+                    const containerDesc = document.getElementById('containerDescription')?.value || '';
+                    formData.containerDescription = containerDesc || formData.description || 'Container';
+                    // Clean up any leading/trailing whitespace
+                    formData.containerDescription = formData.containerDescription.trim();
+                    // Always ensure we have at least a basic name
+                    if (!formData.containerDescription) {
+                        formData.containerDescription = 'Container';   
+                    }
+                    console.log(`DEBUG: Using container description for multiple samples: '${formData.containerDescription}'`);
+                    formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
+                    formData.containerTypeId = document.getElementById('containerType')?.value || '';
+                    formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
+                    
+                    // For multiple containers, get package locations
+                    if (typeof window.PackageLocations !== 'undefined') {
+                        const packageLocations = window.PackageLocations.getSelectedLocations();
+                        console.log('DEBUG: Package locations for multiple containers:', packageLocations);
+                        
+                        // Ensure we have the right number of locations for all packages
+                        const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
+                        
+                        if (packageLocations.length !== packageCount) {
+                            alert(`Error: You need to select ${packageCount} locations for your packages. Currently selected: ${packageLocations.length}`);
+                            
+                            // Remove processing toast if showing
+                            toast.remove();
+                            
+                            // Prevent form submission
+                            return false;
+                        }
+                        
+                        // Set both formats for backend compatibility
+                        formData.containerLocations = packageLocations.map(loc => ({
+                            packageNumber: loc.packageNumber,
+                            locationId: loc.locationId
+                        }));
+                        formData.differentLocations = true; // Explicitly set flag for backend processing
+                        formData.packageLocations = packageLocations.map(loc => ({
+                            packageNumber: loc.packageNumber,
+                            locationId: loc.locationId
+                        }));
+                        
+                        // Set createMultipleContainers as true to ensure we create one container per location
+                        formData.createMultipleContainers = true;
+                    }
+                }
+            }
+            console.log("Container data prepared:", formData);
+        }
+        
+        // Send data to server
+        fetch('/api/samples', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Remove processing toast
+            toast.remove();
+            
+            if (data.success) {
+                // Show success message
+                const successToast = document.createElement('div');
+                successToast.className = 'custom-toast success-toast show';
+                successToast.innerHTML = `
+                    <div class="toast-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="toast-content">
+                        <div class="toast-title">Success</div>
+                        <div class="toast-message">Sample ${data.sample_id} has been registered successfully!</div>
+                    </div>
+                `;
+                document.body.appendChild(successToast);
+                
+                // Redirect to dashboard after 2 seconds
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 2000);
+            } else {
+                // Show error toast
+                const errorToast = document.createElement('div');
+                errorToast.className = 'custom-toast error-toast show';
+                errorToast.innerHTML = `
+                    <div class="toast-icon">
+                        <i class="fas fa-exclamation-circle"></i>
+                    </div>
+                    <div class="toast-content">
+                        <div class="toast-title">Error</div>
+                        <div class="toast-message">Error during registration: ${data.error || 'Unknown error'}</div>
+                    </div>
+                `;
+                document.body.appendChild(errorToast);
+            }
+        })
+        .catch(error => {
+            // Remove processing toast
+            toast.remove();
+            
+            // Show error toast
+            const errorToast = document.createElement('div');
+            errorToast.className = 'custom-toast error-toast show';
+            errorToast.innerHTML = `
+                <div class="toast-icon">
+                    <i class="fas fa-exclamation-circle"></i>
+                </div>
+                <div class="toast-content">
+                    <div class="toast-title">Error</div>
+                    <div class="toast-message">An error occurred: ${error.message || 'Unknown error'}</div>
+                </div>
+            `;
+            document.body.appendChild(errorToast);
+        });
+    };
+
+    // Create fallback for PackageLocations module if not loaded
+    if (!window.PackageLocations) {
+        console.warn("PackageLocations module not loaded, creating fallback");
+        window.PackageLocations = {
+            _locations: [],
+            
+            addLocation: function(packageNumber, locationId, locationName) {
+                this._locations.push({packageNumber, locationId, locationName});
+            },
+            
+            removeLocation: function(packageNumber) {
+                this._locations = this._locations.filter(loc => loc.packageNumber != packageNumber);
+            },
+            
+            removeLocationByName: function(locationName) {
+                this._locations = this._locations.filter(loc => loc.locationName !== locationName);
+            },
+            
+            getSelectedLocations: function() {
+                return this._locations;
+            },
+            
+            getLocationByPackage: function(packageNumber) {
+                return this._locations.find(loc => loc.packageNumber == packageNumber);
+            },
+            
+            reset: function() {
+                this._locations = [];
+            }
+        };
+    }
+</script>
+
+<!-- Load the main registration helper first with global state management -->
+<script src="{{ url_for('static', filename='js/register.js') }}"></script>
+
+<!-- Load core validation module first - has critical functions -->
+<script src="{{ url_for('static', filename='js/register-validation.js') }}"></script>
+
+<!-- Make sure core functions are available before proceeding -->
+<script>
+    // Check if the validation module loaded correctly
+    if (typeof window.validateCurrentStep !== 'function' || 
+        typeof window.handleFormSubmission !== 'function' ||
+        typeof window.updateRegistrationSummary !== 'function') {
+        
+        console.error('Critical functions missing after loading validation module');
+    } else {
+        console.log('Validation module loaded successfully with all critical functions');
+    }
+</script>
+
+<!-- Load form handling module next -->
+<script src="{{ url_for('static', filename='js/register-form.js') }}"></script>
+
+<!-- Then include other modules -->
+<script src="{{ url_for('static', filename='js/register-sample-types.js') }}"></script>
+<script src="{{ url_for('static', filename='js/register-containers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/register-storage.js') }}"></script>
+<script src="{{ url_for('static', filename='js/register-identification.js') }}"></script>
+
+<script>
+    // Define fully functional backup implementations directly in the HTML
+    (function() {
+        // Define real backup form submission function
+        if (typeof window.handleFormSubmission !== 'function') {
+            console.warn('Defining complete backup handleFormSubmission');
+            window.handleFormSubmission = function() {
+                console.log('Using backup form submission function');
+                
+                // Validate current step first
+                if (typeof window.validateCurrentStep === 'function' && !window.validateCurrentStep()) {
+                    return;
+                }
+                
+                // Collect all data from form
+                const formData = {
+                    // Reception information
+                    supplier: document.querySelector('[name="supplier"]')?.value || '',
+                    trackingNumber: document.querySelector('[name="trackingNumber"]')?.value || '',
+                    custodian: document.querySelector('input[name="custodian"]')?.value || '',
+                    
+                    // Sample information
+                    partNumber: document.querySelector('[name="partNumber"]')?.value || '',
+                    description: document.querySelector('[name="description"]')?.value || '',
+                    
+                    // Sample type
+                    sampleType: document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single',
+                    
+                    // Amount information
+                    totalAmount: parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0,
+                    unit: document.querySelector('[name="unit"]')?.value || '',
+                    
+                    // Storage type
+                    storageOption: document.querySelector('input[name="storageOption"]:checked')?.value || 'direct',
+                    
+                    // Additional fields
+                    owner: document.querySelector('[name="owner"]')?.value || '',
+                    expiryDate: document.querySelector('[name="expiryDate"]')?.value || '',
+                    hasSerialNumbers: document.getElementById('hasSerialNumbers')?.checked || false,
+                    other: document.querySelector('[name="other"]')?.value || '',
+                    
+                    // Location
+                    storageLocation: window.registerApp?.selectedLocation || document.getElementById('selectedLocationInput')?.value || '',
+                    
+                    // Container information
+                    storageOption: document.querySelector('input[name="storageOption"]:checked')?.value || 'direct',
+                    createContainers: document.querySelector('input[name="storageOption"]:checked')?.value === 'container'
+                };
+                
+                // Add multiple samples specific data
+                if (formData.sampleType === 'multiple') {
+                    formData.packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
+                    formData.amountPerPackage = parseInt(document.querySelector('[name="amountPerPackage"]')?.value) || 1;
+                    formData.separateStorage = document.getElementById('separateStorage')?.checked || false;
+                    
+                    // If using separate storage for each package
+                    if (formData.separateStorage) {
+                        if (window.PackageLocations && typeof PackageLocations.getSelectedLocations === 'function') {
+                            const packageLocations = PackageLocations.getSelectedLocations();
+                            formData.packageLocations = packageLocations.map(loc => ({
+                                packageNumber: loc.packageNumber,
+                                locationId: loc.locationId
+                            }));
+                            console.log("Using package locations:", formData.packageLocations);
+                        } else {
+                            console.error("PackageLocations module not found for multiple locations");
+                        }
+                    }
+                }
+                
+                // If containers are used, add container-specific data
+                if (formData.createContainers) {
+                    // For single sample - check if using existing or creating new container
+                    if (formData.sampleType !== 'multiple') {
+                        const existingContainerOption = document.getElementById('existingContainerOption');
+                        if (existingContainerOption && existingContainerOption.checked) {
+                            // Using existing container
+                            formData.useExistingContainer = true;
+                            formData.existingContainerId = document.getElementById('existingContainerSelect')?.value;
+                            
+                            // If we have container location, use it
+                            if (window.registerApp?.selectedContainerLocation) {
+                                formData.storageLocation = window.registerApp.selectedContainerLocation.LocationID;
+                            }
+                        } else {
+                            // Use correct API fields for container creation
+                            formData.containerDescription = document.getElementById('containerDescription')?.value || '';
+                            formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
+                            
+                            // Ensure containerTypeId is a number
+                            const typeId = document.getElementById('containerType')?.value;
+                            formData.containerTypeId = typeId ? parseInt(typeId) : null;
+                            
+                            // Ensure capacity is a number
+                            const capacity = document.getElementById('containerCapacity')?.value;
+                            formData.containerCapacity = capacity ? parseInt(capacity) : null;
+                            
+                            // Creating new container type?
+                            const createContainerType = document.getElementById('createContainerType')?.checked || false;
+                            if (createContainerType) {
+                                formData.newContainerType = {
+                                    typeName: document.getElementById('newContainerTypeName')?.value || '',
+                                    description: document.getElementById('newContainerTypeDescription')?.value || '',
+                                    capacity: document.getElementById('newContainerTypeCapacity')?.value || ''
+                                };
+                            }
+                            
+                            // Container location - ensure it's a number
+                            const containerLocationValue = document.getElementById('containerLocation')?.value || '';
+                            formData.containerLocationId = containerLocationValue ? parseInt(containerLocationValue) : null;
+                        }
+                    } else {
+                        // For multiple samples
+                        const oneContainerForAll = document.getElementById('oneContainerForAll');
+                        const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
+                        
+                        if (oneContainerForAll && oneContainerForAll.checked) {
+                            // Creating one container for all samples
+                            formData.createSingleContainer = true;
+                            formData.containerDescription = document.getElementById('containerDescription')?.value || '';
+                            formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
+                            formData.containerTypeId = document.getElementById('containerType')?.value || '';
+                            formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
+                            
+                            // Creating new container type?
+                            const createContainerType = document.getElementById('createContainerType')?.checked || false;
+                            if (createContainerType) {
+                                formData.newContainerType = {
+                                    typeName: document.getElementById('newContainerTypeName')?.value || '',
+                                    description: document.getElementById('newContainerTypeDescription')?.value || '',
+                                    capacity: document.getElementById('newContainerTypeCapacity')?.value || ''
+                                };
+                            }
+                            
+                            // Container location - ensure it's a number
+                            const locationId = document.getElementById('containerLocation')?.value || registerApp.selectedLocation || '';
+                            formData.containerLocationId = locationId ? parseInt(locationId) : null;
+                            
+                            // Logging to help debug
+                            console.log('Container data for one container:', {
+                                createContainers: formData.createContainers,
+                                containerDescription: formData.containerDescription,
+                                containerTypeId: formData.containerTypeId,
+                                containerIsMixed: formData.containerIsMixed,
+                                containerCapacity: formData.containerCapacity,
+                                containerLocationId: formData.containerLocationId
+                            });
+                        } else if (oneContainerPerPackage && oneContainerPerPackage.checked) {
+                            // Creating one container per package
+                            formData.createMultipleContainers = true;
+                            formData.containerDescription = document.getElementById('containerDescription')?.value || '';
+                            formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
+                            formData.containerTypeId = document.getElementById('containerType')?.value || '';
+                            
+                            // Container locations from package locations
+                            if (window.PackageLocations && typeof PackageLocations.getSelectedLocations === 'function') {
+                                const packageLocations = PackageLocations.getSelectedLocations();
+                                formData.containerLocations = packageLocations.map(loc => ({
+                                    packageNumber: loc.packageNumber,
+                                    locationId: loc.locationId
+                                }));
+                            }
+                        }
+                    }
+                }
+                
+                console.log("Sending form data:", formData);
+                
+                // Show a processing message
+                const toast = document.createElement('div');
+                toast.className = 'custom-toast success-toast show';
+                toast.innerHTML = `
+                    <div class="toast-icon">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </div>
+                    <div class="toast-content">
+                        <div class="toast-title">Processing</div>
+                        <div class="toast-message">Submitting your registration...</div>
+                    </div>
+                `;
+                document.body.appendChild(toast);
+                
+                // Send data to server
+                fetch('/api/samples', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Remove the processing toast
+                    toast.remove();
+                    
+                    if (data.success) {
+                        // Show success message
+                        const successToast = document.createElement('div');
+                        successToast.className = 'custom-toast success-toast show';
+                        successToast.innerHTML = `
+                            <div class="toast-icon">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="toast-content">
+                                <div class="toast-title">Success</div>
+                                <div class="toast-message">Sample ${data.sample_id} has been registered successfully!</div>
+                            </div>
+                        `;
+                        document.body.appendChild(successToast);
+                        
+                        // Redirect to dashboard after 2 seconds
+                        setTimeout(() => {
+                            window.location.href = '/dashboard';
+                        }, 2000);
+                    } else {
+                        // Show error message
+                        const errorToast = document.createElement('div');
+                        errorToast.className = 'custom-toast error-toast show';
+                        errorToast.innerHTML = `
+                            <div class="toast-icon">
+                                <i class="fas fa-exclamation-circle"></i>
+                            </div>
+                            <div class="toast-content">
+                                <div class="toast-title">Error</div>
+                                <div class="toast-message">Error during registration: ${data.error}</div>
+                            </div>
+                        `;
+                        document.body.appendChild(errorToast);
+                    }
+                })
+                .catch(error => {
+                    // Remove the processing toast
+                    toast.remove();
+                    
+                    // Show error message
+                    const errorToast = document.createElement('div');
+                    errorToast.className = 'custom-toast error-toast show';
+                    errorToast.innerHTML = `
+                        <div class="toast-icon">
+                            <i class="fas fa-exclamation-circle"></i>
+                        </div>
+                        <div class="toast-content">
+                            <div class="toast-title">Error</div>
+                            <div class="toast-message">An error occurred during submission: ${error}</div>
+                        </div>
+                    `;
+                    document.body.appendChild(errorToast);
+                });
+            };
+        }
+        
+        // Define backup validation function
+        if (typeof window.validateCurrentStep !== 'function') {
+            console.warn('Defining backup validateCurrentStep');
+            window.validateCurrentStep = function() { 
+                const currentStep = window.registerApp?.currentStep || 4;
+                
+                // For the last step (location), check if a location is selected
+                if (currentStep === 4) {
+                    if (!window.registerApp?.selectedLocation) {
+                        alert('Please select a location by clicking on an available space in the grid.');
+                        return false;
+                    }
+                }
+                
+                return true; 
+            };
+        }
+        
+        // Define backup summary function
+        if (typeof window.updateRegistrationSummary !== 'function') {
+            console.warn('Defining backup updateRegistrationSummary');
+            window.updateRegistrationSummary = function() { 
+                console.log('Using backup summary update function'); 
+                
+                const summaryContent = document.getElementById('summaryContent');
+                if (summaryContent) {
+                    const description = document.querySelector('[name="description"]')?.value || 'Sample';
+                    const amount = document.querySelector('[name="totalAmount"]')?.value || '1';
+                    const unit = document.querySelector('[name="unit"] option:checked')?.textContent || 'pcs';
+                    
+                    summaryContent.innerHTML = `
+                        <div class="alert alert-info">
+                            <p><strong>${description}</strong> - ${amount} ${unit}</p>
+                            <p>Your sample will be registered with the selected options.</p>
+                        </div>
+                    `;
+                }
+            };
+        }
+    })();
+    
     // Initialize container module when document is loaded
     document.addEventListener('DOMContentLoaded', function() {
-        ContainerModule.init();
+        if (typeof ContainerModule !== 'undefined') {
+            ContainerModule.init();
+        }
+        
+        // Container type checkbox toggling
+        const createContainerTypeCheckbox = document.getElementById('createContainerType');
+        if (createContainerTypeCheckbox) {
+            createContainerTypeCheckbox.addEventListener('change', function() {
+                const containerTypeSection = document.getElementById('newContainerTypeSection');
+                if (this.checked) {
+                    containerTypeSection.classList.remove('d-none');
+                    // Focus the first input to prompt the user
+                    setTimeout(() => {
+                        document.getElementById('newContainerTypeName')?.focus();
+                    }, 100);
+                } else {
+                    containerTypeSection.classList.add('d-none');
+                }
+            });
+        }
+        
+        // Function to update container location visibility based on multiple container selection
+        function updateContainerLocationVisibility() {
+            const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
+            const containerLocationSection = document.getElementById('containerLocationSelectSection');
+            
+            if (oneContainerPerPackage && containerLocationSection) {
+                // Hide location dropdown when "one container per package" is selected
+                if (oneContainerPerPackage.checked) {
+                    containerLocationSection.classList.add('d-none');
+                    // Remove required attribute when hidden
+                    const containerLocationSelect = document.getElementById('containerLocation');
+                    if (containerLocationSelect) {
+                        containerLocationSelect.removeAttribute('required');
+                    }
+                } else {
+                    containerLocationSection.classList.remove('d-none');
+                    // Add required attribute when visible
+                    const containerLocationSelect = document.getElementById('containerLocation');
+                    if (containerLocationSelect) {
+                        containerLocationSelect.setAttribute('required', 'required');
+                    }
+                }
+            }
+        }
+        
+        // Call this function initially to set up the visibility
+        setTimeout(updateContainerLocationVisibility, 0);
+        
+        // Setup container type selection to automatically set capacity
+        const containerDescriptionInput = document.getElementById('containerDescription');
+        const containerTypeSelect = document.getElementById('containerType');
+        const containerCapacityInput = document.getElementById('containerCapacity');
+        
+        // When container type changes, update the capacity field with default capacity
+        if (containerTypeSelect && containerCapacityInput) {
+            containerTypeSelect.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                if (selectedOption && selectedOption.dataset.capacity) {
+                    const defaultCapacity = parseInt(selectedOption.dataset.capacity);
+                    if (!isNaN(defaultCapacity)) {
+                        // Set the capacity field to the default capacity
+                        containerCapacityInput.value = defaultCapacity;
+                        // Disable the capacity field when a container type is selected
+                        containerCapacityInput.setAttribute('readonly', true);
+                        containerCapacityInput.classList.add('bg-light');
+                    }
+                } else {
+                    // If no type is selected or it has no default capacity, 
+                    // enable the capacity field again
+                    containerCapacityInput.removeAttribute('readonly');
+                    containerCapacityInput.classList.remove('bg-light');
+                    containerCapacityInput.value = '';
+                }
+            });
+            
+            // Trigger the change event to set initial capacity if a type is already selected
+            if (containerTypeSelect.value) {
+                containerTypeSelect.dispatchEvent(new Event('change'));
+            }
+        }
+        
+        // Handle create container type checkbox to properly manage container type selection
+        const createContainerTypeCheckbox = document.getElementById('createContainerType');
+        if (createContainerTypeCheckbox && containerTypeSelect) {
+            createContainerTypeCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    // When creating a new type, disable the container type selection
+                    containerTypeSelect.setAttribute('disabled', true);
+                    containerTypeSelect.classList.add('bg-light');
+                    // Make capacity editable again
+                    if (containerCapacityInput) {
+                        containerCapacityInput.removeAttribute('readonly');
+                        containerCapacityInput.classList.remove('bg-light');
+                    }
+                } else {
+                    // When not creating a new type, enable the container type selection
+                    containerTypeSelect.removeAttribute('disabled');
+                    containerTypeSelect.classList.remove('bg-light');
+                    
+                    // Trigger the change event to reset capacity based on selected type
+                    if (containerTypeSelect.value) {
+                        containerTypeSelect.dispatchEvent(new Event('change'));
+                    }
+                }
+            });
+        }
+        }
+        
+        // Hijack form submission to add enhanced validation
+        const originalHandleFormSubmission = window.handleFormSubmission;
+        if (typeof originalHandleFormSubmission === 'function') {
+            window.handleFormSubmission = function() {
+                // Check if container creation is selected
+                const isContainerStorage = document.querySelector('input[name="storageOption"]:checked')?.value === 'container';
+                if (isContainerStorage) {
+                    // Check if we're creating a new container
+                    const isNewContainer = !document.getElementById('existingContainerOption')?.checked;
+                    
+                    if (isNewContainer) {
+                        // Container description is required
+                        const containerDescription = document.getElementById('containerDescription')?.value?.trim();
+                        if (!containerDescription) {
+                            alert('Error: Container Description is required. Please provide a descriptive name for the container.');
+                            document.getElementById('containerDescription')?.focus();
+                            return false; // Prevent form submission
+                        }
+                        
+                        // Check container type
+                        const containerTypeId = document.getElementById('containerType')?.value;
+                        if (!containerTypeId && !document.getElementById('createContainerType')?.checked) {
+                            alert('Error: Please select a container type or create a new one.');
+                            document.getElementById('containerType')?.focus();
+                            return false; // Prevent form submission
+                        }
+                        
+                        // If creating new container type
+                        if (document.getElementById('createContainerType')?.checked) {
+                            const typeName = document.getElementById('newContainerTypeName')?.value?.trim();
+                            const capacity = document.getElementById('newContainerTypeCapacity')?.value?.trim();
+                            
+                            if (!typeName) {
+                                alert('Error: Container Type Name is required when creating a new container type.');
+                                document.getElementById('newContainerTypeName')?.focus();
+                                return false;
+                            }
+                            
+                            if (!capacity) {
+                                alert('Error: Container Capacity is required when creating a new container type.');
+                                document.getElementById('newContainerTypeCapacity')?.focus();
+                                return false;
+                            }
+                        }
+                        
+                        // Check container location
+                        const containerLocation = document.getElementById('containerLocation')?.value;
+                        if (!containerLocation) {
+                            alert('Error: Please select a storage location for the container.');
+                            document.getElementById('containerLocation')?.focus();
+                            return false;
+                        }
+                    } else {
+                        // Using existing container
+                        const existingContainerId = document.getElementById('existingContainerSelect')?.value;
+                        if (!existingContainerId) {
+                            alert('Error: Please select an existing container from the dropdown.');
+                            document.getElementById('existingContainerSelect')?.focus();
+                            return false;
+                        }
+                    }
+                }
+                
+                // Everything validated, call the original handler
+                return originalHandleFormSubmission();
+            };
+        }
+        
+        // Log loading status and critical functions
+        console.log('All registration scripts loaded. Module status:', 
+            window.registerApp ? window.registerApp.modulesLoaded : 'registerApp not defined');
+        
+        console.log('Critical functions available:', {
+            handleFormSubmission: typeof window.handleFormSubmission === 'function',
+            validateCurrentStep: typeof window.validateCurrentStep === 'function',
+            updateRegistrationSummary: typeof window.updateRegistrationSummary === 'function'
+        });
     });
 </script>
 {% endblock %}

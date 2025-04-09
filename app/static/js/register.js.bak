@@ -1,0 +1,160 @@
+/**
+ * Register - Main registration script
+ * 
+ * This file serves as the entry point for the sample registration system.
+ * It defines the global registerApp object to share state between modules.
+ */
+
+// Create a global object to share state and functions
+window.registerApp = {
+    // Basic variables
+    currentStep: 1,
+    totalSteps: 4,
+    scannedItems: [],
+    selectedLocation: null,
+    selectedContainerLocation: null,
+    skipLocationSelection: false,
+    REGISTRATION_EXPIRY_MONTHS: 2,
+    
+    // Store module states
+    modulesLoaded: {
+        validation: false,
+        form: false,
+        sampleTypes: false,
+        storage: false,
+        containers: false,
+        identification: false
+    },
+    
+    // Global functions that must be available
+    requiredGlobalFunctions: [
+        'validateCurrentStep',
+        'updateRegistrationSummary',
+        'handleFormSubmission'
+    ],
+    
+    // Function to check if all required modules are loaded
+    allModulesLoaded: function() {
+        return this.modulesLoaded.validation && 
+               this.modulesLoaded.form;
+    },
+    
+    // Function to check if all required global functions are available
+    checkGlobalFunctions: function() {
+        const missing = [];
+        
+        this.requiredGlobalFunctions.forEach(funcName => {
+            if (typeof window[funcName] !== 'function') {
+                missing.push(funcName);
+                console.error(`Required global function missing: ${funcName}`);
+            }
+        });
+        
+        return missing.length === 0 ? true : missing;
+    },
+    
+    // Initialize the registration system when all modules are loaded
+    init: function() {
+        console.log('Running main registration initialization');
+        
+        // AGGRESSIVE: Set a hard block on initialization attempts
+        if (this._hasInitialized && this.currentStep > 1) {
+            console.log('BLOCKED duplicate initialization - already running with step:', this.currentStep);
+            return;
+        }
+        this._hasInitialized = true;
+        
+        // Ensure we're not re-initializing where we don't want to
+        // If we're already on step 2 or higher, don't reset to step 1
+        const currentUrl = window.location.href;
+        const isRegisterPage = currentUrl.includes('/register');
+        const pageJustLoaded = !this._pageLoaded;
+        this._pageLoaded = true;
+        
+        // Store current step before reset if we're on step 2+
+        const wasOnStepHigherThanOne = this.currentStep > 1;
+        const previousStep = this.currentStep;
+        
+        // Check if all required global functions are available
+        const functionsCheck = this.checkGlobalFunctions();
+        if (functionsCheck !== true) {
+            console.error('Missing required global functions:', functionsCheck);
+            // We'll still proceed, but log a warning
+            console.warn('Registration system may not work correctly due to missing functions');
+        } else {
+            console.log('All required global functions are available');
+        }
+        
+        // Only reset if we're not already in a higher step or if page just loaded
+        if (!wasOnStepHigherThanOne || pageJustLoaded) {
+            console.log('Performing full state reset');
+            // Reset global state
+            this.currentStep = 1;
+            this.scannedItems = [];
+            this.selectedLocation = null;
+            this.selectedContainerLocation = null;
+            this.skipLocationSelection = false;
+            
+            // Initialize the first step
+            if (typeof showStep === 'function') {
+                showStep(1);
+            }
+        } else {
+            console.log('Maintaining step ' + previousStep + ' - not resetting');
+            // Just in case, re-render the current step
+            if (typeof showStep === 'function') {
+                showStep(previousStep);
+            }
+        }
+        
+        // Set a flag to prevent unexpected navigation
+        this.preventReset = true;
+        this.lockStep = this.currentStep > 1 ? this.currentStep : null;
+        
+        // After a longer delay, we can disable the aggressive protections
+        setTimeout(() => { 
+            this.preventReset = false;
+            console.log('Navigation prevention disabled after timeout');
+        }, 5000);
+        
+        console.log('Registration system initialized');
+    }
+};
+
+// Variable to track if we've already initialized
+let registrationInitialized = false;
+
+// Initialize when document is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Registration system loading...');
+    
+    // Check every 100ms if all modules are loaded
+    const initCheckInterval = setInterval(function() {
+        if (registerApp.allModulesLoaded() && !registrationInitialized) {
+            clearInterval(initCheckInterval);
+            registrationInitialized = true;
+            registerApp.init();
+        }
+    }, 100);
+    
+    // Failsafe - if not all modules load within 3 seconds, try to initialize anyway
+    setTimeout(function() {
+        if (!registrationInitialized) {
+            clearInterval(initCheckInterval);
+            console.log('Forcing initialization. Module status:', registerApp.modulesLoaded);
+            registrationInitialized = true;
+            registerApp.init();
+        }
+    }, 3000);
+});
+
+// Add additional listener for script loading issues
+window.addEventListener('load', function() {
+    // Add an extra delay to ensure forms are stable
+    setTimeout(function() {
+        if (registerApp.currentStep > 1) {
+            console.log('Extra step stability - current step found to be:', registerApp.currentStep);
+            showStep(registerApp.currentStep);
+        }
+    }, 500);
+});
