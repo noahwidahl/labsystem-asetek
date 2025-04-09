@@ -72,30 +72,27 @@ def init_sample(blueprint, mysql):
                     "ID": "SMP-4",
                     "PartNumber": "test",
                     "Description": "test",
-                    "Reception": "2025-04-08",
                     "Amount": "2 pcs",
                     "Location": "1.5.1",
-                    "Registered": "2025-04-08 14:46",
+                    "Registered": "08-04-2025 14:46",
                     "Status": "In Storage"
                 },
                 {
                     "ID": "SMP-3",
                     "PartNumber": "Test123",
                     "Description": "test",
-                    "Reception": "2025-04-08",
                     "Amount": "2 pcs",
                     "Location": "1.6.4",
-                    "Registered": "2025-04-08 13:16",
+                    "Registered": "08-04-2025 13:16",
                     "Status": "In Storage"
                 },
                 {
                     "ID": "SMP-1",
                     "PartNumber": "Partnumber123",
                     "Description": "TestSampleinContainer",
-                    "Reception": "2025-04-08",
                     "Amount": "10 pcs",
                     "Location": "1.1.1",
-                    "Registered": "2025-04-08 13:13",
+                    "Registered": "08-04-2025 13:13",
                     "Status": "In Storage"
                 }
             ]
@@ -141,12 +138,15 @@ def init_sample(blueprint, mysql):
                     s.SampleID, 
                     s.PartNumber, 
                     s.Description, 
-                    DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y') AS Reception,
                     CASE 
                         WHEN s.Status = 'Disposed' THEN 0
                         ELSE IFNULL(ss.AmountRemaining, 0)
                     END AS AmountRemaining, 
-                    'pcs' as Unit,
+                    CASE
+                        WHEN u.UnitName IS NULL THEN 'pcs'
+                        WHEN LOWER(u.UnitName) = 'stk' THEN 'pcs'
+                        ELSE u.UnitName
+                    END as Unit,
                     IFNULL(sl.LocationName, 'Disposed') as LocationName, 
                     DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y %H:%i') AS Registered,
                     s.Status 
@@ -171,11 +171,10 @@ def init_sample(blueprint, mysql):
                             "ID": f"SMP-{row[0]}",
                             "PartNumber": row[1] or "",
                             "Description": row[2] or "",
-                            "Reception": row[3] or "",
-                            "Amount": f"{row[4]} {row[5]}",
-                            "Location": row[6] or "",
-                            "Registered": row[7] or "",
-                            "Status": row[8] or ""
+                            "Amount": f"{row[3]} {row[4]}",
+                            "Location": row[5] or "",
+                            "Registered": row[6] or "",
+                            "Status": row[7] or ""
                         }
                         samples_for_template.append(sample)
                     
@@ -217,7 +216,8 @@ def init_sample(blueprint, mysql):
             if date_from or date_to:
                 filtered_samples = []
                 for sample in samples_for_template:
-                    sample_date = sample.get('Reception', '')
+                    # Get registered date (first 10 chars for date only)
+                    sample_date = sample.get('Registered', '')[:10] if sample.get('Registered') else ''
                     
                     if date_from and date_to:
                         if date_from <= sample_date <= date_to:
@@ -241,8 +241,12 @@ def init_sample(blueprint, mysql):
             elif sort_by == 'description':
                 samples_for_template.sort(key=lambda x: x['Description'].lower(),
                                          reverse=(sort_order == 'DESC'))
+            elif sort_by == 'registered_date':
+                samples_for_template.sort(key=lambda x: x['Registered'],
+                                         reverse=(sort_order == 'DESC'))
+            # Keep backward compatibility with reception_date sorting
             elif sort_by == 'reception_date':
-                samples_for_template.sort(key=lambda x: x['Reception'],
+                samples_for_template.sort(key=lambda x: x['Registered'],
                                          reverse=(sort_order == 'DESC'))
             elif sort_by == 'amount':
                 # Extract the number from "X pcs"
@@ -330,7 +334,8 @@ def init_sample(blueprint, mysql):
             if date_from or date_to:
                 filtered_samples = []
                 for sample in samples_for_template:
-                    sample_date = sample.get('Reception', '')
+                    # Get registered date (first 10 chars for date only)
+                    sample_date = sample.get('Registered', '')[:10] if sample.get('Registered') else ''
                     
                     if date_from and date_to:
                         if date_from <= sample_date <= date_to:
@@ -354,8 +359,12 @@ def init_sample(blueprint, mysql):
             elif sort_by == 'description':
                 samples_for_template.sort(key=lambda x: x['Description'].lower(),
                                          reverse=(sort_order == 'DESC'))
+            elif sort_by == 'registered_date':
+                samples_for_template.sort(key=lambda x: x['Registered'],
+                                         reverse=(sort_order == 'DESC'))
+            # Keep backward compatibility with reception_date sorting
             elif sort_by == 'reception_date':
-                samples_for_template.sort(key=lambda x: x['Reception'],
+                samples_for_template.sort(key=lambda x: x['Registered'],
                                          reverse=(sort_order == 'DESC'))
             elif sort_by == 'amount':
                 # Extract the number from "X pcs"

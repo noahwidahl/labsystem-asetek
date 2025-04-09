@@ -209,16 +209,16 @@
                         <div id="multipleContainerOptions" class="d-none">
                             <div class="form-group mb-3">
                                 <div class="d-flex align-items-center mb-2">
-                                    <input type="radio" name="multiContainerOption" id="oneContainerForAll" value="single" checked onchange="updateContainerLocationVisibility()">
+                                    <input type="radio" name="multiContainerOption" id="oneContainerForAll" value="single" checked onchange="if(window.updateContainerLocationVisibility) window.updateContainerLocationVisibility()">
                                     <label for="oneContainerForAll" class="ms-2 mb-0">One container for all samples</label>
                                 </div>
                                 <div class="d-flex align-items-center">
-                                    <input type="radio" name="multiContainerOption" id="oneContainerPerPackage" value="multiple" onchange="updateContainerLocationVisibility()">
+                                    <input type="radio" name="multiContainerOption" id="oneContainerPerPackage" value="multiple" onchange="if(window.updateContainerLocationVisibility) window.updateContainerLocationVisibility()">
                                     <label for="oneContainerPerPackage" class="ms-2 mb-0">One container per package</label>
                                 </div>
                                 <div class="alert alert-info mt-2" id="multiLocationInfo" style="display: none;">
                                     <i class="fas fa-info-circle"></i>
-                                    <span>You'll select multiple locations in the grid during the Location step - one location for each package.</span>
+                                    <span>Select one location for each package in the grid during Step 4.</span>
                                 </div>
                             </div>
                         </div>
@@ -635,6 +635,11 @@
                     
                     // For multiple containers, get package locations
                     if (typeof window.PackageLocations !== 'undefined') {
+                        // Log state for debug
+                        console.log('DEBUG: PackageLocations state before submission:');
+                        window.PackageLocations.dumpState();
+                        
+                        // Get selected locations
                         const packageLocations = window.PackageLocations.getSelectedLocations();
                         console.log('DEBUG: Package locations for multiple containers:', packageLocations);
                         
@@ -662,8 +667,20 @@
                             locationId: loc.locationId
                         }));
                         
+                        // Log packaged data
+                        console.log('DEBUG: Sending container locations:', formData.containerLocations);
+                        
                         // Set createMultipleContainers as true to ensure we create one container per location
                         formData.createMultipleContainers = true;
+                    } else {
+                        console.error("PackageLocations module not available but oneContainerPerPackage is checked");
+                        alert("Error: Package location tracking is not available. Please refresh the page and try again.");
+                        
+                        // Remove processing toast if showing
+                        toast.remove();
+                        
+                        // Prevent form submission
+                        return false;
                     }
                 }
             }
@@ -786,6 +803,62 @@
     } else {
         console.log('Validation module loaded successfully with all critical functions');
     }
+    
+    // Define global updateContainerLocationVisibility function to ensure it's available everywhere
+    window.updateContainerLocationVisibility = function() {
+        const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
+        const containerLocationSection = document.getElementById('containerLocationSelectSection');
+        const multiLocationInfo = document.getElementById('multiLocationInfo');
+        
+        if (oneContainerPerPackage && containerLocationSection) {
+            // Hide location dropdown when "one container per package" is selected
+            if (oneContainerPerPackage.checked) {
+                // Hide location dropdown
+                containerLocationSection.classList.add('d-none');
+                // Remove required attribute when hidden
+                const containerLocationSelect = document.getElementById('containerLocation');
+                if (containerLocationSelect) {
+                    containerLocationSelect.removeAttribute('required');
+                    // Clear any selected value to prevent it from being submitted
+                    containerLocationSelect.value = '';
+                }
+                
+                // Show the multi-location info alert
+                if (multiLocationInfo) {
+                    multiLocationInfo.style.display = 'block';
+                }
+                
+                // Auto-check the "separate storage" checkbox for multiple storage
+                const separateStorage = document.getElementById('separateStorage');
+                if (separateStorage) {
+                    separateStorage.checked = true;
+                    // Disable the checkbox to prevent changes when in this mode
+                    separateStorage.disabled = true;
+                    // Trigger any associated events
+                    separateStorage.dispatchEvent(new Event('change'));
+                }
+            } else {
+                // Show location dropdown
+                containerLocationSection.classList.remove('d-none');
+                // Add required attribute when visible
+                const containerLocationSelect = document.getElementById('containerLocation');
+                if (containerLocationSelect) {
+                    containerLocationSelect.setAttribute('required', 'required');
+                }
+                
+                // Hide the multi-location info alert
+                if (multiLocationInfo) {
+                    multiLocationInfo.style.display = 'none';
+                }
+                
+                // Re-enable the separate storage checkbox
+                const separateStorage = document.getElementById('separateStorage');
+                if (separateStorage) {
+                    separateStorage.disabled = false;
+                }
+            }
+        }
+    };
 </script>
 
 <!-- Load form handling module next -->
@@ -1095,6 +1168,11 @@
             ContainerModule.init();
         }
         
+        // Initialize container location visibility
+        if (typeof window.updateContainerLocationVisibility === 'function') {
+            window.updateContainerLocationVisibility();
+        }
+        
         // Container type checkbox toggling
         const createContainerTypeCheckbox = document.getElementById('createContainerType');
         if (createContainerTypeCheckbox) {
@@ -1127,6 +1205,8 @@
                     const containerLocationSelect = document.getElementById('containerLocation');
                     if (containerLocationSelect) {
                         containerLocationSelect.removeAttribute('required');
+                        // Clear any selected value to prevent it from being submitted
+                        containerLocationSelect.value = '';
                     }
                     
                     // Show the multi-location info alert
@@ -1138,6 +1218,8 @@
                     const separateStorage = document.getElementById('separateStorage');
                     if (separateStorage) {
                         separateStorage.checked = true;
+                        // Disable the checkbox to prevent changes when in this mode
+                        separateStorage.disabled = true;
                         // Trigger any associated events
                         separateStorage.dispatchEvent(new Event('change'));
                     }
@@ -1153,6 +1235,12 @@
                     // Hide the multi-location info alert
                     if (multiLocationInfo) {
                         multiLocationInfo.style.display = 'none';
+                    }
+                    
+                    // Re-enable the separate storage checkbox
+                    const separateStorage = document.getElementById('separateStorage');
+                    if (separateStorage) {
+                        separateStorage.disabled = false;
                     }
                 }
             }

@@ -309,13 +309,12 @@ body {
 
 /* Special styling for multi-package/container selection mode */
 .storage-cell.multi-selectable-cell {
-    border-left: 3px solid #3b82f6;
     position: relative;
 }
 
 .storage-cell.multi-package-available:hover {
-    background-color: #e6f4ff;
-    border-color: #3b82f6;
+    background-color: #f8f9fa;
+    border-color: #3498db;
 }
 
 .storage-cell.multi-package-selected {
@@ -690,21 +689,10 @@ body {
 
 /* Highlightede storage celler til multipakker */
 .storage-cell.multi-package-available {
-    border: 2px dashed #3498db;
-    background-color: rgba(52, 152, 219, 0.1);
-    transform: translateY(-2px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border: 1px solid #dee2e6;
+    background-color: #ffffff;
     position: relative;
-}
-
-.storage-cell.multi-package-available::after {
-    content: "Tilgængelig";
-    position: absolute;
-    bottom: 5px;
-    left: 0;
-    right: 0;
-    font-size: 0.7rem;
-    color: #3498db;
+    cursor: pointer;
 }
 
 .storage-cell.multi-package-selected {
@@ -753,10 +741,8 @@ body {
 
 /* Highlightede storage celler til multipakker */
 .storage-cell.multi-package-available {
-    border: 2px dashed #3498db;
-    background-color: rgba(52, 152, 219, 0.1);
-    transform: translateY(-2px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border: 1px solid #dee2e6;
+    background-color: #ffffff;
     position: relative;
     cursor: pointer;
 }

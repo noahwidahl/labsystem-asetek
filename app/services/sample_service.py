@@ -276,15 +276,30 @@ class SampleService:
             reception_id = cursor.lastrowid
             
             # Determine if it's a multi-package or single sample
-            is_multi_package = sample_data.get('isMultiPackage', False)
-            # Ensure package_count is 1 when using containers
-            if sample_data.get('useExistingContainer', False) or (sample_data.get('createContainers', False) and not is_multi_package):
-                # For container operations, always use 1 package
-                package_count = 1
-            else:
-                package_count = int(sample_data.get('packageCount', 1)) if is_multi_package else 1
+            is_multi_package = sample_data.get('isMultiPackage', False) or sample_data.get('sampleType') == 'multiple'
             
-            print(f"DEBUG: is_multi_package={is_multi_package}, package_count={package_count}, useExistingContainer={sample_data.get('useExistingContainer', False)}")
+            # Check for multi-container flag (one container per package)
+            create_multi_containers = sample_data.get('createMultipleContainers', False)
+            
+            # Use package count from the data
+            if is_multi_package:
+                package_count = int(sample_data.get('packageCount', 1))
+            else:
+                package_count = 1
+                
+            # If using existing container, force package count to 1
+            if sample_data.get('useExistingContainer', False):
+                package_count = 1
+            # If creating multiple containers (one per package), keep the package count
+            elif sample_data.get('createMultipleContainers', False):
+                # Keep the package count as is - we need one sample per container
+                print(f"DEBUG: Creating multiple containers (one per package). Package count: {package_count}")
+            # If using one container for all samples, use package count = 1
+            elif sample_data.get('createSingleContainer', False) and is_multi_package:
+                print(f"DEBUG: Creating a single container for multiple samples, setting package count to 1")
+                package_count = 1
+                
+            print(f"DEBUG: is_multi_package={is_multi_package}, package_count={package_count}, createMultipleContainers={create_multi_containers}, useExistingContainer={sample_data.get('useExistingContainer', False)}")
             
             # Generate a unique barcode if not provided
             base_barcode = sample_data.get('barcode', '')
@@ -361,15 +376,31 @@ class SampleService:
                 
                 # Determine location for this package
                 location_id = None
-                if different_locations and package_locations:
+                
+                # Check if we have multiple containers (one per package)
+                create_multi_containers = sample_data.get('createMultipleContainers', False)
+                
+                # Try to get location from container locations first if creating one container per package
+                if create_multi_containers and sample_data.get('containerLocations'):
+                    container_locs = sample_data.get('containerLocations', [])
+                    # Find matching package
+                    container_loc = next((loc for loc in container_locs if str(loc.get('packageNumber', '')) == str(i+1)), None)
+                    if container_loc and container_loc.get('locationId'):
+                        location_id = container_loc.get('locationId')
+                        print(f"DEBUG: Using container location {location_id} for package {i+1} from containerLocations array")
+                
+                # Fall back to package locations
+                if not location_id and different_locations and package_locations:
                     # Find package data for this package number
                     package_data = next((p for p in package_locations if str(p.get('packageNumber', '')) == str(i+1)), None)
                     if package_data:
                         location_id = package_data.get('locationId')
+                        print(f"DEBUG: Using location {location_id} for package {i+1} from packageLocations array")
                 
                 # Use default location if no specific one is found
                 if not location_id:
                     location_id = sample_data.get('storageLocation')
+                    print(f"DEBUG: Using default storageLocation {location_id} for package {i+1}")
                     
                 # Safety check - set default location if still none
                 if not location_id:
@@ -553,21 +584,36 @@ class SampleService:
                             # Get location from parameters or use the one already determined
                             # Check for multiple container locations
                             container_location_id = None
-                            container_locations = sample_data.get('containerLocations', [])
                             
-                            # If we have specific container locations for multiple packages
-                            if container_locations and len(container_locations) > 0:
-                                # Try to find location for this package
-                                for cl in container_locations:
-                                    if str(cl.get('packageNumber', '')) == str(i+1):
-                                        container_location_id = cl.get('locationId')
-                                        print(f"DEBUG: Using special container location {container_location_id} for package {i+1}")
-                                        break
+                            # First check if we have "one container per package" mode
+                            if sample_data.get('createMultipleContainers', False):
+                                # In "one container per package" mode, we need to use the specific location for each package
+                                container_locations = sample_data.get('containerLocations', [])
                                 
-                            # Fallback to main container location or storage location
+                                if container_locations and len(container_locations) > 0:
+                                    # Try to find location for this package
+                                    matching_location = next((cl for cl in container_locations if str(cl.get('packageNumber', '')) == str(i+1)), None)
+                                    if matching_location:
+                                        container_location_id = matching_location.get('locationId')
+                                        print(f"DEBUG: Using special container location {container_location_id} for package {i+1} (multiple containers mode)")
+                            
+                            # If no location found yet, try packageLocations as fallback
+                            if not container_location_id and sample_data.get('packageLocations'):
+                                package_locations = sample_data.get('packageLocations', [])
+                                matching_package = next((p for p in package_locations if str(p.get('packageNumber', '')) == str(i+1)), None)
+                                if matching_package:
+                                    container_location_id = matching_package.get('locationId')
+                                    print(f"DEBUG: Using package location {container_location_id} for container of package {i+1}")
+                            
+                            # Fallback to main container location
+                            if not container_location_id and sample_data.get('containerLocationId'):
+                                container_location_id = sample_data.get('containerLocationId')
+                                print(f"DEBUG: Using main containerLocationId {container_location_id} for container of package {i+1}")
+                            
+                            # Last resort: use sample storage location
                             if not container_location_id:
-                                container_location_id = sample_data.get('containerLocationId') or location_id
-                                print(f"DEBUG: Using fallback container location {container_location_id} for package {i+1}")
+                                container_location_id = location_id
+                                print(f"DEBUG: Using storage location {container_location_id} as fallback for container of package {i+1}")
                             
                             # Create container with location and container type
                             if container_type_id:

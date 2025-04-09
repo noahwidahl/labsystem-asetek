@@ -80,7 +80,7 @@
                                     <option value="sample_id" {% if current_sort_by == 'sample_id' %}selected{% endif %}>Sample ID</option>
                                     <option value="part_number" {% if current_sort_by == 'part_number' %}selected{% endif %}>Part Number</option>
                                     <option value="description" {% if current_sort_by == 'description' %}selected{% endif %}>Description</option>
-                                    <option value="reception_date" {% if current_sort_by == 'reception_date' %}selected{% endif %}>Reception Date</option>
+                                    <option value="registered_date" {% if current_sort_by == 'registered_date' %}selected{% endif %}>Registered Date</option>
                                     <option value="amount" {% if current_sort_by == 'amount' %}selected{% endif %}>Amount</option>
                                     <option value="location" {% if current_sort_by == 'location' %}selected{% endif %}>Location</option>
                                     <option value="status" {% if current_sort_by == 'status' %}selected{% endif %}>Status</option>
@@ -167,14 +167,8 @@
                                     <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
                                     {% endif %}
                                 </th>
-                                <th class="sortable" data-sort="reception_date">
-                                    Reception
-                                    {% if current_sort_by == 'reception_date' %}
-                                    <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
-                                    {% endif %}
-                                </th>
                                 <th class="sortable" data-sort="amount">
-                                    Amount
+                                    Amount/Quantity
                                     {% if current_sort_by == 'amount' %}
                                     <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
                                     {% endif %}
@@ -185,9 +179,9 @@
                                     <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
                                     {% endif %}
                                 </th>
-                                <th class="sortable" data-sort="reception_date">
+                                <th class="sortable" data-sort="registered_date">
                                     Registered
-                                    {% if current_sort_by == 'reception_date' %}
+                                    {% if current_sort_by == 'registered_date' %}
                                     <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
                                     {% endif %}
                                 </th>
@@ -208,7 +202,6 @@
                                     <td>{{ sample.ID }}</td>
                                     <td>{{ sample.PartNumber or "-" }}</td>
                                     <td>{{ sample.Description }}</td>
-                                    <td>{{ sample.Reception }}</td>
                                     <td>{{ sample.Amount }}</td>
                                     <td>{{ sample.Location }}</td>
                                     <td>{{ sample.Registered }}</td>

@@ -1,9 +1,11 @@
 /**
  * Package Locations module to handle different locations for packages
  */
-const PackageLocations = (function() {
+window.PackageLocations = (function() {
     // Private variables
     let packageLocations = [];
+    
+    console.log("PackageLocations module initializing");
     
     // Private methods
     function _generateLocationOptions() {
@@ -24,6 +26,12 @@ const PackageLocations = (function() {
     return {
         init: function() {
             console.log("Package Locations initialized");
+            
+            // Debug: add this function to window object explicitly 
+            if (!window.PackageLocations) {
+                console.warn("Explicitly setting window.PackageLocations");
+                window.PackageLocations = this;
+            }
         },
         
         // Add location for a specific package
@@ -38,7 +46,7 @@ const PackageLocations = (function() {
                 locationName: locationName
             });
             
-            console.log('Added location for package', packageNumber, ':', locationName);
+            console.log('Added location for package', packageNumber, ':', locationName, 'Current locations:', JSON.stringify(packageLocations));
         },
         
         // Remove location based on package number
@@ -55,12 +63,13 @@ const PackageLocations = (function() {
             const index = packageLocations.findIndex(p => p.locationName === locationName);
             if (index >= 0) {
                 packageLocations.splice(index, 1);
-                console.log('Removed location:', locationName);
+                console.log('Removed location:', locationName, 'Current locations:', JSON.stringify(packageLocations));
             }
         },
         
         // Get all selected locations
         getSelectedLocations: function() {
+            console.log('Getting selected locations:', JSON.stringify(packageLocations));
             return packageLocations;
         },
         
@@ -90,6 +99,12 @@ const PackageLocations = (function() {
                     locationName: p.locationName
                 }))
             };
+        },
+        
+        // Debug: dump state to console
+        dumpState: function() {
+            console.log("PackageLocations state:", JSON.stringify(packageLocations));
+            return packageLocations.length;
         }
     };
 })();

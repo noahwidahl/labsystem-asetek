@@ -633,8 +633,18 @@ function handleMultiPackageSelection(cell) {
     
     const selectedCellsCount = document.querySelectorAll('.storage-cell.multi-package-selected').length;
     
+    // Ensure PackageLocations is available
+    if (typeof window.PackageLocations === 'undefined') {
+        console.error("PackageLocations module not available");
+        alert("Error: Package location tracking is not available. Please refresh the page and try again.");
+        return;
+    }
+    
     // Check if cell is already selected
     if (cell.classList.contains('multi-package-selected')) {
+        // Find the package number associated with this cell
+        const packageNumber = getPackageNumberForCell(cell);
+        
         // Deselect cell
         cell.classList.remove('multi-package-selected');
         cell.classList.add('multi-package-available');
@@ -642,13 +652,22 @@ function handleMultiPackageSelection(cell) {
         // Find location and remove it from package-locations list
         const locationText = cell.querySelector('.location').textContent;
         
-        // Find package number based on selection order
-        if (typeof PackageLocations !== 'undefined') {
-            PackageLocations.removeLocationByName(locationText);
-            
-            // Always update the summary when removing a location
-            updatePackageSelectionSummary();
+        // Debug log
+        console.log("Removing location from cell:", locationText, "with package number:", packageNumber);
+        
+        if (packageNumber) {
+            // If we know the package number, use it
+            window.PackageLocations.removeLocation(packageNumber);
+        } else {
+            // Otherwise remove by name
+            window.PackageLocations.removeLocationByName(locationText);
         }
+        
+        // Always update the summary when removing a location
+        updatePackageSelectionSummary();
+        
+        // Debug: dump state
+        console.log("After removal, package locations:", window.PackageLocations.dumpState());
     } else {
         // Check if we already selected maximum number of locations
         if (selectedCellsCount < packageCount) {
@@ -656,22 +675,65 @@ function handleMultiPackageSelection(cell) {
             cell.classList.add('multi-package-selected');
             cell.classList.remove('multi-package-available');
             
-            // Add to package locations (with next available package number)
-            if (typeof PackageLocations !== 'undefined') {
-                const locationText = cell.querySelector('.location').textContent;
+            // Get location info from cell
+            const locationText = cell.querySelector('.location').textContent;
+            const locationId = cell.dataset.locationId;
+            
+            // Find the next available package number
+            let nextPackageNumber = 1;
+            
+            // Get all currently selected packages
+            const selectedPackages = [];
+            window.PackageLocations.getSelectedLocations().forEach(loc => {
+                selectedPackages.push(parseInt(loc.packageNumber));
+            });
+            
+            // If there are packages already selected, find the next available
+            if (selectedPackages.length > 0) {
+                selectedPackages.sort((a, b) => a - b);
                 
-                // Add location to next available package
-                const locationId = cell.dataset.locationId;
-                PackageLocations.addLocation(selectedCellsCount + 1, locationId, locationText);
-                
-                // Always update the summary when adding a location
-                updatePackageSelectionSummary();
+                // Find first gap in sequence or use next number
+                for (let i = 1; i <= packageCount; i++) {
+                    if (!selectedPackages.includes(i)) {
+                        nextPackageNumber = i;
+                        break;
+                    }
+                }
             }
+            
+            // Debug log
+            console.log("Adding location from cell:", locationText, "with ID:", locationId, "as package:", nextPackageNumber);
+            
+            // Store the package number in a data attribute on the cell for later reference
+            cell.dataset.packageNumber = nextPackageNumber;
+            
+            // Add location with the determined package number
+            window.PackageLocations.addLocation(nextPackageNumber, locationId, locationText);
+            
+            // Always update the summary when adding a location
+            updatePackageSelectionSummary();
+            
+            // Debug: dump state
+            console.log("After addition, package locations:", window.PackageLocations.dumpState());
         } else {
             // We already selected max count - show error
-            showWarningMessage(`You can only select ${packageCount} locations. Remove a location before adding a new one.`);
+            alert(`You can only select ${packageCount} locations. Remove a location before adding a new one.`);
         }
     }
+}
+
+// Helper function to get the package number stored on a cell
+function getPackageNumberForCell(cell) {
+    // If we have package number stored directly on the cell, use it
+    if (cell.dataset.packageNumber) {
+        return parseInt(cell.dataset.packageNumber);
+    }
+    
+    // Otherwise try to find it by location name
+    const locationText = cell.querySelector('.location').textContent;
+    const location = window.PackageLocations.getLocationByName(locationText);
+    
+    return location ? location.packageNumber : null;
 }
 
 // Update the location summary based on selected options
@@ -803,9 +865,15 @@ function updatePackageSelectionSummary() {
     }
     
     // Get selected package locations
-    if (typeof PackageLocations === 'undefined') return;
+    if (typeof window.PackageLocations === 'undefined') {
+        console.error("PackageLocations module not available");
+        return;
+    }
     
-    const selectedLocations = PackageLocations.getSelectedLocations();
+    // Debug - log the current state
+    console.log("DEBUG: Update summary - current package locations:", window.PackageLocations.dumpState());
+    
+    const selectedLocations = window.PackageLocations.getSelectedLocations();
     
     // Update summary
     if (selectedLocations.length === 0) {
@@ -834,7 +902,7 @@ function updatePackageSelectionSummary() {
             <li class="list-group-item d-flex justify-content-between align-items-center">
                 <div>
                     <span class="badge bg-primary me-2">Package ${pkg.packageNumber}</span>
-                    <span>${pkg.locationName}</span>
+                    <span>${pkg.locationName} (ID: ${pkg.locationId})</span>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-danger remove-location" data-package="${pkg.packageNumber}">
                     <i class="fas fa-times"></i>
@@ -863,7 +931,7 @@ function updatePackageSelectionSummary() {
     summaryContainer.querySelectorAll('.remove-location').forEach(button => {
         button.addEventListener('click', function() {
             const packageNumber = this.getAttribute('data-package');
-            const locationData = PackageLocations.getLocationByPackage(packageNumber);
+            const locationData = window.PackageLocations.getLocationByPackage(packageNumber);
             
             if (locationData) {
                 // Find and update the corresponding grid cell
@@ -873,11 +941,16 @@ function updatePackageSelectionSummary() {
                     if (locationText === locationData.locationName) {
                         cell.classList.remove('multi-package-selected');
                         cell.classList.add('multi-package-available');
+                        // Also remove package number from cell
+                        delete cell.dataset.packageNumber;
                     }
                 });
                 
                 // Remove from package locations
-                PackageLocations.removeLocation(packageNumber);
+                window.PackageLocations.removeLocation(packageNumber);
+                
+                // Debug - log after removal
+                console.log(`DEBUG: Removed package ${packageNumber}, remaining locations:`, window.PackageLocations.dumpState());
                 
                 // Update summary
                 updatePackageSelectionSummary();
@@ -891,20 +964,28 @@ function updatePackageSelectionSummary() {
     if (clearAllBtn) {
         clearAllBtn.addEventListener('click', function() {
             // Remove all selected locations
-            PackageLocations.reset();
+            window.PackageLocations.reset();
             
             // Reset grid cells
             const gridCells = document.querySelectorAll('.storage-cell.multi-package-selected');
             gridCells.forEach(cell => {
                 cell.classList.remove('multi-package-selected');
                 cell.classList.add('multi-package-available');
+                // Also remove package number from cell
+                delete cell.dataset.packageNumber;
             });
+            
+            // Debug - log after reset
+            console.log("DEBUG: Reset all locations:", window.PackageLocations.dumpState());
             
             // Update summary
             updatePackageSelectionSummary();
             updateLocationSummary();
         });
     }
+    
+    // Update location summary to show status
+    updateLocationSummary();
 }
 
 // Update storage instructions based on selected options
