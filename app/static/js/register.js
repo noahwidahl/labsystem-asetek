@@ -860,7 +860,7 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
                 <i class="fas fa-arrow-left me-2"></i>Back
             </button>
             <button type="button" class="btn btn-primary" id="fixedNextButton">
-                ${isLastStep ? 'Save' : 'Next'} ${isLastStep ? '<i class="fas fa-save ms-2"></i>' : '<i class="fas fa-arrow-right ms-2"></i>'}
+                ${isLastStep ? 'Save' : 'Next'} ${isLastStep ? '' : '<i class="fas fa-arrow-right ms-2"></i>'}
             </button>
         `;
         
