@@ -32,7 +32,8 @@ class ContainerService:
                     c.ContainerTypeID,
                     c.IsMixed,
                     c.ContainerCapacity,
-                    'Active' as Status
+                    'Active' as Status,
+                    c.LocationID
                 FROM {table_name} c
                 ORDER BY c.ContainerID DESC
             """
@@ -48,254 +49,186 @@ class ContainerService:
             containers = []
             for row in result:
                 try:
-                    print(f"DEBUG: Processing container row: {row}")
                     container = Container.from_db_row(row)
                     
-                    # Fetch extra information
-                    container_with_info = self._add_container_info(container)
-                    containers.append(container_with_info)
+                    # Add additional calculated fields using additional query
+                    container = self._add_container_info(container)
+                    
+                    containers.append(container)
                 except Exception as e:
-                    print(f"DEBUG: Error processing container row: {e}")
+                    print(f"DEBUG: Error creating container object: {e}")
+                    continue
             
-            print(f"DEBUG: Returning {len(containers)} containers")
             return containers
         except Exception as e:
-            print(f"DEBUG: General error in get_all_containers: {e}")
+            print(f"DEBUG: Error in get_all_containers: {e}")
             import traceback
             traceback.print_exc()
             return []
-    
-    def get_available_containers(self):
-        """Gets containers that are available for adding samples"""
-        print("DEBUG: Getting available containers...")
+            
+    def get_container_by_id(self, container_id):
+        print(f"DEBUG: Getting container with ID {container_id}")
         try:
-            # Check table name
-            query = """
+            query = f"""
                 SELECT 
                     c.ContainerID,
                     c.Description,
-                    IFNULL(
-                        (SELECT COUNT(cs.ContainerSampleID) 
-                        FROM ContainerSample cs 
-                        WHERE cs.ContainerID = c.ContainerID), 
-                        0
-                    ) as sample_count,
+                    c.ContainerTypeID,
+                    c.IsMixed,
                     c.ContainerCapacity,
-                    sl.LocationName,
-                    (
-                        SELECT IFNULL(SUM(cs.Amount), 0) 
-                        FROM containersample cs 
-                        WHERE cs.ContainerID = c.ContainerID
-                    ) as current_amount
+                    'Active' as Status,
+                    c.LocationID
                 FROM container c
-                LEFT JOIN storagelocation sl ON c.LocationID = sl.LocationID
-                WHERE c.IsMixed = 1 OR (
-                    SELECT IFNULL(SUM(cs.Amount), 0) 
-                    FROM containersample cs 
-                    WHERE cs.ContainerID = c.ContainerID
-                ) < IFNULL(c.ContainerCapacity, 999999) OR c.ContainerCapacity IS NULL
-                ORDER BY c.ContainerID DESC
+                WHERE c.ContainerID = %s
             """
             
-            result, _ = self.db.execute_query(query)
+            result, _ = self.db.execute_query(query, (container_id,))
+            
+            if not result or len(result) == 0:
+                print(f"DEBUG: No container found with ID {container_id}")
+                return None
+            
+            container = Container.from_db_row(result[0])
+            
+            # Add additional calculated fields
+            container = self._add_container_info(container)
+            
+            return container
+        except Exception as e:
+            print(f"DEBUG: Error in get_container_by_id: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def get_container_location(self, container_id):
+        try:
+            query = """
+                SELECT 
+                    l.LocationID,
+                    l.LocationName,
+                    l.Rack,
+                    l.Section,
+                    l.Shelf
+                FROM container c
+                JOIN StorageLocation l ON c.LocationID = l.LocationID
+                WHERE c.ContainerID = %s
+            """
+            
+            result, cursor = self.db.execute_query(query, (container_id,))
+            
+            if not result or len(result) == 0:
+                return None
+            
+            columns = [col[0] for col in cursor.description]
+            location = dict(zip(columns, result[0]))
+            
+            return location
+        except Exception as e:
+            print(f"DEBUG: Error in get_container_location: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def get_available_containers(self):
+        try:
+            # Dette er en mere robust version, der også beregner tilgængelig kapacitet
+            query = f"""
+                SELECT 
+                    c.ContainerID,
+                    c.Description,
+                    ct.TypeName,
+                    c.ContainerCapacity,
+                    IFNULL(SUM(cs.Amount), 0) as CurrentAmount,
+                    l.LocationName
+                FROM container c
+                LEFT JOIN ContainerType ct ON c.ContainerTypeID = ct.ContainerTypeID
+                LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
+                LEFT JOIN StorageLocation l ON c.LocationID = l.LocationID
+                GROUP BY c.ContainerID
+                HAVING CurrentAmount < c.ContainerCapacity OR c.ContainerCapacity IS NULL
+            """
+            
+            result, cursor = self.db.execute_query(query)
+            
+            # Konverterer rå resultater til dict
+            columns = [col[0] for col in cursor.description]
             containers = []
             
-            if result:
-                for row in result:
-                    # Calculate available capacity
-                    capacity = row[3] if row[3] is not None else 999999
-                    current_amount = row[5] if len(row) > 5 else 0
-                    available_capacity = capacity - current_amount
-                    
-                    containers.append({
-                        'ContainerID': row[0],
-                        'Description': row[1],
-                        'sample_count': row[2],
-                        'ContainerCapacity': row[3],
-                        'available_capacity': available_capacity,
-                        'LocationName': row[4] if len(row) > 4 else 'Unknown'
-                    })
+            for row in result:
+                container_dict = dict(zip(columns, row))
+                
+                # Beregn tilgængelig kapacitet
+                container_capacity = container_dict.get('ContainerCapacity')
+                current_amount = container_dict.get('CurrentAmount', 0)
+                
+                # Tilføj beregnede felter som frontend forventer
+                if container_capacity is not None:
+                    container_dict['available_capacity'] = container_capacity - current_amount
+                
+                # Tilføj sample_count for kompatibilitet med frontend
+                container_dict['sample_count'] = current_amount
+                
+                containers.append(container_dict)
             
-            print(f"DEBUG: Found {len(containers)} available containers")
+            print(f"DEBUG: Returning {len(containers)} available containers")
+            
             return containers
         except Exception as e:
             print(f"DEBUG: Error in get_available_containers: {e}")
             import traceback
             traceback.print_exc()
             return []
-
-    def delete_container(self, container_id, user_id):
-        print(f"DEBUG: delete_container called with container_id={container_id}, user_id={user_id}")
-        try:
-            with self.db.transaction() as cursor:
-                # Table name is already known to be 'container'
-                cursor.execute("SHOW TABLES LIKE 'container'")
-                table_exists = cursor.fetchone() is not None
-                
-                if not table_exists:
-                    print("DEBUG: No container table exists!")
-                    return {
-                        'success': False,
-                        'error': 'Container table does not exist'
-                    }
-                
-                table_name = "container"
-                
-                # Delete container's samples first if any
-                # Instead of preventing deletion, we'll delete the container-sample links
-                cursor.execute("""
-                    DELETE FROM ContainerSample 
-                    WHERE ContainerID = %s
-                """, (container_id,))
-                
-                deleted_samples = cursor.rowcount
-                print(f"DEBUG: Deleted {deleted_samples} sample links from container {container_id}")
-                
-                # Delete the container
-                cursor.execute(f"""
-                    DELETE FROM {table_name}
-                    WHERE ContainerID = %s
-                """, (container_id,))
-                
-                # Log the activity
-                cursor.execute("""
-                    INSERT INTO History (
-                        Timestamp, 
-                        ActionType, 
-                        UserID, 
-                        Notes
-                    )
-                    VALUES (NOW(), %s, %s, %s)
-                """, (
-                    'Container deleted',
-                    user_id,
-                    f"Container {container_id} deleted with {deleted_samples} sample links"
-                ))
-                
-                return {
-                    'success': True,
-                    'container_id': container_id
-                }
-        except Exception as e:
-            print(f"DEBUG: Error in delete_container: {e}")
-            import traceback
-            traceback.print_exc()
-            return {
-                'success': False,
-                'error': str(e)
-            }
-
-    def get_container_location(self, container_id):
-        """Gets the location for a container"""
-        print(f"DEBUG: Getting location for container {container_id}")
-        try:
-            # First check direct container.LocationID (new approach)
-            query = """
-                SELECT sl.LocationID, sl.LocationName
-                FROM container c
-                JOIN storagelocation sl ON c.LocationID = sl.LocationID
-                WHERE c.ContainerID = %s
-            """
-            
-            result, _ = self.db.execute_query(query, (container_id,))
-            
-            if result and len(result) > 0:
-                return {
-                    'LocationID': result[0][0],
-                    'LocationName': result[0][1]
-                }
-            
-            # Fallback: Find from contained samples (old approach)
-            query = """
-                SELECT DISTINCT ss.LocationID, sl.LocationName
-                FROM containersample cs
-                JOIN samplestorage ss ON cs.SampleStorageID = ss.StorageID
-                JOIN storagelocation sl ON ss.LocationID = sl.LocationID
-                WHERE cs.ContainerID = %s
-                LIMIT 1
-            """
-            
-            result, _ = self.db.execute_query(query, (container_id,))
-            
-            if result and len(result) > 0:
-                # Update the container with this location for future use
-                with self.db.transaction() as cursor:
-                    cursor.execute("""
-                        UPDATE container 
-                        SET LocationID = %s 
-                        WHERE ContainerID = %s
-                    """, (result[0][0], container_id))
-                
-                return {
-                    'LocationID': result[0][0],
-                    'LocationName': result[0][1]
-                }
-            else:
-                print(f"DEBUG: No location found for container {container_id}")
-                return None
-        except Exception as e:
-            print(f"DEBUG: Error in get_container_location: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-
+    
     def _add_container_info(self, container):
         try:
-            # Add type name
-            if container.container_type_id:
-                query = "SELECT TypeName FROM ContainerType WHERE ContainerTypeID = %s"
-                result, _ = self.db.execute_query(query, (container.container_type_id,))
-                if result and len(result) > 0:
-                    container.type_name = result[0][0]
-            else:
-                container.type_name = 'Standard'
+            # Get container type name
+            cursor = self.mysql.connection.cursor()
             
-            # Get container location
-            try:
-                # Get location information
-                query = """
-                    SELECT sl.LocationName 
-                    FROM container c
-                    LEFT JOIN storagelocation sl ON c.LocationID = sl.LocationID
-                    WHERE c.ContainerID = %s
-                """
-                result, _ = self.db.execute_query(query, (container.id,))
+            # Get type info
+            cursor.execute("""
+                SELECT TypeName 
+                FROM ContainerType 
+                WHERE ContainerTypeID = %s
+            """, (container.container_type_id,))
+            
+            type_result = cursor.fetchone()
+            if type_result:
+                container.type_name = type_result[0]
+            else:
+                container.type_name = 'Unknown'
                 
-                if result and len(result) > 0 and result[0][0]:
-                    container.location_name = result[0][0]
+            # Get location name
+            if hasattr(container, 'location_id') and container.location_id:
+                cursor.execute("""
+                    SELECT LocationName 
+                    FROM StorageLocation 
+                    WHERE LocationID = %s
+                """, (container.location_id,))
+                
+                location_result = cursor.fetchone()
+                if location_result:
+                    container.location_name = location_result[0]
                 else:
                     container.location_name = 'Unknown'
-            except Exception as e:
-                print(f"DEBUG: Error getting container location: {e}")
-                container.location_name = 'Unknown'
-            
-            # Count number of samples - check both table names
-            try:
-                cursor = self.mysql.connection.cursor()
-                cursor.execute("SHOW TABLES LIKE 'ContainerSample'")
-                sample_table_exists = cursor.fetchone() is not None
-                cursor.close()
+            else:
+                container.location_name = 'Not assigned'
                 
-                if sample_table_exists:
-                    query = """
-                        SELECT COUNT(ContainerSampleID) as SampleCount, IFNULL(SUM(Amount), 0) as TotalItems 
-                        FROM ContainerSample 
-                        WHERE ContainerID = %s
-                    """
-                    result, _ = self.db.execute_query(query, (container.id,))
-                    
-                    if result and len(result) > 0:
-                        container.sample_count = result[0][0] or 0
-                        container.total_items = result[0][1] or 0
-                    else:
-                        container.sample_count = 0
-                        container.total_items = 0
-                else:
-                    print("DEBUG: ContainerSample table not found")
-                    container.sample_count = 0
-                    container.total_items = 0
-            except Exception as e:
-                print(f"DEBUG: Error attempting to count samples: {e}")
+            # Get count of samples in container
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as SampleCount,
+                    IFNULL(SUM(Amount), 0) as TotalItems
+                FROM ContainerSample 
+                WHERE ContainerID = %s
+            """, (container.id,))
+            
+            count_result = cursor.fetchone()
+            cursor.close()
+            
+            if count_result:
+                container.sample_count = count_result[0]
+                container.total_items = count_result[1]
+            else:
                 container.sample_count = 0
                 container.total_items = 0
             
@@ -310,6 +243,16 @@ class ContainerService:
     
     def create_container(self, container_data, user_id):
         print(f"DEBUG: create_container called with data: {container_data}")
+        # Extract key data for debugging
+        debug_info = {
+            'description': container_data.get('description'),
+            'locationId': container_data.get('locationId'),
+            'containerLocationId': container_data.get('containerLocationId'),
+            'storageLocation': container_data.get('storageLocation'),
+            'containerTypeId': container_data.get('containerTypeId'),
+            'newContainerType': container_data.get('newContainerType')
+        }
+        print(f"DEBUG: Key container data: {debug_info}")
         try:
             with self.db.transaction() as cursor:
                 # Use 'container' table
@@ -329,8 +272,10 @@ class ContainerService:
                 # Print container object
                 print(f"DEBUG: Container object created: {container.__dict__}")
                 
-                # Get a default location ID (1.1.1) if none provided
-                location_id = container_data.get('locationId')
+                # Get a location ID from various potential field names
+                location_id = container_data.get('locationId') or container_data.get('containerLocationId') or container_data.get('storageLocation')
+                print(f"DEBUG: Looking for location ID in data: {location_id}")
+                
                 if not location_id:
                     # Try to find the default location (1.1.1)
                     cursor.execute("""
@@ -341,6 +286,9 @@ class ContainerService:
                     result = cursor.fetchone()
                     if result:
                         location_id = result[0]
+                        print(f"DEBUG: Using default location ID: {location_id}")
+                    else:
+                        print("DEBUG: No default location found. This might cause container creation to fail.")
                 
                 # Check if we need to create a new container type
                 new_container_type = container_data.get('newContainerType')
@@ -614,4 +562,187 @@ class ContainerService:
             return {
                 'success': False,
                 'error': str(e)
+            }
+            
+    def delete_container(self, container_id, user_id):
+        try:
+            print(f"DEBUG: Deleting container {container_id}")
+            
+            # Check if the container exists
+            cursor = self.mysql.connection.cursor()
+            cursor.execute("""
+                SELECT ContainerID, Description
+                FROM container
+                WHERE ContainerID = %s
+            """, (container_id,))
+            
+            container_data = cursor.fetchone()
+            if not container_data:
+                cursor.close()
+                return {
+                    'success': False,
+                    'error': 'Container not found'
+                }
+                
+            container_description = container_data[1]
+            
+            # Check if the container has samples - don't allow deletion if it does
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM ContainerSample
+                WHERE ContainerID = %s
+            """, (container_id,))
+            
+            sample_count = cursor.fetchone()[0]
+            if sample_count > 0:
+                cursor.close()
+                return {
+                    'success': False,
+                    'error': f'Container still has {sample_count} samples. Remove all samples first.'
+                }
+            
+            # Delete the container
+            with self.db.transaction() as tx_cursor:
+                tx_cursor.execute("""
+                    DELETE FROM container
+                    WHERE ContainerID = %s
+                """, (container_id,))
+                
+                # Log the deletion
+                tx_cursor.execute("""
+                    INSERT INTO History (
+                        Timestamp,
+                        ActionType,
+                        UserID,
+                        Notes
+                    )
+                    VALUES (NOW(), %s, %s, %s)
+                """, (
+                    'Container deleted',
+                    user_id,
+                    f'Container {container_id} ({container_description}) was deleted'
+                ))
+                
+            cursor.close()
+            return {
+                'success': True,
+                'message': f'Container {container_id} deleted successfully'
+            }
+        except Exception as e:
+            print(f"DEBUG: Error in delete_container: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'error': str(e)
+            }
+            
+    def delete_container_type(self, container_type_id, user_id):
+        try:
+            print(f"DEBUG: Deleting container type {container_type_id}")
+            
+            # First check if the container type exists
+            cursor = self.mysql.connection.cursor()
+            cursor.execute("""
+                SELECT TypeName
+                FROM containertype
+                WHERE ContainerTypeID = %s
+            """, (container_type_id,))
+            
+            result = cursor.fetchone()
+            if not result:
+                cursor.close()
+                return {
+                    'success': False,
+                    'error': 'Container type not found'
+                }
+                
+            type_name = result[0]
+            
+            # Check if any active containers use this type
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM container
+                WHERE ContainerTypeID = %s
+            """, (container_type_id,))
+            
+            active_containers = cursor.fetchone()[0]
+            if active_containers > 0:
+                cursor.close()
+                return {
+                    'success': False,
+                    'error': f'This container type is used by {active_containers} active containers and cannot be deleted. Remove all containers of this type first.'
+                }
+                
+            # Check if any samples are in containers of this type
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM container c
+                JOIN containersample cs ON c.ContainerID = cs.ContainerID
+                WHERE c.ContainerTypeID = %s
+            """, (container_type_id,))
+            
+            active_samples = cursor.fetchone()[0]
+            if active_samples > 0:
+                cursor.close()
+                return {
+                    'success': False,
+                    'error': f'This container type is used by containers that contain {active_samples} samples and cannot be deleted. Remove all samples from containers of this type first.'
+                }
+                
+            # Check if any tests use this container type
+            # Simplify the test query since we may not have all the tables referenced in the original query
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM test t
+                JOIN testsample ts ON t.TestID = ts.TestID
+                JOIN sample s ON ts.SampleID = s.SampleID
+                JOIN samplestorage ss ON s.SampleID = ss.SampleID
+                JOIN containersample cs ON ss.StorageID = cs.SampleStorageID
+                JOIN container c ON cs.ContainerID = c.ContainerID
+                WHERE c.ContainerTypeID = %s
+            """, (container_type_id,))
+            
+            active_tests = cursor.fetchone()[0]
+            if active_tests > 0:
+                cursor.close()
+                return {
+                    'success': False,
+                    'error': f'This container type is used in {active_tests} tests and cannot be deleted. Complete all tests using this container type first.'
+                }
+                
+            # After all checks, delete the container type
+            with self.db.transaction() as tx_cursor:
+                tx_cursor.execute("""
+                    DELETE FROM containertype
+                    WHERE ContainerTypeID = %s
+                """, (container_type_id,))
+                
+                # Log the deletion
+                tx_cursor.execute("""
+                    INSERT INTO history (
+                        Timestamp,
+                        ActionType,
+                        UserID,
+                        Notes
+                    )
+                    VALUES (NOW(), %s, %s, %s)
+                """, (
+                    'Container type deleted',
+                    user_id,
+                    f'Container type "{type_name}" (ID: {container_type_id}) was deleted'
+                ))
+                
+            cursor.close()
+            return {
+                'success': True,
+                'message': f'Container type "{type_name}" deleted successfully'
+            }
+        except Exception as e:
+            print(f"DEBUG: Error in delete_container_type: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'error': f'Database error: {str(e)}'
             }

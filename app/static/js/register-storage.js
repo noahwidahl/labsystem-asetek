@@ -154,6 +154,37 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
                 if (registerApp.currentStep === registerApp.totalSteps) {
                     console.log('Final step, calling handleFormSubmission');
                     
+                    // First check if we need to validate package locations for multi-container mode
+                    const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
+                    const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
+                    
+                    // Check both possible ways to select "one container per package"
+                    let oneContainerPerPackage = storageOption === 'container' && sampleType === 'multiple' && 
+                                               document.getElementById('oneContainerPerPackage')?.checked;
+                    
+                    // Also check the alternative selector (multiContainerOption)
+                    if (!oneContainerPerPackage && storageOption === 'container' && sampleType === 'multiple') {
+                        const multiContainerOption = document.querySelector('input[name="multiContainerOption"]:checked')?.value;
+                        if (multiContainerOption === 'multiple') {
+                            oneContainerPerPackage = true;
+                            console.log("DEBUG: one container per package detected via multiContainerOption");
+                        }
+                    }
+                    
+                    // For one container per package mode, ensure we have all locations selected
+                    if (oneContainerPerPackage && typeof window.PackageLocations !== 'undefined') {
+                        const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
+                        const selectedLocations = window.PackageLocations.getSelectedLocations();
+                        
+                        console.log("DEBUG: Validating container locations before submission", 
+                            {packageCount, selectedCount: selectedLocations.length, locations: selectedLocations});
+                            
+                        if (selectedLocations.length !== packageCount) {
+                            alert(`Error: Please select a storage location for each container. You need to select ${packageCount} locations (one for each package).`);
+                            return; // Prevent form submission
+                        }
+                    }
+                    
                     // Check if the function exists before calling it
                     if (typeof window.handleFormSubmission === 'function') {
                         window.handleFormSubmission();
@@ -327,7 +358,19 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
                 const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
                 const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
                 const separateStorage = document.getElementById('separateStorage')?.checked || false;
-                const oneContainerPerPackage = storageOption === 'container' && sampleType === 'multiple' && document.getElementById('oneContainerPerPackage')?.checked;
+                
+                // Check both possible ways to select "one container per package"
+                let oneContainerPerPackage = storageOption === 'container' && sampleType === 'multiple' && 
+                                          document.getElementById('oneContainerPerPackage')?.checked;
+                
+                // Also check the alternative selector (multiContainerOption)
+                if (!oneContainerPerPackage && storageOption === 'container' && sampleType === 'multiple') {
+                    const multiContainerOption = document.querySelector('input[name="multiContainerOption"]:checked')?.value;
+                    if (multiContainerOption === 'multiple') {
+                        oneContainerPerPackage = true;
+                        console.log("DEBUG: one container per package detected via multiContainerOption");
+                    }
+                }
                 
                 // Add visual indicator for multi-package selection
                 if ((sampleType === 'multiple' && separateStorage) || oneContainerPerPackage) {
@@ -752,6 +795,7 @@ function updateLocationSummary() {
     
     // Check if we should use multi-select mode
     const useMultiSelect = (sampleType === 'multiple' && separateStorage) || (oneContainerPerPackage);
+    console.log("DEBUG: Storage selection mode - useMultiSelect:", useMultiSelect, "oneContainerPerPackage:", oneContainerPerPackage);
     
     let summaryHtml = '';
     

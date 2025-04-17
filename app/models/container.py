@@ -11,12 +11,21 @@ class Container:
     
     @classmethod
     def from_dict(cls, data):
+        # Debug data to track what values are being provided
+        print(f"DEBUG: Container.from_dict() called with: {data}")
+        
+        # Check for possible location ID field names
+        location_id = data.get('locationId') or data.get('containerLocationId') or data.get('storageLocation')
+        
+        # Log what location ID was found
+        print(f"DEBUG: Using location_id: {location_id}")
+        
         return cls(
             description=data.get('description'),
             container_type_id=data.get('containerTypeId'),
             is_mixed=data.get('isMixed', False),
             capacity=data.get('capacity'),
-            location_id=data.get('locationId')
+            location_id=location_id
         )
     
     @classmethod
@@ -27,7 +36,8 @@ class Container:
             container_type_id=row[2] if len(row) > 2 else None,
             is_mixed=bool(row[3]) if len(row) > 3 else False,
             capacity=row[4] if len(row) > 4 else None,
-            status=row[5] if len(row) > 5 else 'Active'
+            status=row[5] if len(row) > 5 else 'Active',
+            location_id=row[6] if len(row) > 6 else None
         )
     
     def to_dict(self):

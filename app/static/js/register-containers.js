@@ -180,7 +180,12 @@ function setupContainerTypeCreation() {
 // Function to fetch existing containers
 function fetchExistingContainers() {
     const existingContainerSelect = document.getElementById('existingContainerSelect');
-    if (!existingContainerSelect) return;
+    if (!existingContainerSelect) {
+        console.error("existingContainerSelect element not found!");
+        return;
+    }
+    
+    console.log("DEBUG: Fetching existing containers...");
     
     // Clear existing options except the first one
     while (existingContainerSelect.options.length > 1) {
@@ -197,15 +202,24 @@ function fetchExistingContainers() {
     // This ensures we get fresh data every time, not cached results
     const timestamp = new Date().getTime();
     fetch(`/api/containers/available?_=${timestamp}`)
-        .then(response => response.json())
+        .then(response => {
+            console.log("DEBUG: Got response from /api/containers/available, status:", response.status);
+            return response.json();
+        })
         .then(data => {
             // Remove "loading..." option
             existingContainerSelect.remove(existingContainerSelect.options.length - 1);
+            
+            console.log("DEBUG: /api/containers/available API response:", data);
             
             if (data.containers && data.containers.length > 0) {
                 data.containers.forEach(container => {
                     const option = document.createElement('option');
                     option.value = container.ContainerID;
+                    
+                    // Debug logging for container data
+                    console.log("DEBUG: Container data:", container);
+                    
                     // Include location information in the dropdown for better identification
                     const locationInfo = container.LocationName ? ` - Location: ${container.LocationName}` : '';
                     
@@ -224,7 +238,7 @@ function fetchExistingContainers() {
                     existingContainerSelect.appendChild(option);
                 });
                 
-                console.log(`Loaded ${data.containers.length} available containers`);
+                console.log(`DEBUG: Loaded ${data.containers.length} available containers`);
                 
                 // Enable the dropdown and select the first container by default
                 if (data.containers.length > 0) {
@@ -242,11 +256,11 @@ function fetchExistingContainers() {
                 noContainersOption.disabled = true;
                 existingContainerSelect.appendChild(noContainersOption);
                 
-                console.log('No available containers found');
+                console.log('DEBUG: No available containers found');
             }
         })
         .catch(error => {
-            console.error('Error fetching containers:', error);
+            console.error('ERROR: Error fetching containers:', error);
             const errorOption = document.createElement('option');
             errorOption.textContent = 'Error fetching containers';
             errorOption.disabled = true;
@@ -256,21 +270,46 @@ function fetchExistingContainers() {
 
 // Function to fetch container location
 function fetchContainerLocation(containerId) {
-    if (!containerId) return;
+    if (!containerId) {
+        console.error("DEBUG: fetchContainerLocation called with no containerId");
+        return;
+    }
+    
+    console.log(`DEBUG: Fetching location for container ${containerId}`);
     
     fetch(`/api/containers/${containerId}/location`)
-        .then(response => response.json())
+        .then(response => {
+            console.log(`DEBUG: Got response from container location API, status: ${response.status}`);
+            return response.json();
+        })
         .then(data => {
+            console.log(`DEBUG: Container location API response:`, data);
+            
             if (data.success && data.location) {
-                console.log("Container placering:", data.location);
+                console.log("DEBUG: Container location:", data.location);
+                
                 // Save container's location for later use in the global state
                 registerApp.selectedContainerLocation = data.location;
+                
+                // Store the location ID in all possible field names for maximum compatibility
+                if (data.location.LocationID) {
+                    registerApp.containerLocationId = data.location.LocationID;
+                    registerApp.locationId = data.location.LocationID;
+                    registerApp.storageLocation = data.location.LocationID;
+                    
+                    console.log(`DEBUG: Stored container location IDs: 
+                        locationId=${registerApp.locationId}, 
+                        containerLocationId=${registerApp.containerLocationId},
+                        storageLocation=${registerApp.storageLocation}`);
+                }
                 
                 // Set skipLocationSelection to true since we'll use container's location
                 // This will make the location grid auto-select this location in step 4
                 registerApp.skipLocationSelection = true;
-                console.log("Setting skipLocationSelection=true, will use container location:", data.location.LocationName);
+                console.log(`DEBUG: Setting skipLocationSelection=true, will use container location: ${data.location.LocationName}`);
+            } else {
+                console.error("DEBUG: No location data received for container or request failed");
             }
         })
-        .catch(error => console.error("Fejl ved hentning af containerplacering:", error));
+        .catch(error => console.error("ERROR: Failed to fetch container location:", error));
 }

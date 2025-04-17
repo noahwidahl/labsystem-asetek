@@ -23,11 +23,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // Filter buttons
     setupFilterButtons();
     
-    // Add event listener to delete buttons
+    // Add event listener to delete container buttons
     document.querySelectorAll('.delete-container-btn').forEach(button => {
         button.addEventListener('click', function() {
             const containerId = this.getAttribute('data-container-id');
             deleteContainer(containerId);
+        });
+    });
+    
+    // Add event listener to delete container type buttons
+    document.querySelectorAll('.delete-container-type-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const containerTypeId = this.getAttribute('data-container-type-id');
+            const containerTypeName = this.getAttribute('data-container-type-name');
+            deleteContainerType(containerTypeId, containerTypeName);
         });
     });
     
@@ -401,6 +410,164 @@ function deleteContainer(containerId) {
             showErrorMessage(`An error occurred: ${error}`);
         });
     }
+}
+
+// Delete container type
+function deleteContainerType(containerTypeId, typeName) {
+    // Create and show confirmation modal instead of browser alert
+    const modalHtml = `
+        <div class="modal fade" id="deleteTypeConfirmModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">Delete Container Type</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to delete container type <strong>"${typeName}"</strong>?</p>
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <span>This action can only be performed if the type is not used by any active containers.</span>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-danger" id="confirmDeleteType">Delete</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove any existing modal
+    const existingModal = document.getElementById('deleteTypeConfirmModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Initialize the modal
+    const modal = new bootstrap.Modal(document.getElementById('deleteTypeConfirmModal'));
+    modal.show();
+    
+    // Handle confirm button click
+    document.getElementById('confirmDeleteType').addEventListener('click', function() {
+        // Hide the modal
+        modal.hide();
+        
+        // Show loading message
+        const loadingToast = document.createElement('div');
+        loadingToast.className = 'custom-toast show';
+        loadingToast.style.borderLeftColor = '#17a2b8';
+        loadingToast.innerHTML = `
+            <div class="toast-icon">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <div class="toast-content">
+                <div class="toast-title">Processing</div>
+                <div class="toast-message">Deleting container type...</div>
+            </div>
+        `;
+        document.body.appendChild(loadingToast);
+        
+        console.log('Deleting container type:', containerTypeId, typeName);
+        
+        fetch(`/api/containers/types/${containerTypeId}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Remove loading toast
+            loadingToast.remove();
+            
+            if (data.success) {
+                showSuccessMessage(`Container type "${typeName}" deleted successfully!`);
+                
+                // Find and remove the card for this container type
+                const card = document.querySelector(`.delete-container-type-btn[data-container-type-id="${containerTypeId}"]`).closest('.col-md-4');
+                if (card) {
+                    // Animate the removal
+                    card.style.transition = 'opacity 0.3s ease';
+                    card.style.opacity = '0';
+                    setTimeout(() => {
+                        card.remove();
+                        
+                        // Check if there are no container types left and show message if needed
+                        const remainingCards = document.querySelectorAll('.card-title');
+                        if (remainingCards.length === 0) {
+                            const containerTypesRow = document.querySelector('.card:last-of-type .row');
+                            if (containerTypesRow) {
+                                containerTypesRow.innerHTML = `
+                                    <div class="col-12">
+                                        <p class="text-center text-muted">No container types defined</p>
+                                    </div>
+                                `;
+                            }
+                        }
+                    }, 300);
+                } else {
+                    // Reload page if card not found
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                }
+            } else {
+                // Use custom error modal instead of toast for clearer message
+                showDeletionErrorModal(typeName, data.error);
+            }
+        })
+        .catch(error => {
+            // Remove loading toast
+            loadingToast.remove();
+            
+            console.error('Error deleting container type:', error);
+            showDeletionErrorModal(typeName, 'A server error occurred while processing your request.');
+        });
+    });
+}
+
+// Show professional error modal
+function showDeletionErrorModal(typeName, errorMessage) {
+    const errorModalHtml = `
+        <div class="modal fade" id="deletionErrorModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">Cannot Delete Container Type</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="fas fa-exclamation-circle text-danger me-3" style="font-size: 2rem;"></i>
+                            <p class="mb-0">Unable to delete container type <strong>"${typeName}"</strong>.</p>
+                        </div>
+                        <div class="alert alert-secondary">
+                            <strong>Reason:</strong> ${errorMessage}
+                        </div>
+                        <p class="text-muted small mt-3">To delete this container type, you must first remove all references to it from active containers, samples, and tests.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove any existing error modal
+    const existingModal = document.getElementById('deletionErrorModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', errorModalHtml);
+    
+    // Initialize and show the modal
+    const errorModal = new bootstrap.Modal(document.getElementById('deletionErrorModal'));
+    errorModal.show();
 }
 
 // Message functions

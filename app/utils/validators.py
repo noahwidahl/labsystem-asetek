@@ -38,8 +38,9 @@ def validate_container_data(data):
             'field': 'description'
         }
     
-    # Location is required
-    if not data.get('locationId'):
+    # Location is required, but may be under different keys depending on frontend
+    location_id = data.get('locationId') or data.get('containerLocationId') or data.get('containerLocation')
+    if not location_id:
         return {
             'valid': False,
             'error': 'Storage location is required',

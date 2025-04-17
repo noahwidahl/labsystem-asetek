@@ -124,12 +124,17 @@ def init_container(blueprint, mysql):
             # Get containers that can hold samples
             containers = container_service.get_available_containers()
             
+            # Add debug output for frontend
+            print(f"DEBUG: API /api/containers/available returning {len(containers)} containers")
+            if containers:
+                print(f"DEBUG: First container: {containers[0]}")
+            
             return jsonify({'success': True, 'containers': containers})
         except Exception as e:
             print(f"API error when fetching available containers: {e}")
             import traceback
             traceback.print_exc()
-            return jsonify({'success': False, 'error': str(e)}), 500
+            return jsonify({'success': False, 'error': str(e)}, 500)
             
     @blueprint.route('/api/containers/types')
     def get_container_types():
@@ -146,6 +151,23 @@ def init_container(blueprint, mysql):
             return jsonify({'success': True, 'types': container_types})
         except Exception as e:
             print(f"API error when fetching container types: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+            
+    @blueprint.route('/api/containers/types/<int:container_type_id>', methods=['DELETE'])
+    def delete_container_type(container_type_id):
+        try:
+            # Get current user
+            current_user = get_current_user()
+            user_id = current_user['UserID']
+            
+            # Delete container type via service
+            result = container_service.delete_container_type(container_type_id, user_id)
+            
+            return jsonify(result)
+        except Exception as e:
+            print(f"API error deleting container type: {e}")
             import traceback
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500

@@ -81,7 +81,14 @@
                         <div class="col-md-4 mb-3">
                             <div class="card h-100">
                                 <div class="card-body">
-                                    <h5 class="card-title">{{ type.TypeName }}</h5>
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h5 class="card-title mb-0">{{ type.TypeName }}</h5>
+                                        <button class="btn btn-sm btn-outline-danger delete-container-type-btn" 
+                                                data-container-type-id="{{ type.ContainerTypeID }}"
+                                                data-container-type-name="{{ type.TypeName }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
                                     <p class="card-text">Capacity: {{ type.DefaultCapacity|default('Unlimited') }}</p>
                                     {% if type.Description %}
                                     <p class="card-text text-muted small">{{ type.Description }}</p>

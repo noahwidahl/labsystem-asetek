@@ -220,11 +220,11 @@
                         <div id="multipleContainerOptions" class="d-none">
                             <div class="form-group mb-3">
                                 <div class="d-flex align-items-center mb-2">
-                                    <input type="radio" name="multiContainerOption" id="oneContainerForAll" value="single" checked onchange="if(typeof updateContainerLocationVisibility === 'function') updateContainerLocationVisibility()">
+                                    <input type="radio" name="multiContainerOption" id="oneContainerForAll" value="single" checked onchange="if(window.updateContainerLocationVisibility) window.updateContainerLocationVisibility()">
                                     <label for="oneContainerForAll" class="ms-2 mb-0">One container for all samples</label>
                                 </div>
                                 <div class="d-flex align-items-center">
-                                    <input type="radio" name="multiContainerOption" id="oneContainerPerPackage" value="multiple" onchange="if(typeof updateContainerLocationVisibility === 'function') updateContainerLocationVisibility()">
+                                    <input type="radio" name="multiContainerOption" id="oneContainerPerPackage" value="multiple" onchange="if(window.updateContainerLocationVisibility) window.updateContainerLocationVisibility()">
                                     <label for="oneContainerPerPackage" class="ms-2 mb-0">One container per package</label>
                                 </div>
                                 <div class="alert alert-info mt-2" id="multiLocationInfo" style="display: none;">
@@ -587,13 +587,9 @@
                     formData.useExistingContainer = true;
                     formData.existingContainerId = document.getElementById('existingContainerSelect')?.value;
                     
-                    // If we have container location, use it 
+                    // If we have container location, use it
                     if (window.registerApp?.selectedContainerLocation) {
-                        // Set all possible location ID field names for maximum compatibility
                         formData.storageLocation = window.registerApp.selectedContainerLocation.LocationID;
-                        formData.locationId = window.registerApp.selectedContainerLocation.LocationID;
-                        formData.containerLocationId = window.registerApp.selectedContainerLocation.LocationID;
-                        console.log("DEBUG: Using container's location for storage:", window.registerApp.selectedContainerLocation.LocationID);
                     }
                 } else {
                     // Create new container
@@ -820,63 +816,6 @@
         });
     };
 
-    // Function to update container location visibility based on multiple container selection
-    function updateContainerLocationVisibility() {
-        console.log("updateContainerLocationVisibility called");
-        const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
-        const containerLocationSection = document.getElementById('containerLocationSelectSection');
-        const multiLocationInfo = document.getElementById('multiLocationInfo');
-        
-        if (oneContainerPerPackage && containerLocationSection) {
-            // Hide location dropdown when "one container per package" is selected
-            if (oneContainerPerPackage.checked) {
-                // Hide location dropdown
-                containerLocationSection.classList.add('d-none');
-                // Remove required attribute when hidden
-                const containerLocationSelect = document.getElementById('containerLocation');
-                if (containerLocationSelect) {
-                    containerLocationSelect.removeAttribute('required');
-                    // Clear any selected value to prevent it from being submitted
-                    containerLocationSelect.value = '';
-                }
-                
-                // Show the multi-location info alert
-                if (multiLocationInfo) {
-                    multiLocationInfo.style.display = 'block';
-                }
-                
-                // Auto-check the "separate storage" checkbox for multiple storage
-                const separateStorage = document.getElementById('separateStorage');
-                if (separateStorage) {
-                    separateStorage.checked = true;
-                    // Disable the checkbox to prevent changes when in this mode
-                    separateStorage.disabled = true;
-                    // Trigger any associated events
-                    separateStorage.dispatchEvent(new Event('change'));
-                }
-            } else {
-                // Show location dropdown
-                containerLocationSection.classList.remove('d-none');
-                // Add required attribute when visible
-                const containerLocationSelect = document.getElementById('containerLocation');
-                if (containerLocationSelect) {
-                    containerLocationSelect.setAttribute('required', 'required');
-                }
-                
-                // Hide the multi-location info alert
-                if (multiLocationInfo) {
-                    multiLocationInfo.style.display = 'none';
-                }
-                
-                // Re-enable the separate storage checkbox
-                const separateStorage = document.getElementById('separateStorage');
-                if (separateStorage) {
-                    separateStorage.disabled = false;
-                }
-            }
-        }
-    }
-    
     // Create fallback for PackageLocations module if not loaded
     if (!window.PackageLocations) {
         console.warn("PackageLocations module not loaded, creating fallback");
@@ -1077,11 +1016,7 @@
                             
                             // If we have container location, use it
                             if (window.registerApp?.selectedContainerLocation) {
-                                // Set all possible location ID field names for maximum compatibility
                                 formData.storageLocation = window.registerApp.selectedContainerLocation.LocationID;
-                                formData.locationId = window.registerApp.selectedContainerLocation.LocationID;
-                                formData.containerLocationId = window.registerApp.selectedContainerLocation.LocationID;
-                                console.log("DEBUG: Using container's location for storage in backup function:", window.registerApp.selectedContainerLocation.LocationID);
                             }
                         } else {
                             // Use correct API fields for container creation
