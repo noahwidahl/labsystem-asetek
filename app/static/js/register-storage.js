@@ -181,8 +181,8 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
                         console.log("DEBUG: Validating container locations before submission", 
                             {packageCount, selectedCount: selectedLocations.length, locations: selectedLocations});
                         
-                        // Check if separate storage is enabled
-                        const separateStorage = document.getElementById('separateStorage')?.checked || false;
+                        // Check if separate storage is enabled - using radio buttons now
+                        const separateStorage = document.getElementById('separateStorageYes')?.checked || false;
                         console.log("DEBUG: Separate storage enabled:", separateStorage);
                         
                         // Save selected locations for later access in form submission
@@ -486,7 +486,8 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
                 }
                 
                 // Check if separate storage is enabled - important for oneContainerPerPackage mode
-                const separateStorageEnabled = document.getElementById('separateStorage')?.checked || false;
+                // Using radio buttons now
+                const separateStorageEnabled = document.getElementById('separateStorageYes')?.checked || false;
                 console.log(`Checking separate storage: ${separateStorageEnabled}`);
                 
                 // Add visual indicator for multi-package selection ONLY when separate storage is checked
@@ -792,6 +793,8 @@ function handleMultiPackageSelection(cell) {
     const multiContainerOption = document.querySelector('input[name="multiContainerOption"]:checked')?.value;
     const isMultiContainerMode = oneContainerPerPackage || multiContainerOption === 'multiple';
     
+    console.log(`MultiPackageSelection: Option check results - separateStorageYes=${separateStorage}, oneContainerPerPackage=${oneContainerPerPackage}, multiContainerOption=${multiContainerOption}, isMultiContainerMode=${isMultiContainerMode}`);
+    
     let packageCount = 1;
     
     // Calculate package count based on configuration
@@ -931,13 +934,14 @@ function updateLocationSummary() {
     // Get relevant selection data
     const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
     const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
-    const separateStorage = document.getElementById('separateStorage')?.checked || false;
+    // Check separate storage - using radio buttons now
+    const separateStorage = document.getElementById('separateStorageYes')?.checked || false;
     const useExistingContainer = storageOption === 'container' && document.getElementById('existingContainerOption')?.checked;
     const oneContainerPerPackage = storageOption === 'container' && sampleType === 'multiple' && document.getElementById('oneContainerPerPackage')?.checked;
     
     // Check if we should use multi-select mode
     const useMultiSelect = (sampleType === 'multiple' && separateStorage) || (oneContainerPerPackage);
-    console.log("DEBUG: Storage selection mode - useMultiSelect:", useMultiSelect, "oneContainerPerPackage:", oneContainerPerPackage);
+    console.log("DEBUG: Storage selection mode - useMultiSelect:", useMultiSelect, "oneContainerPerPackage:", oneContainerPerPackage, "separateStorageYes:", separateStorage);
     
     let summaryHtml = '';
     
@@ -1029,11 +1033,14 @@ function updatePackageSelectionSummary() {
     // Get sample type and determine if we need to show package locations
     const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
     const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
-    const separateStorage = document.getElementById('separateStorage')?.checked || false;
+    // Check separate storage - using radio buttons now
+    const separateStorage = document.getElementById('separateStorageYes')?.checked || false;
     const oneContainerPerPackage = storageOption === 'container' && sampleType === 'multiple' && document.getElementById('oneContainerPerPackage')?.checked;
     
     // Only show summary for multi-package with separate storage or one container per package
     const useMultiSelect = (sampleType === 'multiple' && separateStorage) || oneContainerPerPackage;
+    
+    console.log("DEBUG: Package Selection Summary - useMultiSelect:", useMultiSelect, "separateStorageYes:", separateStorage, "oneContainerPerPackage:", oneContainerPerPackage);
     if (!useMultiSelect) return;
     
     const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
@@ -1183,8 +1190,11 @@ function updateStorageInstructions() {
     
     const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
     const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
-    const separateStorage = document.getElementById('separateStorage')?.checked || false;
+    // Check separate storage - using radio buttons now
+    const separateStorage = document.getElementById('separateStorageYes')?.checked || false;
     const multiContainerOption = document.querySelector('input[name="multiContainerOption"]:checked')?.value || 'single';
+    
+    console.log("DEBUG: updateStorageInstructions - separateStorageYes:", separateStorage);
     
     let instructionText = '';
     
