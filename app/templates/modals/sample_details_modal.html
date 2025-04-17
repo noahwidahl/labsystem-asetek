@@ -1,0 +1,128 @@
+<!-- app/templates/modals/sample_details_modal.html -->
+<div class="modal fade" id="sampleDetailsModal" tabindex="-1" aria-labelledby="sampleDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sampleDetailsModalLabel">Sample Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="container-fluid" id="sample-details-content">
+                    <!-- Sample info section -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Sample Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <th>ID:</th>
+                                            <td id="sample-id">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Description:</th>
+                                            <td id="sample-description">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Part Number:</th>
+                                            <td id="sample-part-number">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Amount:</th>
+                                            <td id="sample-amount">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Status:</th>
+                                            <td id="sample-status">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Registered:</th>
+                                            <td id="sample-registered-date">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Registered By:</th>
+                                            <td id="sample-registered-by">-</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Storage Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <th>Location:</th>
+                                            <td id="sample-location">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Container:</th>
+                                            <td id="sample-container">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Tracking Number:</th>
+                                            <td id="sample-tracking-number">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Supplier:</th>
+                                            <td id="sample-supplier">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Units:</th>
+                                            <td id="sample-units">-</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Additional Info Section -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Additional Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <h6>Comments:</h6>
+                                        <div id="sample-comments" class="p-2 border rounded bg-light">-</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <h6>Properties:</h6>
+                                        <div id="sample-properties">
+                                            <p class="text-center text-muted">Loading properties...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sample history section -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Sample History</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="sample-history-list">
+                                <p class="text-center text-muted">Loading history...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-primary" id="move-sample-btn">Move Sample</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -31,6 +31,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // Add event listener to container detail buttons
+    document.querySelectorAll('button.btn-secondary[data-container-id]').forEach(button => {
+        button.addEventListener('click', function() {
+            const containerId = this.getAttribute('data-container-id');
+            
+            // Implementer direkte i denne fil
+            showContainerDetails(containerId);
+        });
+    });
+    
     // Add event listener to delete container type buttons
     document.querySelectorAll('.delete-container-type-btn').forEach(button => {
         button.addEventListener('click', function() {
@@ -76,6 +86,208 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error("Container page: Could not find disposal link with ID 'disposalLink'");
     }
 });
+
+// Direkte implementation af container details funktion
+function showContainerDetails(containerId) {
+    // Clear previous content
+    document.getElementById('container-id').textContent = '-';
+    document.getElementById('container-description').textContent = '-';
+    document.getElementById('container-type').textContent = '-';
+    document.getElementById('container-status').textContent = '-';
+    document.getElementById('container-mixed').textContent = '-';
+    document.getElementById('container-location').textContent = '-';
+    document.getElementById('container-samples-list').innerHTML = '<p class="text-center text-muted">Loading samples...</p>';
+    document.getElementById('container-history-list').innerHTML = '<p class="text-center text-muted">Loading history...</p>';
+    
+    // Set the modal title
+    document.getElementById('containerDetailsModalLabel').textContent = `Container ${containerId} Details`;
+    
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('containerDetailsModal'));
+    modal.show();
+    
+    // Fetch container details
+    fetch(`/api/containers/${containerId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.container) {
+                const container = data.container;
+                
+                // Update container information safely
+                document.getElementById('container-id').textContent = String(container.ContainerID || '-');
+                document.getElementById('container-description').textContent = container.Description || '-';
+                document.getElementById('container-type').textContent = container.TypeName || 'Standard';
+                document.getElementById('container-status').innerHTML = `<span class="badge bg-primary">${container.Status || 'Active'}</span>`;
+                
+                // Safely handle IsMixed which can be 0/1 or true/false
+                let isMixed = 'No';
+                if (container.IsMixed === 1 || container.IsMixed === '1' || container.IsMixed === true) {
+                    isMixed = 'Yes';
+                }
+                document.getElementById('container-mixed').textContent = isMixed;
+                
+                // Get location data
+                if (container.LocationID) {
+                    // Try the new API endpoint first
+                    fetch(`/api/locations/${container.LocationID}`)
+                        .then(response => {
+                            if (!response.ok) {
+                                // Fall back to the container-specific endpoint
+                                return fetch(`/api/containers/${containerId}/location`);
+                            }
+                            return response;
+                        })
+                        .then(response => response.json())
+                        .then(locationData => {
+                            if (locationData.success && locationData.location) {
+                                document.getElementById('container-location').textContent = locationData.location.LocationName || '-';
+                            } else {
+                                document.getElementById('container-location').textContent = 'No location information';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching container location:', error);
+                            document.getElementById('container-location').textContent = 'Error loading location';
+                        });
+                } else {
+                    document.getElementById('container-location').textContent = 'No location assigned';
+                }
+                
+                // Display samples with more detail
+                if (data.samples && data.samples.length > 0) {
+                    let samplesHtml = '<div class="table-responsive"><table class="table table-sm table-hover">';
+                    samplesHtml += `
+                        <thead>
+                            <tr>
+                                <th>Sample ID</th>
+                                <th>Description</th>
+                                <th>Part Number</th>
+                                <th>Quantity</th>
+                                <th>Registered</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                    `;
+                    
+                    data.samples.forEach(sample => {
+                        const sampleId = sample.SampleID;
+                        const sampleIdFormatted = `SMP-${sampleId}`;
+                        
+                        // Format amount safely
+                        let displayAmount = '-';
+                        if (sample.Amount !== null && sample.Amount !== undefined) {
+                            // Try to format the amount, handle both string and number
+                            try {
+                                displayAmount = Number(sample.Amount).toString();
+                            } catch (e) {
+                                displayAmount = String(sample.Amount);
+                            }
+                        }
+                        
+                        samplesHtml += `
+                            <tr>
+                                <td>${sampleIdFormatted}</td>
+                                <td>${sample.Description || '-'}</td>
+                                <td>${sample.PartNumber || '-'}</td>
+                                <td>${displayAmount} ${sample.Unit || 'pcs'}</td>
+                                <td>${sample.RegisteredDate || '-'}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-secondary sample-details-btn" 
+                                           data-sample-id="${sampleId}">
+                                        Details
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    
+                    samplesHtml += '</tbody></table></div>';
+                    document.getElementById('container-samples-list').innerHTML = samplesHtml;
+                    
+                    // Add event listeners to the sample detail buttons
+                    document.querySelectorAll('#container-samples-list .sample-details-btn').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const sampleId = this.dataset.sampleId;
+                            if (sampleId) {
+                                // Hide container details modal
+                                const containerModal = bootstrap.Modal.getInstance(document.getElementById('containerDetailsModal'));
+                                if (containerModal) containerModal.hide();
+                                
+                                // Show sample details modal if it exists
+                                const sampleDetailsModal = document.getElementById('sampleDetailsModal');
+                                if (sampleDetailsModal) {
+                                    // Try to call loadSampleDetails if it exists in window
+                                    if (typeof window.loadSampleDetails === 'function') {
+                                        window.loadSampleDetails(sampleId);
+                                        const sampleModal = new bootstrap.Modal(sampleDetailsModal);
+                                        sampleModal.show();
+                                    }
+                                }
+                            }
+                        });
+                    });
+                } else {
+                    document.getElementById('container-samples-list').innerHTML = 
+                        '<p class="text-center text-muted">No samples in this container</p>';
+                }
+                
+                // Display history
+                if (data.history && data.history.length > 0) {
+                    let historyHtml = `
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Action</th>
+                                        <th>User</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    data.history.forEach(item => {
+                        // Safely format timestamp
+                        let timestamp = '-';
+                        if (item.Timestamp) {
+                            // Handle both string and date objects
+                            try {
+                                if (typeof item.Timestamp === 'object' && item.Timestamp instanceof Date) {
+                                    timestamp = item.Timestamp.toLocaleString();
+                                } else {
+                                    timestamp = String(item.Timestamp);
+                                }
+                            } catch (e) {
+                                console.error("Error formatting timestamp:", e);
+                                timestamp = String(item.Timestamp);
+                            }
+                        }
+                        
+                        historyHtml += `
+                            <tr>
+                                <td>${timestamp}</td>
+                                <td>${item.ActionType || '-'}</td>
+                                <td>${item.UserName || '-'}</td>
+                                <td>${item.Notes || '-'}</td>
+                            </tr>
+                        `;
+                    });
+                    historyHtml += '</tbody></table></div>';
+                    document.getElementById('container-history-list').innerHTML = historyHtml;
+                } else {
+                    document.getElementById('container-history-list').innerHTML = 
+                        '<p class="text-center text-muted">No history found for this container</p>';
+                }
+            } else {
+                showErrorMessage(data.error || 'Error loading container details');
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching container details:', error);
+            showErrorMessage('An error occurred while loading container details');
+        });
+}
 
 function setupFilterButtons() {
     const filterAll = document.getElementById('filterAll');

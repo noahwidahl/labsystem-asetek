@@ -80,8 +80,39 @@ def init_container(blueprint, mysql):
     @blueprint.route('/api/containers/<int:container_id>/location')
     def get_container_location(container_id):
         try:
-            # Get container location
-            location = container_service.get_container_location(container_id)
+            # Use string to avoid %d bytes error
+            container_id_str = str(container_id)
+            
+            # Direct database query for container location
+            cursor = mysql.connection.cursor()
+            
+            query = """
+                SELECT 
+                    sl.LocationID,
+                    sl.LocationName,
+                    sl.Rack,
+                    sl.Section,
+                    sl.Shelf,
+                    l.LabName
+                FROM container c
+                JOIN storagelocation sl ON c.LocationID = sl.LocationID
+                JOIN lab l ON sl.LabID = l.LabID
+                WHERE c.ContainerID = """ + container_id_str
+                
+            cursor.execute(query)
+            
+            location_result = cursor.fetchone()
+            
+            if not location_result:
+                # Try container service as fallback
+                location = container_service.get_container_location(container_id)
+                return jsonify({'success': True, 'location': location})
+            
+            # Convert to dict with column names
+            location_cols = [col[0] for col in cursor.description]
+            location = dict(zip(location_cols, location_result))
+            
+            cursor.close()
             
             return jsonify({'success': True, 'location': location})
         except Exception as e:
@@ -172,6 +203,47 @@ def init_container(blueprint, mysql):
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500
             
+    @blueprint.route('/api/locations/<int:location_id>')
+    def get_location(location_id):
+        try:
+            # Use string to avoid %d bytes error
+            location_id_str = str(location_id)
+            
+            # Direct database query for storage location info
+            cursor = mysql.connection.cursor()
+            
+            query = """
+                SELECT 
+                    sl.LocationID,
+                    sl.LocationName,
+                    sl.Rack,
+                    sl.Section, 
+                    sl.Shelf,
+                    l.LabName
+                FROM storagelocation sl
+                JOIN lab l ON sl.LabID = l.LabID
+                WHERE sl.LocationID = """ + location_id_str
+                
+            cursor.execute(query)
+            
+            location_result = cursor.fetchone()
+            
+            if not location_result:
+                return jsonify({'success': False, 'error': 'Location not found'}), 404
+            
+            # Convert to dict with column names
+            location_cols = [col[0] for col in cursor.description]
+            location = dict(zip(location_cols, location_result))
+            
+            cursor.close()
+            
+            return jsonify({'success': True, 'location': location})
+        except Exception as e:
+            print(f"API error getting location details: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+            
     @blueprint.route('/api/containers/add-sample', methods=['POST'])
     def add_sample_to_container():
         try:
@@ -224,10 +296,14 @@ def init_container(blueprint, mysql):
     @blueprint.route('/api/containers/<int:container_id>', methods=['GET'])
     def get_container_details(container_id):
         try:
+            # Convert to string to avoid %d bytes error
+            container_id_str = str(container_id)
+            
             # Connect to database directly for this complex query
             cursor = mysql.connection.cursor()
             
-            # Get container details
+            # Get container details with field name aliasing to match database
+            # Use string concatenation to avoid %d format error
             cursor.execute("""
                 SELECT 
                     c.ContainerID,
@@ -236,11 +312,11 @@ def init_container(blueprint, mysql):
                     c.IsMixed,
                     c.ContainerCapacity,
                     ct.TypeName,
-                    'Active' as Status
+                    COALESCE(c.ContainerStatus, 'Active') as Status,
+                    c.LocationID
                 FROM container c
                 LEFT JOIN containertype ct ON c.ContainerTypeID = ct.ContainerTypeID
-                WHERE c.ContainerID = %s
-            """, (container_id,))
+                WHERE c.ContainerID = """ + container_id_str)
             
             container_result = cursor.fetchone()
             if not container_result:
@@ -250,42 +326,89 @@ def init_container(blueprint, mysql):
             container_cols = [col[0] for col in cursor.description]
             container = dict(zip(container_cols, container_result))
             
-            # Get samples in this container
+            # Ensure all numeric values are properly converted
+            if 'ContainerID' in container and container['ContainerID'] is not None:
+                container['ContainerID'] = int(container['ContainerID'])
+            if 'ContainerTypeID' in container and container['ContainerTypeID'] is not None:
+                container['ContainerTypeID'] = int(container['ContainerTypeID'])
+            if 'ContainerCapacity' in container and container['ContainerCapacity'] is not None:
+                try:
+                    container['ContainerCapacity'] = int(container['ContainerCapacity'])
+                except (ValueError, TypeError):
+                    container['ContainerCapacity'] = 0
+            
+            # Get samples in this container with more detail
             cursor.execute("""
                 SELECT 
                     s.SampleID,
                     s.Description,
+                    s.PartNumber,
                     cs.Amount,
+                    CASE
+                        WHEN un.UnitName IS NULL THEN 'pcs'
+                        WHEN LOWER(un.UnitName) = 'stk' THEN 'pcs'
+                        ELSE un.UnitName
+                    END as Unit,
                     sl.LocationName,
-                    ss.ExpireDate
+                    ss.ExpireDate,
+                    DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y') as RegisteredDate,
+                    ss.StorageID as SampleStorageID
                 FROM containersample cs
                 JOIN samplestorage ss ON cs.SampleStorageID = ss.StorageID
                 JOIN sample s ON ss.SampleID = s.SampleID
                 LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
-                WHERE cs.ContainerID = %s
-            """, (container_id,))
+                LEFT JOIN reception r ON s.ReceptionID = r.ReceptionID
+                LEFT JOIN unit un ON s.UnitID = un.UnitID
+                WHERE cs.ContainerID = """ + container_id_str)
             
             samples_result = cursor.fetchall()
             samples_cols = [col[0] for col in cursor.description]
-            samples = [dict(zip(samples_cols, row)) for row in samples_result]
+            samples = []
             
-            # Get container history
+            # Properly convert all sample values to proper types
+            for row in samples_result:
+                sample_dict = dict(zip(samples_cols, row))
+                
+                # Convert SampleID to integer
+                if 'SampleID' in sample_dict and sample_dict['SampleID'] is not None:
+                    sample_dict['SampleID'] = int(sample_dict['SampleID'])
+                
+                # Convert Amount to float or int
+                if 'Amount' in sample_dict and sample_dict['Amount'] is not None:
+                    try:
+                        sample_dict['Amount'] = float(sample_dict['Amount'])
+                    except (ValueError, TypeError):
+                        sample_dict['Amount'] = 0
+                
+                # Add to samples list
+                samples.append(sample_dict)
+            
+            # Get container history with formatted timestamp
+            # Use direct string concat to avoid % format issues
             cursor.execute("""
                 SELECT 
-                    h.Timestamp,
+                    DATE_FORMAT(h.Timestamp, '%d-%m-%Y %H:%i') as Timestamp,
                     h.ActionType,
                     h.Notes,
                     u.Name as UserName
                 FROM history h
                 LEFT JOIN user u ON h.UserID = u.UserID
-                WHERE h.Notes LIKE %s
+                WHERE h.Notes LIKE '%Container """ + container_id_str + """%'
                 ORDER BY h.Timestamp DESC
                 LIMIT 20
-            """, (f"%Container {container_id}%",))
+            """)
             
             history_result = cursor.fetchall()
             history_cols = [col[0] for col in cursor.description]
-            history = [dict(zip(history_cols, row)) for row in history_result]
+            history = []
+            
+            # Process history records with properly formatted timestamps
+            for row in history_result:
+                history_dict = dict(zip(history_cols, row))
+                # Ensure timestamp is a string
+                if 'Timestamp' in history_dict and history_dict['Timestamp'] is not None:
+                    history_dict['Timestamp'] = str(history_dict['Timestamp'])
+                history.append(history_dict)
             
             cursor.close()
             

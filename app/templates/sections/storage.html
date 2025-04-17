@@ -213,9 +213,8 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-secondary">Details</button>
+                                        <button class="btn btn-sm btn-secondary sample-details-btn" data-sample-id="{{ sample.ID|replace('SMP-', '') }}">Details</button>
                                         <button class="btn btn-sm btn-outline-primary">Move</button>
-                                        <button class="btn btn-sm btn-outline-danger delete-sample-btn" data-sample-id="{{ sample.ID|replace('SMP-', '') }}">Delete</button>
                                     </td>
                                 </tr>
                                 {% endfor %}

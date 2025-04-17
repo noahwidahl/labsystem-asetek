@@ -42,7 +42,8 @@ function setupContainerDetailButtons() {
     });
 }
 
-function loadContainerDetails(containerId) {
+// Make the function globally available
+window.loadContainerDetails = function(containerId) {
     // Clear previous content
     document.getElementById('container-id').textContent = '-';
     document.getElementById('container-description').textContent = '-';
@@ -85,22 +86,63 @@ function loadContainerDetails(containerId) {
                         document.getElementById('container-location').textContent = 'Error loading location';
                     });
                 
-                // Display samples
+                // Display samples with more detail
                 if (data.samples && data.samples.length > 0) {
-                    let samplesHtml = '<ul class="list-group">';
+                    let samplesHtml = '<div class="table-responsive"><table class="table table-sm table-hover">';
+                    samplesHtml += `
+                        <thead>
+                            <tr>
+                                <th>Sample ID</th>
+                                <th>Description</th>
+                                <th>Part Number</th>
+                                <th>Quantity</th>
+                                <th>Registered</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                    `;
+                    
                     data.samples.forEach(sample => {
+                        const sampleId = sample.SampleID;
+                        const sampleIdFormatted = `SMP-${sampleId}`;
+                        
                         samplesHtml += `
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>${sample.SampleID || `SMP-${sample.SampleID}`}</strong>: ${sample.Description || '-'}
-                                    ${sample.LocationName ? `<div class="text-muted small">Location: ${sample.LocationName}</div>` : ''}
-                                </div>
-                                <span class="badge bg-primary rounded-pill">${sample.Amount || 1}</span>
-                            </li>
+                            <tr>
+                                <td>${sampleIdFormatted}</td>
+                                <td>${sample.Description || '-'}</td>
+                                <td>${sample.PartNumber || '-'}</td>
+                                <td>${sample.Amount} ${sample.Unit || 'pcs'}</td>
+                                <td>${sample.RegisteredDate || '-'}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-secondary sample-details-btn" 
+                                           data-sample-id="${sampleId}">
+                                        Details
+                                    </button>
+                                </td>
+                            </tr>
                         `;
                     });
-                    samplesHtml += '</ul>';
+                    
+                    samplesHtml += '</tbody></table></div>';
                     document.getElementById('container-samples-list').innerHTML = samplesHtml;
+                    
+                    // Add event listeners to the sample detail buttons
+                    document.querySelectorAll('#container-samples-list .sample-details-btn').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const sampleId = this.dataset.sampleId;
+                            if (sampleId) {
+                                // Hide container details modal
+                                const containerModal = bootstrap.Modal.getInstance(document.getElementById('containerDetailsModal'));
+                                if (containerModal) containerModal.hide();
+                                
+                                // Show sample details modal
+                                loadSampleDetails(sampleId);
+                                const sampleModal = new bootstrap.Modal(document.getElementById('sampleDetailsModal'));
+                                sampleModal.show();
+                            }
+                        });
+                    });
                 } else {
                     document.getElementById('container-samples-list').innerHTML = 
                         '<p class="text-center text-muted">No samples in this container</p>';

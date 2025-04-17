@@ -873,6 +873,147 @@ def init_sample(blueprint, mysql):
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500
             
+    @blueprint.route('/api/samples/<int:sample_id>', methods=['GET'])
+    def get_sample_details(sample_id):
+        """
+        Get detailed information about a specific sample
+        """
+        try:
+            # Use string to avoid %d bytes error
+            sample_id_str = str(sample_id)
+            
+            cursor = mysql.connection.cursor()
+            
+            # Get sample basic info
+            cursor.execute("""
+                SELECT 
+                    s.SampleID,
+                    s.PartNumber,
+                    s.Description,
+                    s.Barcode,
+                    s.Status,
+                    r.Notes as Comments,
+                    CASE
+                        WHEN un.UnitName IS NULL THEN 'pcs'
+                        WHEN LOWER(un.UnitName) = 'stk' THEN 'pcs'
+                        ELSE un.UnitName
+                    END as Unit,
+                    sp.SupplierName as Supplier,
+                    r.TrackingNumber,
+                    r.ReceptionNumber,
+                    DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y %H:%i') as RegisteredDate,
+                    u.Name as RegisteredBy,
+                    ss.AmountRemaining as Amount,
+                    sl.LocationName as Location,
+                    c.ContainerID
+                FROM Sample s
+                JOIN Reception r ON s.ReceptionID = r.ReceptionID
+                LEFT JOIN User u ON r.ReceivedBy = u.UserID
+                LEFT JOIN Supplier sp ON r.SupplierID = sp.SupplierID
+                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                LEFT JOIN ContainerSample cs ON ss.StorageID = cs.SampleStorageID
+                LEFT JOIN Container c ON cs.ContainerID = c.ContainerID
+                LEFT JOIN Unit un ON s.UnitID = un.UnitID
+                WHERE s.SampleID = """ + sample_id_str)
+            
+            sample_result = cursor.fetchone()
+            
+            if not sample_result:
+                return jsonify({
+                    'success': False,
+                    'error': f'Sample with ID {sample_id} not found'
+                }), 404
+                
+            # Get column names
+            columns = [col[0] for col in cursor.description]
+            sample = dict(zip(columns, sample_result))
+            
+            # Convert all numeric and boolean values to appropriate types
+            # Ensure SampleID is a string
+            if 'SampleID' in sample and sample['SampleID'] is not None:
+                sample['SampleID'] = str(sample['SampleID'])
+                
+            # Ensure Amount is a number
+            if 'Amount' in sample and sample['Amount'] is not None:
+                try:
+                    sample['Amount'] = float(sample['Amount'])
+                except (ValueError, TypeError):
+                    # If conversion fails, use a default value
+                    sample['Amount'] = 0
+                    
+            # Ensure ContainerID is converted if present
+            if 'ContainerID' in sample and sample['ContainerID'] is not None:
+                try:
+                    sample['ContainerID'] = int(sample['ContainerID'])
+                except (ValueError, TypeError):
+                    sample['ContainerID'] = None
+                sample['Amount'] = float(sample['Amount'])
+            
+            # Get sample properties (if any)
+            cursor.execute("""
+                SELECT PropertyName, PropertyValue 
+                FROM SampleProperty 
+                WHERE SampleID = """ + sample_id_str)
+            
+            properties = []
+            for row in cursor.fetchall():
+                properties.append({
+                    'PropertyName': row[0],
+                    'PropertyValue': row[1]
+                })
+            
+            # Get sample history
+            cursor.execute("""
+                SELECT 
+                    h.LogID,
+                    DATE_FORMAT(h.Timestamp, '%d-%m-%Y %H:%i') as Timestamp,
+                    h.ActionType,
+                    u.Name as UserName,
+                    h.Notes
+                FROM History h
+                LEFT JOIN User u ON h.UserID = u.UserID
+                WHERE h.SampleID = """ + sample_id_str + """
+                ORDER BY h.Timestamp DESC
+            """)
+            
+            history_cols = [col[0] for col in cursor.description]
+            history = []
+            
+            # Process history records with properly formatted values
+            for row in cursor.fetchall():
+                history_dict = dict(zip(history_cols, row))
+                
+                # Ensure LogID is an integer
+                if 'LogID' in history_dict and history_dict['LogID'] is not None:
+                    try:
+                        history_dict['LogID'] = int(history_dict['LogID'])
+                    except (ValueError, TypeError):
+                        pass
+                        
+                # Ensure timestamp is a string
+                if 'Timestamp' in history_dict and history_dict['Timestamp'] is not None:
+                    history_dict['Timestamp'] = str(history_dict['Timestamp'])
+                    
+                history.append(history_dict)
+            
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'sample': sample,
+                'properties': properties,
+                'history': history
+            })
+        except Exception as e:
+            print(f"API error getting sample details: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+    
     @blueprint.route('/disposal')
     def disposal_page():
         """
