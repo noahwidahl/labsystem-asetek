@@ -287,6 +287,9 @@ class SampleService:
             else:
                 package_count = 1
                 
+            # Save original package count to handle amount calculations correctly
+            original_package_count = package_count
+                
             # If using existing container, force package count to 1
             if sample_data.get('useExistingContainer', False):
                 package_count = 1
@@ -334,17 +337,34 @@ class SampleService:
                 
                 # Calculate amount per package
                 total_amount = int(sample_data.get('totalAmount', 0))
-                # Handle amount differently for multi-container vs. standard
+                
+                # Handle amount differently based on registration type
+                
+                # Case 1: Multiple containers (one per package)
                 if create_multi_containers:
                     # For multiple containers, each sample gets the amount per package directly
                     amount_per_package = int(sample_data.get('amountPerPackage', 1))
                     print(f"DEBUG: Package {i+1} of {package_count} with createMultipleContainers=True gets amount={amount_per_package}")
+                
+                # Case 2: Multiple identical samples - direct storage or single container
+                elif is_multi_package:
+                    # Get amount per package from form input
+                    amount_per_package = int(sample_data.get('amountPerPackage', 1))
+                    
+                    # If original package count was modified for container handling,
+                    # we need to keep the original amount per package from the form
+                    if package_count != original_package_count:
+                        print(f"DEBUG: Multiple identical samples using original amount per package: {amount_per_package}")
+                    else:
+                        print(f"DEBUG: Using standard amount per package: {amount_per_package}")
+                
+                # Case 3: Standard single sample
                 else:
-                    # Standard handling
-                    amount_per_package = int(sample_data.get('amountPerPackage', total_amount // package_count)) if is_multi_package else total_amount
+                    # Standard single sample handling
+                    amount_per_package = total_amount
                     
                     # Adjust last package if there's a remainder
-                    if i == package_count - 1 and not is_multi_package and total_amount % package_count != 0:
+                    if i == package_count - 1 and total_amount % package_count != 0:
                         amount_per_package += total_amount % package_count
                         
                 print(f"DEBUG: Using amount {amount_per_package} for package {i+1} of {package_count}")

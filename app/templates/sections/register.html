@@ -674,6 +674,13 @@
                     formData.createMultipleContainers = true;
                     formData.isMultiPackage = true;  // CRITICAL: Explicitly set this flag to true
                     formData.sampleType = 'multiple'; // CRITICAL: Ensure backend knows this is multiple samples
+                    formData.multiContainerOption = 'multiple'; // Set this flag for API compatibility
+                    
+                    // Include any additional flags from storage grid validation
+                    if (window._multipleContainersFormData) {
+                        Object.assign(formData, window._multipleContainersFormData);
+                        console.log("DEBUG: Merged additional flags from storage grid validation:", window._multipleContainersFormData);
+                    }
                     
                     // Get container description and log it for debugging
                     const containerDesc = document.getElementById('containerDescription')?.value || '';

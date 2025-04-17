@@ -183,6 +183,30 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
                             alert(`Error: Please select a storage location for each container. You need to select ${packageCount} locations (one for each package).`);
                             return; // Prevent form submission
                         }
+                        
+                        // Also verify that we've set the amountPerPackage correctly
+                        const amountPerPackage = parseInt(document.querySelector('[name="amountPerPackage"]')?.value) || 1;
+                        if (amountPerPackage < 1) {
+                            alert("Error: Amount per package must be at least 1.");
+                            // Focus the field if possible
+                            document.querySelector('[name="amountPerPackage"]')?.focus();
+                            return; // Prevent form submission
+                        }
+                        
+                        // Make sure multiple containers flag is explicitly set for form submission
+                        // Different parts of the code may check for different flags
+                        // This ensures the key flags all have consistent values
+                        console.log("DEBUG: Setting multiple containers flags for submission");
+                        
+                        // Set all related flags consistently
+                        const formData = {
+                            // Set this explicitly to ensure it's sent
+                            createMultipleContainers: true,
+                            multiContainerOption: 'multiple'
+                        };
+                        
+                        // The main form submission will include these with the form data
+                        window._multipleContainersFormData = formData;
                     }
                     
                     // Check if the function exists before calling it

@@ -69,6 +69,32 @@ function setupSampleTypeOptions() {
                 const isMultiple = sampleType === 'multiple';
                 multipleContainerOptions.classList.toggle('d-none', !isMultiple);
                 singleContainerOptions.classList.toggle('d-none', isMultiple);
+                
+                // When switching to multiple samples with container storage
+                if (isMultiple) {
+                    // Update the container location visibility
+                    if (typeof updateContainerLocationVisibility === 'function') {
+                        console.log("Triggering container location visibility update");
+                        updateContainerLocationVisibility();
+                    }
+                    
+                    // Ensure package count and amount per package fields are properly initialized
+                    const packageCountInput = document.querySelector('[name="packageCount"]');
+                    const amountPerPackageInput = document.querySelector('[name="amountPerPackage"]');
+                    
+                    if (packageCountInput && amountPerPackageInput) {
+                        if (!packageCountInput.value || packageCountInput.value < 1) {
+                            packageCountInput.value = 1;
+                        }
+                        
+                        if (!amountPerPackageInput.value || amountPerPackageInput.value < 1) {
+                            amountPerPackageInput.value = 1;
+                        }
+                        
+                        // Refresh total calculation
+                        setTimeout(updateTotalAmount, 0);
+                    }
+                }
             }
         }
         
@@ -205,11 +231,17 @@ function updateTotalAmount() {
     
     if (!packageCountInput || !amountPerPackageInput || !totalAmountInput) return;
     
+    // Get values with fallback to 0 if invalid
     const packageCount = parseInt(packageCountInput.value) || 0;
     const amountPerPackage = parseInt(amountPerPackageInput.value) || 0;
+    
+    // Calculate total amount
     const total = packageCount * amountPerPackage;
     
+    // Always update the total amount input
     totalAmountInput.value = total;
+    
+    // Update UI elements if they exist
     if (calculatedTotal) {
         calculatedTotal.textContent = total;
     }
@@ -218,4 +250,13 @@ function updateTotalAmount() {
     if (totalCounter) {
         totalCounter.textContent = total;
     }
+    
+    // Check the sample type and storage option for container-related logic
+    const isSampleTypeMultiple = document.querySelector('input[name="sampleTypeOption"]:checked')?.value === 'multiple';
+    const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value;
+    const oneContainerPerPackage = document.getElementById('oneContainerPerPackage')?.checked;
+    
+    // Log for debugging
+    console.log(`Total calculation: ${packageCount} packages × ${amountPerPackage} per package = ${total}`);
+    console.log(`Sample type: ${isSampleTypeMultiple ? 'multiple' : 'single'}, Storage: ${storageOption}, One container per package: ${oneContainerPerPackage}`);
 }

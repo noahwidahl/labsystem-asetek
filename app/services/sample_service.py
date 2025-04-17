@@ -281,15 +281,14 @@ class SampleService:
             # Check for multi-container flag (one container per package)
             create_multi_containers = sample_data.get('createMultipleContainers', False)
             
-            # Log all container-related flags for debugging
-            print(f"DEBUG: Container flags - isMultiPackage: {is_multi_package}, createMultipleContainers: {create_multi_containers}")
-            print(f"DEBUG: Container data - {sample_data.get('containerLocations', 'No container locations')}")
-            
             # Use package count from the data
             if is_multi_package:
                 package_count = int(sample_data.get('packageCount', 1))
             else:
                 package_count = 1
+                
+            # Save original package count to handle amount calculations correctly
+            original_package_count = package_count
                 
             # If using existing container, force package count to 1
             if sample_data.get('useExistingContainer', False):
@@ -298,10 +297,13 @@ class SampleService:
             elif sample_data.get('createMultipleContainers', False):
                 # Keep the package count as is - we need one sample per container
                 print(f"DEBUG: Creating multiple containers (one per package). Package count: {package_count}")
-            # If using one container for all samples, use package count = 1
+            # If using one container for all samples, we still need to create all samples
+            # but we'll put them all in the same container
             elif sample_data.get('createSingleContainer', False) and is_multi_package:
-                print(f"DEBUG: Creating a single container for multiple samples, setting package count to 1")
-                package_count = 1
+                print(f"DEBUG: Creating a single container for multiple samples, keeping package_count={package_count}")
+                # Don't modify package_count here, we still want to create all samples
+                # Just set a flag to indicate we're using a single container for all packages
+                sample_data['useSingleContainerForAll'] = True
                 
             print(f"DEBUG: is_multi_package={is_multi_package}, package_count={package_count}, createMultipleContainers={create_multi_containers}, useExistingContainer={sample_data.get('useExistingContainer', False)}")
             
@@ -338,29 +340,31 @@ class SampleService:
                 
                 # Calculate amount per package
                 total_amount = int(sample_data.get('totalAmount', 0))
-                # Handle amount differently based on what type of registration we're doing
                 
-                # Initialize with a default that will be overridden
-                amount_per_package = 0
+                # Handle amount differently based on registration type
                 
                 # Case 1: Multiple containers (one per package)
                 if create_multi_containers:
-                    # For one container per package, each sample should have the amountPerPackage directly
-                    # This is crucial to ensure each sample+container has the right amount
+                    # For multiple containers, each sample gets the amount per package directly
                     amount_per_package = int(sample_data.get('amountPerPackage', 1))
                     print(f"DEBUG: Package {i+1} of {package_count} with createMultipleContainers=True gets amount={amount_per_package}")
                 
-                # Case 2: Multiple packages with multiple samples
+                # Case 2: Multiple identical samples - direct storage or single container
                 elif is_multi_package:
-                    # For standard multiple samples (no multiple containers)
-                    amount_per_package = int(sample_data.get('amountPerPackage', 1)) 
-                    print(f"DEBUG: Package {i+1} of {package_count} multi-package case gets amount={amount_per_package}")
+                    # Get amount per package from form input
+                    amount_per_package = int(sample_data.get('amountPerPackage', 1))
+                    
+                    # If original package count was modified for container handling,
+                    # we need to keep the original amount per package from the form
+                    if package_count != original_package_count:
+                        print(f"DEBUG: Multiple identical samples using original amount per package: {amount_per_package}")
+                    else:
+                        print(f"DEBUG: Using standard amount per package: {amount_per_package}")
                 
                 # Case 3: Standard single sample
                 else:
-                    # Single sample - use total amount directly
+                    # Standard single sample handling
                     amount_per_package = total_amount
-                    print(f"DEBUG: Single sample case uses total amount={amount_per_package}")
                     
                     # Adjust last package if there's a remainder
                     if i == package_count - 1 and total_amount % package_count != 0:
@@ -560,6 +564,11 @@ class SampleService:
                             container_id = sample_data.get('existingContainerId')
                             print(f"DEBUG: Using existing container with ID: {container_id}")
                             container_ids.append(container_id)
+                        # Check if we're using one container for all samples and this is not the first sample
+                        elif sample_data.get('useSingleContainerForAll') == True and i > 0 and len(container_ids) > 0:
+                            # Use the first container we already created for all samples
+                            container_id = container_ids[0]
+                            print(f"DEBUG: Using single container for all samples - reusing container ID: {container_id}")
                         else:
                             # Create new container
                             print(f"DEBUG: Creating container for package {i+1}")
@@ -628,14 +637,23 @@ class SampleService:
                                     container_type_id = default_type_result[0]
                             
                             # Get capacity from parameters or use amount_per_package
+                            # If we're using a single container for all packages, use total amount
+                            if sample_data.get('useSingleContainerForAll', False):
+                                total_amount = int(sample_data.get('totalAmount', 0))
+                                capacity = total_amount
+                                print(f"DEBUG: Using total amount {capacity} as capacity for single container for all samples")
                             # If creating a new container type, use its capacity value
-                            if sample_data.get('newContainerType'):
+                            elif sample_data.get('newContainerType'):
                                 capacity = sample_data.get('newContainerType').get('capacity') or amount_per_package
                                 print(f"DEBUG: Using capacity {capacity} from new container type for container")
                             # If user specified container capacity, use that
                             elif sample_data.get('containerCapacity'):
                                 capacity = sample_data.get('containerCapacity')
                                 print(f"DEBUG: Using user-specified capacity {capacity} for container")
+                            # For multiple containers mode (one per package), always use amount_per_package
+                            elif sample_data.get('createMultipleContainers', False):
+                                capacity = int(sample_data.get('amountPerPackage', 1))
+                                print(f"DEBUG: Using amount per package {capacity} as capacity for container in multiple containers mode")
                             # Otherwise use the amount per package
                             else:
                                 capacity = amount_per_package
@@ -650,16 +668,12 @@ class SampleService:
                                 # In "one container per package" mode, we need to use the specific location for each package
                                 container_locations = sample_data.get('containerLocations', [])
                                 
-                                print(f"DEBUG: Available container locations: {container_locations}")
-                                
                                 if container_locations and len(container_locations) > 0:
                                     # Try to find location for this package
                                     matching_location = next((cl for cl in container_locations if str(cl.get('packageNumber', '')) == str(i+1)), None)
                                     if matching_location:
                                         container_location_id = matching_location.get('locationId')
                                         print(f"DEBUG: Using special container location {container_location_id} for package {i+1} (multiple containers mode)")
-                                    else:
-                                        print(f"WARNING: No matching container location found for package {i+1} in containerLocations array")
                             
                             # If no location found yet, try packageLocations as fallback
                             if not container_location_id and sample_data.get('packageLocations'):

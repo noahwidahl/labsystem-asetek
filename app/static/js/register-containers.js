@@ -126,10 +126,42 @@ function setupContainerOptions() {
     // Handle multiple container options
     if (oneContainerForAll && oneContainerPerPackage) {
         oneContainerForAll.addEventListener('change', function() {
+            // Update container location visibility if function is available
+            if (typeof updateContainerLocationVisibility === 'function') {
+                updateContainerLocationVisibility();
+            }
+            
+            // Always update storage instructions
             updateStorageInstructions();
         });
         
         oneContainerPerPackage.addEventListener('change', function() {
+            // Update container location visibility if function is available
+            if (typeof updateContainerLocationVisibility === 'function') {
+                updateContainerLocationVisibility();
+            }
+            
+            // Ensure package count and amount per package are properly filled in
+            const packageCountInput = document.querySelector('[name="packageCount"]');
+            const amountPerPackageInput = document.querySelector('[name="amountPerPackage"]');
+            
+            if (packageCountInput && amountPerPackageInput) {
+                // Ensure we have valid values
+                if (!packageCountInput.value || parseInt(packageCountInput.value) < 1) {
+                    packageCountInput.value = 1;
+                }
+                
+                if (!amountPerPackageInput.value || parseInt(amountPerPackageInput.value) < 1) {
+                    amountPerPackageInput.value = 1;
+                }
+                
+                // Update the total amount calculation
+                if (typeof updateTotalAmount === 'function') {
+                    updateTotalAmount();
+                }
+            }
+            
+            // Always update storage instructions
             updateStorageInstructions();
         });
     }

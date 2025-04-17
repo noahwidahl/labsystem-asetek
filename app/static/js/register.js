@@ -15,6 +15,9 @@ window.registerApp = {
     selectedContainerLocation: null,
     skipLocationSelection: false,
     REGISTRATION_EXPIRY_MONTHS: 2,
+    // Container-related state
+    containerIds: [],
+    oneContainerPerPackage: false,
     
     // Store module states
     modulesLoaded: {
