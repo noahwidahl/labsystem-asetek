@@ -34,12 +34,13 @@ def init_test(blueprint, mysql):
                     s.SampleID, 
                     s.Description, 
                     ss.AmountRemaining, 
-                    sl.LocationName
+                    sl.LocationName,
+                    s.Status
                 FROM Sample s
                 JOIN SampleStorage ss ON s.SampleID = ss.SampleID
                 JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
                 WHERE ss.AmountRemaining > 0
-                AND s.Status = 'In Storage'
+                AND (s.Status = 'In Storage' OR s.Status = 'In Test') 
             """)
             
             samples_data = cursor.fetchall()
@@ -50,7 +51,8 @@ def init_test(blueprint, mysql):
                     "SampleIDFormatted": f"SMP-{sample[0]}",
                     "Description": sample[1],
                     "AmountRemaining": sample[2],
-                    "LocationName": sample[3]
+                    "LocationName": sample[3],
+                    "Status": sample[4] if len(sample) > 4 else "In Storage"
                 })
             
             # Get users
@@ -349,6 +351,29 @@ def init_test(blueprint, mysql):
             return jsonify(result)
         except Exception as e:
             print(f"API error disposing all samples: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @blueprint.route('/api/returnAllTestSamples', methods=['POST'])
+    def return_all_test_samples():
+        try:
+            data = request.json
+            test_id = data.get('testId')
+            
+            if not test_id:
+                return jsonify({'success': False, 'error': 'Test ID is required'}), 400
+            
+            # Get current user
+            current_user = get_current_user()
+            user_id = current_user['UserID']
+            
+            # Return all samples to storage
+            result = test_service.return_all_test_samples(test_id, user_id)
+            
+            return jsonify(result)
+        except Exception as e:
+            print(f"API error returning samples to storage: {e}")
             import traceback
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500

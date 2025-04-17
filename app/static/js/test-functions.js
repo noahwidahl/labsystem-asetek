@@ -231,7 +231,11 @@ function populateIterationSampleTable(samples) {
             </td>
             <td>${sample.SampleIDFormatted}</td>
             <td>${sample.PartNumber || '-'}</td>
-            <td>${sample.Description}</td>
+            <td>
+                ${sample.Description}
+                ${sample.Status === 'In Test' ? 
+                    '<span class="badge bg-warning text-dark ms-2">In Test</span>' : ''}
+            </td>
             <td>${sample.LocationName || 'Unknown'}</td>
         `;
         
@@ -240,6 +244,9 @@ function populateIterationSampleTable(samples) {
             // For unique samples with serial numbers, offer dropdowns instead of amount
             rowHtml += `
                 <td>
+                    <div class="d-flex align-items-center mb-2">
+                        <span class="badge bg-success me-2">${sample.AmountRemaining} Available</span>
+                    </div>
                     <div class="serial-number-selector" data-id="${sample.SampleID}" style="display: none;">
                         <select class="form-select form-select-sm" multiple size="3">
                             ${sample.SerialNumbersList.map(sn => `<option value="${sn}">${sn}</option>`).join('')}
@@ -247,8 +254,11 @@ function populateIterationSampleTable(samples) {
                         <small class="form-text text-muted">Select serial numbers</small>
                     </div>
                     <div class="amount-selector">
-                        <input type="number" class="form-control form-control-sm" name="sampleAmount" 
-                               value="1" min="1" max="${sample.AmountRemaining}" data-id="${sample.SampleID}">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">Use:</span>
+                            <input type="number" class="form-control form-control-sm" name="sampleAmount" 
+                                   value="1" min="1" max="${sample.AmountRemaining}" data-id="${sample.SampleID}">
+                        </div>
                     </div>
                 </td>
             `;
@@ -256,13 +266,27 @@ function populateIterationSampleTable(samples) {
             // For standard samples, just show amount selector
             rowHtml += `
                 <td>
-                    <input type="number" class="form-control form-control-sm" name="sampleAmount" 
-                           value="1" min="1" max="${sample.AmountRemaining}" data-id="${sample.SampleID}">
+                    <div class="d-flex align-items-center mb-2">
+                        <span class="badge bg-success me-2">${sample.AmountRemaining} Available</span>
+                    </div>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Use:</span>
+                        <input type="number" class="form-control form-control-sm" name="sampleAmount" 
+                               value="1" min="1" max="${sample.AmountRemaining}" data-id="${sample.SampleID}">
+                    </div>
                 </td>
             `;
         }
         
         row.innerHTML = rowHtml;
+        
+        // Add amount tooltip to the description cell for visibility
+        const descCell = row.querySelector('td:nth-child(4)');
+        if (descCell) {
+            descCell.title = `Available quantity: ${sample.AmountRemaining || 0} ${sample.Unit || 'pcs'}`;
+            descCell.style.cursor = 'help';
+        }
+        
         tableBody.appendChild(row);
         
         // Add event listeners for unique sample checkboxes
@@ -571,7 +595,11 @@ function populateSampleTable(samples) {
             </td>
             <td>${sample.SampleIDFormatted}</td>
             <td>${sample.PartNumber || '-'}</td>
-            <td>${sample.Description}</td>
+            <td>
+                ${sample.Description}
+                ${sample.Status === 'In Test' ? 
+                    '<span class="badge bg-warning text-dark ms-2">In Test</span>' : ''}
+            </td>
             <td>${sample.LocationName || 'Unknown'}</td>
         `;
         
@@ -580,6 +608,9 @@ function populateSampleTable(samples) {
             // For unique samples with serial numbers, offer dropdowns instead of amount
             rowHtml += `
                 <td>
+                    <div class="d-flex align-items-center mb-2">
+                        <span class="badge bg-success me-2">${sample.AmountRemaining} Available</span>
+                    </div>
                     <div class="serial-number-selector" data-id="${sample.SampleID}" style="display: none;">
                         <select class="form-select form-select-sm" multiple size="3">
                             ${sample.SerialNumbersList.map(sn => `<option value="${sn}">${sn}</option>`).join('')}
@@ -587,8 +618,11 @@ function populateSampleTable(samples) {
                         <small class="form-text text-muted">Select serial numbers</small>
                     </div>
                     <div class="amount-selector">
-                        <input type="number" class="form-control form-control-sm" name="sampleAmount" 
-                               value="1" min="1" max="${sample.AmountRemaining}" data-id="${sample.SampleID}">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">Use:</span>
+                            <input type="number" class="form-control form-control-sm" name="sampleAmount" 
+                                   value="1" min="1" max="${sample.AmountRemaining}" data-id="${sample.SampleID}">
+                        </div>
                     </div>
                 </td>
             `;
@@ -596,13 +630,27 @@ function populateSampleTable(samples) {
             // For standard samples, just show amount selector
             rowHtml += `
                 <td>
-                    <input type="number" class="form-control form-control-sm" name="sampleAmount" 
-                           value="1" min="1" max="${sample.AmountRemaining}" data-id="${sample.SampleID}">
+                    <div class="d-flex align-items-center mb-2">
+                        <span class="badge bg-success me-2">${sample.AmountRemaining} Available</span>
+                    </div>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Use:</span>
+                        <input type="number" class="form-control form-control-sm" name="sampleAmount" 
+                               value="1" min="1" max="${sample.AmountRemaining}" data-id="${sample.SampleID}">
+                    </div>
                 </td>
             `;
         }
         
         row.innerHTML = rowHtml;
+        
+        // Add amount tooltip to the description cell for visibility
+        const descCell = row.querySelector('td:nth-child(4)');
+        if (descCell) {
+            descCell.title = `Available quantity: ${sample.AmountRemaining || 0} ${sample.Unit || 'pcs'}`;
+            descCell.style.cursor = 'help';
+        }
+        
         tableBody.appendChild(row);
         
         // Add event listeners for unique sample checkboxes
@@ -772,16 +820,29 @@ function completeTest(testId, testNo) {
             hideLoadingOverlay();
             
             if (data.success) {
-                showSuccessMessage(`Test ${data.test_id || displayId} has been completed successfully!`);
+                // Test completed successfully
+                showSuccessMessage(`Test ${data.test_id || displayId} has been completed!`);
                 
-                // Close modal if open
-                const modal = bootstrap.Modal.getInstance(document.getElementById('testDetailsModal'));
-                if (modal) modal.hide();
+                // Close test details modal
+                const testDetailsModal = bootstrap.Modal.getInstance(document.getElementById('testDetailsModal'));
+                if (testDetailsModal) {
+                    testDetailsModal.hide();
+                }
                 
-                // Reload the page after a short delay
+                // Store test ID for disposition and show the disposition modal
+                // This is critical - we need to make sure this happens
+                console.log("Preparing to show sample disposition modal for test", testId);
+                document.getElementById('completedTestId').value = testId;
+                
+                // Wait a moment for the first modal to close, then show disposition modal
                 setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
+                    console.log("Showing sample disposition modal now");
+                    const dispositionModal = new bootstrap.Modal(document.getElementById('sampleDispositionModal'));
+                    dispositionModal.show();
+                    
+                    // Setup event handlers for the buttons
+                    setupDispositionHandlers(testId, data.test_id || displayId);
+                }, 300);
             } else {
                 showErrorMessage(`Error while finishing test: ${data.error}`);
             }
@@ -1048,7 +1109,10 @@ function populateTestDetailsModal(test) {
             const partInfo = sample.PartNumber ? `(${sample.PartNumber})` : '';
             row.innerHTML = `
                 <td>${sample.GeneratedIdentifier || `${test.TestNo}_${index + 1}`}</td>
-                <td>${sample.Description || 'Not specified'} ${partInfo}</td>
+                <td>
+                    ${sample.Description || 'Not specified'} ${partInfo}
+                    <span class="badge bg-warning text-dark ms-2">In Test</span>
+                </td>
                 <td>SMP-${sample.OriginalSampleID || 'N/A'}</td>
                 <td>
                     <div class="btn-group">
@@ -1318,6 +1382,109 @@ function confirmAction(message, callback) {
     
     // Show the modal
     bsModal.show();
+}
+
+// Function to setup event handlers for the disposition buttons
+function setupDispositionHandlers(testId, displayId) {
+    console.log("Setting up disposition handlers for test", testId);
+    
+    // Setup event handlers for disposition buttons
+    const disposeAllBtn = document.getElementById('disposeAllSamplesBtn');
+    const returnAllBtn = document.getElementById('returnAllSamplesBtn');
+    const decideIndividuallyBtn = document.getElementById('decideIndividuallyBtn');
+    
+    if (!disposeAllBtn || !returnAllBtn || !decideIndividuallyBtn) {
+        console.error("Could not find disposition buttons");
+        return;
+    }
+    
+    // Remove any existing event listeners
+    disposeAllBtn.replaceWith(disposeAllBtn.cloneNode(true));
+    returnAllBtn.replaceWith(returnAllBtn.cloneNode(true));
+    decideIndividuallyBtn.replaceWith(decideIndividuallyBtn.cloneNode(true));
+    
+    // Re-get the buttons after replacing
+    const newDisposeAllBtn = document.getElementById('disposeAllSamplesBtn');
+    const newReturnAllBtn = document.getElementById('returnAllSamplesBtn');
+    const newDecideIndividuallyBtn = document.getElementById('decideIndividuallyBtn');
+    
+    // Add event listeners
+    newDisposeAllBtn.addEventListener('click', function() {
+        console.log("Dispose all samples button clicked for test", testId);
+        disposeAllTestSamples(testId);
+        
+        // Close the modal
+        const dispositionModal = bootstrap.Modal.getInstance(document.getElementById('sampleDispositionModal'));
+        if (dispositionModal) {
+            dispositionModal.hide();
+        }
+    });
+    
+    newReturnAllBtn.addEventListener('click', function() {
+        console.log("Return all samples button clicked for test", testId);
+        returnAllSamplesToStorage(testId);
+        
+        // Close the modal
+        const dispositionModal = bootstrap.Modal.getInstance(document.getElementById('sampleDispositionModal'));
+        if (dispositionModal) {
+            dispositionModal.hide();
+        }
+    });
+    
+    newDecideIndividuallyBtn.addEventListener('click', function() {
+        console.log("Decide individually button clicked for test", testId);
+        // Close disposition modal
+        const dispositionModal = bootstrap.Modal.getInstance(document.getElementById('sampleDispositionModal'));
+        if (dispositionModal) {
+            dispositionModal.hide();
+        }
+        
+        // Show test details modal again
+        setTimeout(() => {
+            showTestDetails(testId);
+        }, 300);
+    });
+}
+
+// Function to return all samples to storage
+function returnAllSamplesToStorage(testId) {
+    // Show loading indicator
+    showLoadingOverlay();
+    
+    fetch('/api/returnAllTestSamples', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ testId: testId })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Server responded with status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        // Hide loading indicator
+        hideLoadingOverlay();
+        
+        if (data.success) {
+            showSuccessMessage(`All samples returned to storage successfully!`);
+            
+            // Reload the page after a short delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showErrorMessage(`Error returning samples: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        // Hide loading indicator
+        hideLoadingOverlay();
+        showErrorMessage(`An error occurred: ${error}`);
+        console.error("Error returning samples to storage:", error);
+    });
 }
 
 // Initialiser funktioner når siden indlæses

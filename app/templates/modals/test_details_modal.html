@@ -62,3 +62,52 @@
         </div>
     </div>
 </div>
+
+<!-- Sample Disposition Modal -->
+<div class="modal" id="sampleDispositionModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h4 class="modal-title">
+                    <i class="fas fa-tasks me-2"></i>
+                    Sample Disposition
+                </h4>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-info-circle fa-2x me-3"></i>
+                        <div>
+                            <h5 class="mb-1">Test Completed Successfully</h5>
+                            <p class="mb-0">What would you like to do with the samples used in this test?</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <input type="hidden" id="completedTestId" value="">
+                
+                <div class="d-grid gap-3">
+                    <button type="button" class="btn btn-danger btn-lg py-3" id="disposeAllSamplesBtn">
+                        <i class="fas fa-trash-alt me-2"></i>
+                        Dispose All Samples
+                        <div class="small text-white-50 mt-1">Remove all samples from inventory</div>
+                    </button>
+                    
+                    <button type="button" class="btn btn-success btn-lg py-3" id="returnAllSamplesBtn">
+                        <i class="fas fa-archive me-2"></i>
+                        Return All Samples to Storage
+                        <div class="small text-white-50 mt-1">Return all samples to their original locations</div>
+                    </button>
+                    
+                    <div class="text-center mt-2">
+                        <button type="button" class="btn btn-outline-secondary" id="decideIndividuallyBtn">
+                            <i class="fas fa-tasks me-2"></i>
+                            Decide for Each Sample Individually
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -245,8 +245,115 @@ class TestService:
                             
                             samples_added += 1
                         
-                        # Update storage amount in a separate transaction
+                        # Instead of reducing the amount, create a duplicate sample with "In Test" status
                         with self.db.transaction() as cursor:
+                            # First get the sample details
+                            cursor.execute("""
+                                SELECT 
+                                    s.PartNumber,
+                                    s.Description,
+                                    s.UnitID,
+                                    s.OwnerID,
+                                    s.ReceptionID,
+                                    s.Type,
+                                    s.IsUnique
+                                FROM Sample s
+                                WHERE s.SampleID = %s
+                                LIMIT 1
+                            """, (sample_id,))
+                            
+                            sample_details = cursor.fetchone()
+                            if not sample_details:
+                                # Skip if sample details can't be found
+                                print(f"WARNING: Sample details not found for SampleID {sample_id}")
+                                continue
+                                
+                            sample_part_number = sample_details[0]
+                            sample_description = sample_details[1]
+                            sample_unit_id = sample_details[2]
+                            sample_owner_id = sample_details[3]
+                            sample_reception_id = sample_details[4]
+                            sample_type = sample_details[5] or 'multiple'
+                            sample_is_unique = sample_details[6] or 0
+                            
+                            # Get storage location information
+                            cursor.execute("""
+                                SELECT ss.LocationID, ss.ExpireDate
+                                FROM SampleStorage ss
+                                WHERE ss.SampleID = %s
+                                LIMIT 1
+                            """, (sample_id,))
+                            
+                            storage_info = cursor.fetchone()
+                            
+                            # Create timestamp for unique barcode
+                            import datetime
+                            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                            new_barcode = f"TEST-{sample_id}-{timestamp}"
+                            
+                            # Create a new sample with "In Test" status
+                            cursor.execute("""
+                                INSERT INTO Sample (
+                                    PartNumber,
+                                    Description,
+                                    Barcode,
+                                    Status,
+                                    Amount,
+                                    UnitID,
+                                    OwnerID,
+                                    ReceptionID,
+                                    Type,
+                                    IsUnique
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            """, (
+                                sample_part_number,
+                                sample_description,
+                                new_barcode,
+                                'In Test',
+                                amount,  # Set the amount being used in the test
+                                sample_unit_id,
+                                sample_owner_id,
+                                sample_reception_id,
+                                sample_type,
+                                sample_is_unique
+                            ))
+                            
+                            new_sample_id = cursor.lastrowid
+                            print(f"DEBUG: Created new 'In Test' sample with ID {new_sample_id}")
+                            
+                            # Create a special "Testing" location if it doesn't exist
+                            cursor.execute("""
+                                SELECT LocationID FROM StorageLocation 
+                                WHERE LocationName = 'Testing' 
+                                LIMIT 1
+                            """)
+                            
+                            testing_location = cursor.fetchone()
+                            if testing_location:
+                                testing_location_id = testing_location[0]
+                            else:
+                                # Create the Testing location
+                                cursor.execute("""
+                                    INSERT INTO StorageLocation (LocationName, LabID)
+                                    SELECT 'Testing', LabID FROM Lab LIMIT 1
+                                """)
+                                testing_location_id = cursor.lastrowid
+                                print(f"DEBUG: Created new Testing location with ID {testing_location_id}")
+                            
+                            # Create storage record for the test sample
+                            cursor.execute("""
+                                INSERT INTO SampleStorage (
+                                    SampleID,
+                                    LocationID,
+                                    AmountRemaining
+                                ) VALUES (%s, %s, %s)
+                            """, (
+                                new_sample_id,
+                                testing_location_id,
+                                amount
+                            ))
+                            
+                            # Also reduce the amount of the original sample in storage
                             cursor.execute("""
                                 UPDATE SampleStorage 
                                 SET AmountRemaining = AmountRemaining - %s
@@ -574,8 +681,115 @@ class TestService:
                             
                             samples_added += 1
                         
-                        # Update storage amount in a separate transaction
+                        # Instead of reducing the amount, create a duplicate sample with "In Test" status
                         with self.db.transaction() as cursor:
+                            # First get the sample details
+                            cursor.execute("""
+                                SELECT 
+                                    s.PartNumber,
+                                    s.Description,
+                                    s.UnitID,
+                                    s.OwnerID,
+                                    s.ReceptionID,
+                                    s.Type,
+                                    s.IsUnique
+                                FROM Sample s
+                                WHERE s.SampleID = %s
+                                LIMIT 1
+                            """, (sample_id,))
+                            
+                            sample_details = cursor.fetchone()
+                            if not sample_details:
+                                # Skip if sample details can't be found
+                                print(f"WARNING: Sample details not found for SampleID {sample_id}")
+                                continue
+                                
+                            sample_part_number = sample_details[0]
+                            sample_description = sample_details[1]
+                            sample_unit_id = sample_details[2]
+                            sample_owner_id = sample_details[3]
+                            sample_reception_id = sample_details[4]
+                            sample_type = sample_details[5] or 'multiple'
+                            sample_is_unique = sample_details[6] or 0
+                            
+                            # Get storage location information
+                            cursor.execute("""
+                                SELECT ss.LocationID, ss.ExpireDate
+                                FROM SampleStorage ss
+                                WHERE ss.SampleID = %s
+                                LIMIT 1
+                            """, (sample_id,))
+                            
+                            storage_info = cursor.fetchone()
+                            
+                            # Create timestamp for unique barcode
+                            import datetime
+                            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                            new_barcode = f"TEST-{sample_id}-{timestamp}"
+                            
+                            # Create a new sample with "In Test" status
+                            cursor.execute("""
+                                INSERT INTO Sample (
+                                    PartNumber,
+                                    Description,
+                                    Barcode,
+                                    Status,
+                                    Amount,
+                                    UnitID,
+                                    OwnerID,
+                                    ReceptionID,
+                                    Type,
+                                    IsUnique
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            """, (
+                                sample_part_number,
+                                sample_description,
+                                new_barcode,
+                                'In Test',
+                                amount,  # Set the amount being used in the test
+                                sample_unit_id,
+                                sample_owner_id,
+                                sample_reception_id,
+                                sample_type,
+                                sample_is_unique
+                            ))
+                            
+                            new_sample_id = cursor.lastrowid
+                            print(f"DEBUG: Created new 'In Test' sample with ID {new_sample_id}")
+                            
+                            # Create a special "Testing" location if it doesn't exist
+                            cursor.execute("""
+                                SELECT LocationID FROM StorageLocation 
+                                WHERE LocationName = 'Testing' 
+                                LIMIT 1
+                            """)
+                            
+                            testing_location = cursor.fetchone()
+                            if testing_location:
+                                testing_location_id = testing_location[0]
+                            else:
+                                # Create the Testing location
+                                cursor.execute("""
+                                    INSERT INTO StorageLocation (LocationName, LabID)
+                                    SELECT 'Testing', LabID FROM Lab LIMIT 1
+                                """)
+                                testing_location_id = cursor.lastrowid
+                                print(f"DEBUG: Created new Testing location with ID {testing_location_id}")
+                            
+                            # Create storage record for the test sample
+                            cursor.execute("""
+                                INSERT INTO SampleStorage (
+                                    SampleID,
+                                    LocationID,
+                                    AmountRemaining
+                                ) VALUES (%s, %s, %s)
+                            """, (
+                                new_sample_id,
+                                testing_location_id,
+                                amount
+                            ))
+                            
+                            # Also reduce the amount of the original sample in storage
                             cursor.execute("""
                                 UPDATE SampleStorage 
                                 SET AmountRemaining = AmountRemaining - %s
@@ -1431,4 +1645,113 @@ class TestService:
                 'success': True, 
                 'test_id': test_no,
                 'disposed_samples': disposed_samples
+            }
+    
+    def return_all_test_samples(self, test_id, user_id):
+        """Return all samples in a test to storage"""
+        # Check if test_id is an integer or a string
+        try:
+            test_id_int = int(test_id)
+            # If it's an integer, search by TestID
+            query = "SELECT TestID, TestNo FROM Test WHERE TestID = %s"
+            params = (test_id_int,)
+        except ValueError:
+            # If it's not an integer, search by TestNo
+            query = "SELECT TestID, TestNo FROM Test WHERE TestNo = %s"
+            params = (test_id,)
+        
+        result, _ = self.db.execute_query(query, params)
+        
+        if not result or len(result) == 0:
+            raise ValueError('Test not found')
+        
+        actual_test_id = result[0][0]
+        test_no = result[0][1]
+        
+        # Process returning all test samples to storage
+        with self.db.transaction() as cursor:
+            # Get all test samples
+            cursor.execute("""
+                SELECT ts.TestSampleID, ts.SampleID, ts.GeneratedIdentifier, s.Description
+                FROM TestSample ts
+                JOIN Sample s ON ts.SampleID = s.SampleID
+                WHERE ts.TestID = %s
+            """, (actual_test_id,))
+            
+            test_samples = cursor.fetchall()
+            
+            if not test_samples or len(test_samples) == 0:
+                raise ValueError('No samples found in this test')
+            
+            returned_samples = 0
+            
+            # Process each test sample
+            for sample in test_samples:
+                test_sample_id = sample[0]
+                sample_id = sample[1]
+                generated_identifier = sample[2]
+                description = sample[3]
+                
+                # Get the default storage location for this sample
+                cursor.execute("""
+                    SELECT LocationID, ExpireDate FROM SampleStorage
+                    WHERE SampleID = %s
+                    LIMIT 1
+                """, (sample_id,))
+                
+                storage_info = cursor.fetchone()
+                location_id = storage_info[0] if storage_info else 1  # Default location
+                expire_date = storage_info[1] if storage_info and len(storage_info) > 1 else None
+                
+                # Add back to sample storage
+                cursor.execute("""
+                    UPDATE SampleStorage 
+                    SET AmountRemaining = AmountRemaining + 1
+                    WHERE SampleID = %s AND LocationID = %s
+                    LIMIT 1
+                """, (sample_id, location_id))
+                
+                # Check if update affected any rows
+                if cursor.rowcount == 0:
+                    # Need to insert a new storage record
+                    cursor.execute("""
+                        INSERT INTO SampleStorage (SampleID, LocationID, AmountRemaining, ExpireDate)
+                        VALUES (%s, %s, %s, %s)
+                    """, (
+                        sample_id,
+                        location_id,
+                        1,  # Amount
+                        expire_date
+                    ))
+                
+                # Log in history
+                cursor.execute("""
+                    INSERT INTO History (Timestamp, ActionType, UserID, SampleID, TestID, LocationID, Notes)
+                    VALUES (NOW(), %s, %s, %s, %s, %s, %s)
+                """, (
+                    'Sample returned to storage',
+                    user_id,
+                    sample_id,
+                    actual_test_id,
+                    location_id,
+                    f"Test sample {generated_identifier} returned to storage after bulk return"
+                ))
+                
+                returned_samples += 1
+            
+            # Log bulk return
+            cursor.execute("""
+                INSERT INTO History (Timestamp, ActionType, UserID, TestID, Notes)
+                VALUES (NOW(), %s, %s, %s, %s)
+            """, (
+                'Bulk samples returned',
+                user_id,
+                actual_test_id,
+                f"Bulk return of {returned_samples} samples from test {test_no}"
+            ))
+            
+            return {
+                'success': True, 
+                'test_id': test_no,
+                'returned_samples': returned_samples
             }
