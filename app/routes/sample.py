@@ -1368,6 +1368,193 @@ def init_sample(blueprint, mysql):
                 'error': str(e)
             }), 500
             
+    @blueprint.route('/api/suppliers', methods=['POST'])
+    def create_supplier():
+        """
+        API endpoint to create a new supplier
+        """
+        try:
+            data = request.json
+            
+            if not data or not data.get('name'):
+                return jsonify({
+                    'success': False,
+                    'error': 'Supplier name is required'
+                }), 400
+            
+            supplier_name = data.get('name').strip()
+            supplier_notes = data.get('notes', '').strip()
+            
+            # Get current user for logging
+            current_user = get_current_user()
+            user_id = current_user['UserID']
+            
+            cursor = mysql.connection.cursor()
+            
+            # Check if supplier already exists
+            cursor.execute("SELECT SupplierID FROM Supplier WHERE SupplierName = %s", (supplier_name,))
+            existing = cursor.fetchone()
+            
+            if existing:
+                return jsonify({
+                    'success': False,
+                    'error': 'A supplier with this name already exists',
+                    'supplier_id': existing[0]
+                }), 400
+            
+            # Check if Notes column exists in Supplier table
+            cursor.execute("SHOW COLUMNS FROM Supplier LIKE 'Notes'")
+            notes_column_exists = cursor.fetchone() is not None
+            
+            # Insert new supplier
+            if notes_column_exists and supplier_notes:
+                cursor.execute("""
+                    INSERT INTO Supplier (SupplierName, Notes)
+                    VALUES (%s, %s)
+                """, (supplier_name, supplier_notes))
+            else:
+                cursor.execute("""
+                    INSERT INTO Supplier (SupplierName)
+                    VALUES (%s)
+                """, (supplier_name,))
+            
+            mysql.connection.commit()
+            supplier_id = cursor.lastrowid
+            
+            # Log the operation
+            cursor.execute("""
+                INSERT INTO History (
+                    Timestamp,
+                    ActionType,
+                    UserID,
+                    Notes
+                )
+                VALUES (NOW(), %s, %s, %s)
+            """, (
+                'Supplier created',
+                user_id,
+                f"Created new supplier: {supplier_name}"
+            ))
+            
+            mysql.connection.commit()
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'supplier_id': supplier_id,
+                'name': supplier_name
+            })
+            
+        except Exception as e:
+            print(f"API error creating supplier: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+    
+    @blueprint.route('/api/samples/recent')
+    def get_recent_samples():
+        """
+        API endpoint to get recent sample registrations
+        """
+        try:
+            cursor = mysql.connection.cursor()
+            
+            # Get the 20 most recent samples
+            cursor.execute("""
+                SELECT 
+                    s.SampleID,
+                    CONCAT('SMP-', s.SampleID) as SampleIDFormatted,
+                    s.Description,
+                    s.PartNumber,
+                    s.UnitID,
+                    u.UnitName,
+                    s.OwnerID,
+                    DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y %H:%i') as RegisteredDate
+                FROM Sample s
+                JOIN Reception r ON s.ReceptionID = r.ReceptionID
+                LEFT JOIN Unit u ON s.UnitID = u.UnitID
+                ORDER BY s.SampleID DESC
+                LIMIT 20
+            """)
+            
+            columns = [col[0] for col in cursor.description]
+            samples = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'samples': samples
+            })
+            
+        except Exception as e:
+            print(f"API error getting recent samples: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'samples': []
+            }), 500
+    
+    @blueprint.route('/api/samples/last')
+    def get_last_sample():
+        """
+        API endpoint to get the most recently registered sample
+        """
+        try:
+            cursor = mysql.connection.cursor()
+            
+            # Get the most recent sample
+            cursor.execute("""
+                SELECT 
+                    s.SampleID,
+                    CONCAT('SMP-', s.SampleID) as SampleIDFormatted,
+                    s.Description,
+                    s.PartNumber,
+                    s.UnitID,
+                    u.UnitName,
+                    s.OwnerID,
+                    DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y %H:%i') as RegisteredDate
+                FROM Sample s
+                JOIN Reception r ON s.ReceptionID = r.ReceptionID
+                LEFT JOIN Unit u ON s.UnitID = u.UnitID
+                ORDER BY s.SampleID DESC
+                LIMIT 1
+            """)
+            
+            result = cursor.fetchone()
+            
+            if not result:
+                return jsonify({
+                    'success': False,
+                    'error': 'No samples found',
+                    'sample': None
+                })
+            
+            columns = [col[0] for col in cursor.description]
+            sample = dict(zip(columns, result))
+            
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'sample': sample
+            })
+            
+        except Exception as e:
+            print(f"API error getting last sample: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'sample': None
+            }), 500
+    
     @blueprint.route('/disposal')
     def disposal_page():
         """

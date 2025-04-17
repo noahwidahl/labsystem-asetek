@@ -3,6 +3,9 @@
 {% block title %}Register Samples - Laboratory Sample System{% endblock %}
 
 {% block content %}
+<!-- Include modals -->
+{% include 'modals/new_supplier_modal.html' %}
+{% include 'modals/copy_registration_modal.html' %}
 <section id="register" class="content-section">
     <div class="registration-container">
         <div class="registration-steps">
@@ -59,15 +62,22 @@
 
             <!-- Step 2: Sample Information -->
             <div class="form-step" id="step2">
-                <div class="copy-buttons">
-                    <button type="button" class="btn-copy" id="copyLastButton">
-                        <i class="fas fa-clone"></i>
+                <div class="copy-buttons mb-3">
+                    <button type="button" class="btn-copy btn btn-outline-primary" id="copyLastButton">
+                        <i class="fas fa-clone me-1"></i>
                         Use last registered sample
                     </button>
-                    <button class="btn-copy" data-bs-toggle="modal" data-bs-target="#copyRegistrationModal">
-                        <i class="fas fa-copy"></i>
+                    <button class="btn-copy btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#copyRegistrationModal">
+                        <i class="fas fa-copy me-1"></i>
                         Use previously registered sample
                     </button>
+                </div>
+                
+                <!-- Alert that appears when data is copied -->
+                <div id="dataCopiedAlert" class="alert alert-success mb-3 d-none">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <span id="dataCopiedMessage">Sample data copied successfully!</span>
+                    <button type="button" class="btn-close float-end" onclick="document.getElementById('dataCopiedAlert').classList.add('d-none')"></button>
                 </div>
                 <h3>Sample Information</h3>
                 
@@ -543,6 +553,310 @@
 <!-- Load critical dependencies first -->
 <script src="{{ url_for('static', filename='js/package-locations.js') }}"></script>
 <script src="{{ url_for('static', filename='js/container.js') }}"></script>
+
+<!-- Supplier and Copy Registration functions -->
+<script>
+    // Function to create a new supplier
+    function createNewSupplier() {
+        const supplierName = document.getElementById('newSupplierName').value.trim();
+        const supplierNotes = document.getElementById('newSupplierNotes')?.value.trim() || '';
+        
+        if (!supplierName) {
+            // Show validation error
+            const nameInput = document.getElementById('newSupplierName');
+            nameInput.classList.add('is-invalid');
+            nameInput.focus();
+            return;
+        }
+        
+        // Show a loading indicator
+        const saveButton = document.getElementById('createSupplierBtn');
+        const originalText = saveButton.innerHTML;
+        saveButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Creating...';
+        saveButton.disabled = true;
+        
+        // Send API request to create new supplier
+        fetch('/api/suppliers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                name: supplierName,
+                notes: supplierNotes
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            saveButton.textContent = originalText;
+            saveButton.disabled = false;
+            
+            if (data.success) {
+                // Add the new supplier to the dropdown
+                const supplierSelect = document.getElementById('supplierSelect');
+                const newOption = document.createElement('option');
+                newOption.value = data.supplier_id;
+                newOption.textContent = supplierName;
+                
+                // Insert before the "Create new supplier" option (which should be the last one)
+                supplierSelect.insertBefore(newOption, supplierSelect.lastChild);
+                
+                // Select the newly created supplier
+                supplierSelect.value = data.supplier_id;
+                
+                // Close the modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('newSupplierModal'));
+                modal.hide();
+                
+                // Show success message
+                alert('Supplier created successfully');
+            } else {
+                alert('Error creating supplier: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            saveButton.textContent = originalText;
+            saveButton.disabled = false;
+            alert('Error creating supplier: ' + error.message);
+        });
+    }
+    
+    // Function to fetch and populate recent registrations for the copy modal
+    function loadPreviousRegistrations() {
+        const dropdown = document.getElementById('existingRegistrations');
+        
+        // Clear existing options
+        while (dropdown.firstChild) {
+            dropdown.removeChild(dropdown.firstChild);
+        }
+        
+        // Add loading option
+        const loadingOption = document.createElement('option');
+        loadingOption.textContent = 'Loading samples...';
+        dropdown.appendChild(loadingOption);
+        
+        // Fetch recent samples
+        fetch('/api/samples/recent')
+        .then(response => response.json())
+        .then(data => {
+            // Clear dropdown
+            dropdown.innerHTML = '';
+            
+            if (data.success && data.samples && data.samples.length > 0) {
+                // Add samples to dropdown
+                data.samples.forEach(sample => {
+                    const option = document.createElement('option');
+                    option.value = sample.SampleID;
+                    option.textContent = `${sample.SampleIDFormatted}: ${sample.Description} (${sample.PartNumber || 'No part number'})`;
+                    option.dataset.sample = JSON.stringify(sample);
+                    dropdown.appendChild(option);
+                });
+            } else {
+                // No samples found
+                const noSamplesOption = document.createElement('option');
+                noSamplesOption.textContent = 'No previous samples found';
+                noSamplesOption.disabled = true;
+                dropdown.appendChild(noSamplesOption);
+            }
+        })
+        .catch(error => {
+            dropdown.innerHTML = '';
+            const errorOption = document.createElement('option');
+            errorOption.textContent = 'Error loading samples';
+            errorOption.disabled = true;
+            dropdown.appendChild(errorOption);
+            console.error('Error loading previous registrations:', error);
+        });
+    }
+    
+    // Helper function to show copy success message
+    function showCopySuccess(sampleId) {
+        const alert = document.getElementById('dataCopiedAlert');
+        const message = document.getElementById('dataCopiedMessage');
+        
+        if (alert && message) {
+            message.textContent = `Sample data copied from sample ${sampleId}. Please update amount and location as needed.`;
+            alert.classList.remove('d-none');
+            
+            // Focus the first editable field that should be updated
+            setTimeout(() => {
+                document.querySelector('[name="totalAmount"]')?.focus();
+            }, 300);
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                alert.classList.add('d-none');
+            }, 5000);
+        }
+    }
+    
+    // Function to copy registration data from selected sample
+    function copyRegistration() {
+        const dropdown = document.getElementById('existingRegistrations');
+        const selectedOption = dropdown.options[dropdown.selectedIndex];
+        
+        if (!selectedOption || !selectedOption.dataset.sample) {
+            alert('Please select a valid sample to copy from');
+            return;
+        }
+        
+        try {
+            // Parse the sample data from the option's dataset
+            const sampleData = JSON.parse(selectedOption.dataset.sample);
+            
+            // Fill in form fields with sample data
+            document.querySelector('[name="partNumber"]').value = sampleData.PartNumber || '';
+            document.querySelector('[name="description"]').value = sampleData.Description || '';
+            
+            // Set unit if available
+            const unitSelect = document.querySelector('[name="unit"]');
+            if (unitSelect && sampleData.UnitID) {
+                unitSelect.value = sampleData.UnitID;
+            }
+            
+            // Don't copy amount - user needs to specify this
+            
+            // Set owner if available
+            const ownerSelect = document.querySelector('[name="owner"]');
+            if (ownerSelect && sampleData.OwnerID) {
+                ownerSelect.value = sampleData.OwnerID;
+            }
+            
+            // Close the modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('copyRegistrationModal'));
+            modal.hide();
+            
+            // Show success message
+            showCopySuccess(sampleData.SampleIDFormatted || 'Selected');
+        } catch (error) {
+            console.error('Error copying registration:', error);
+            alert('Error copying registration data');
+        }
+    }
+    
+    // Set up event listeners once the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set up copy registration modal to load data when opened
+        document.getElementById('copyRegistrationModal').addEventListener('show.bs.modal', function() {
+            loadPreviousRegistrations();
+        });
+        
+        // Set up "use last registered sample" button with loading indicator
+        document.getElementById('copyLastButton').addEventListener('click', function() {
+            // Show loading state
+            const button = this;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Loading...';
+            button.disabled = true;
+            
+            fetch('/api/samples/last')
+            .then(response => response.json())
+            .then(data => {
+                // Restore button state
+                button.innerHTML = originalText;
+                button.disabled = false;
+                
+                if (data.success && data.sample) {
+                    // Fill in form fields with sample data
+                    document.querySelector('[name="partNumber"]').value = data.sample.PartNumber || '';
+                    document.querySelector('[name="description"]').value = data.sample.Description || '';
+                    
+                    // Set unit if available
+                    const unitSelect = document.querySelector('[name="unit"]');
+                    if (unitSelect && data.sample.UnitID) {
+                        unitSelect.value = data.sample.UnitID;
+                    }
+                    
+                    // Don't copy amount - user needs to specify this
+                    
+                    // Set owner if available
+                    const ownerSelect = document.querySelector('[name="owner"]');
+                    if (ownerSelect && data.sample.OwnerID) {
+                        ownerSelect.value = data.sample.OwnerID;
+                    }
+                    
+                    // Set sample type if available (single, multiple, bulk)
+                    if (data.sample.Type) {
+                        const typeRadio = document.querySelector(`input[name="sampleTypeOption"][value="${data.sample.Type}"]`);
+                        if (typeRadio) {
+                            typeRadio.checked = true;
+                            // Trigger change event to update related UI elements
+                            typeRadio.dispatchEvent(new Event('change'));
+                        }
+                    }
+                    
+                    // Show success message
+                    showCopySuccess(data.sample.SampleIDFormatted || 'Last');
+                    
+                    // Scroll to the top of step 2
+                    document.getElementById('step2')?.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    // Show error in the alert area
+                    const alert = document.getElementById('dataCopiedAlert');
+                    const message = document.getElementById('dataCopiedMessage');
+                    if (alert && message) {
+                        alert.classList.remove('alert-success');
+                        alert.classList.add('alert-warning');
+                        message.textContent = 'No previous sample found to copy from';
+                        alert.classList.remove('d-none');
+                        
+                        // Auto-hide after 3 seconds
+                        setTimeout(() => {
+                            alert.classList.add('d-none');
+                            alert.classList.add('alert-success');
+                            alert.classList.remove('alert-warning');
+                        }, 3000);
+                    } else {
+                        // Fallback to alert if elements not found
+                        alert('No previous sample found to copy from');
+                    }
+                }
+            })
+            .catch(error => {
+                // Restore button state
+                button.innerHTML = originalText;
+                button.disabled = false;
+                
+                console.error('Error fetching last sample:', error);
+                
+                // Show error in the alert area
+                const alert = document.getElementById('dataCopiedAlert');
+                const message = document.getElementById('dataCopiedMessage');
+                if (alert && message) {
+                    alert.classList.remove('alert-success');
+                    alert.classList.add('alert-danger');
+                    message.textContent = 'Error fetching last sample data. Please try again.';
+                    alert.classList.remove('d-none');
+                    
+                    // Auto-hide after 3 seconds
+                    setTimeout(() => {
+                        alert.classList.add('d-none');
+                        alert.classList.add('alert-success');
+                        alert.classList.remove('alert-danger');
+                    }, 3000);
+                } else {
+                    // Fallback to alert if elements not found
+                    alert('Error fetching last sample');
+                }
+            });
+        });
+        
+        // Handle supplier dropdown change
+        document.getElementById('supplierSelect').addEventListener('change', function() {
+            if (this.value === 'new') {
+                // Reset the dropdown to empty selection
+                this.value = '';
+                
+                // Open the new supplier modal
+                const modal = new bootstrap.Modal(document.getElementById('newSupplierModal'));
+                modal.show();
+                
+                // Focus on the supplier name input
+                setTimeout(() => {
+                    document.getElementById('newSupplierName').focus();
+                }, 500);
+            }
+        });
+    });
+</script>
 
 <!-- Define global handleFormSubmission function directly to ensure it's available -->
 <script>

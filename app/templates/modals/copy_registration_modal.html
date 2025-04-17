@@ -1,26 +1,81 @@
 <div class="modal" id="copyRegistrationModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Use previous registration</h5>
+            <div class="modal-header bg-light">
+                <h5 class="modal-title"><i class="fas fa-copy me-2"></i>Use previous registration</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i>
-                    Select a previous registration to reuse information such as part number, description, and unit. You still need to specify quantity and location.
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>About copy registration:</strong> 
+                    <p class="mb-0">Select a previous registration to reuse information such as part number, description, and unit. You still need to specify quantity and location.</p>
                 </div>
-                <div class="form-group">
-                    <label>Select existing registration</label>
-                    <select class="form-control" id="existingRegistrations">
+                
+                <div class="form-group mb-4">
+                    <label class="form-label fw-bold">Select existing registration</label>
+                    <select class="form-select form-select-lg" id="existingRegistrations" style="height: auto;">
                         <!-- Populated dynamically -->
+                        <option disabled selected>Loading samples...</option>
                     </select>
                 </div>
+                
+                <div id="samplePreviewArea" class="d-none bg-light p-3 rounded mt-4">
+                    <h6 class="border-bottom pb-2 mb-3">Sample Preview</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>ID:</strong> <span id="previewId">-</span></p>
+                            <p><strong>Part Number:</strong> <span id="previewPartNumber">-</span></p>
+                            <p><strong>Description:</strong> <span id="previewDescription">-</span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Unit:</strong> <span id="previewUnit">-</span></p>
+                            <p><strong>Registered:</strong> <span id="previewDate">-</span></p>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="copyRegistration()">Use selected sample</button>
+                <button type="button" class="btn btn-primary" onclick="copyRegistration()">
+                    <i class="fas fa-clone me-1"></i> Use selected sample
+                </button>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+    // Update preview when selection changes
+    document.addEventListener('DOMContentLoaded', function() {
+        const existingRegistrations = document.getElementById('existingRegistrations');
+        if (existingRegistrations) {
+            existingRegistrations.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                const previewArea = document.getElementById('samplePreviewArea');
+                
+                if (selectedOption && selectedOption.dataset.sample) {
+                    try {
+                        const sampleData = JSON.parse(selectedOption.dataset.sample);
+                        
+                        // Update preview fields
+                        document.getElementById('previewId').textContent = sampleData.SampleIDFormatted || '-';
+                        document.getElementById('previewPartNumber').textContent = sampleData.PartNumber || '-';
+                        document.getElementById('previewDescription').textContent = sampleData.Description || '-';
+                        document.getElementById('previewUnit').textContent = sampleData.UnitName || '-';
+                        document.getElementById('previewDate').textContent = sampleData.RegisteredDate || '-';
+                        
+                        // Show preview area
+                        previewArea.classList.remove('d-none');
+                    } catch (error) {
+                        console.error('Error updating sample preview:', error);
+                        previewArea.classList.add('d-none');
+                    }
+                } else {
+                    // Hide preview area
+                    previewArea.classList.add('d-none');
+                }
+            });
+        }
+    });
+</script>

@@ -1,20 +1,76 @@
 <div class="modal" id="newSupplierModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Create new supplier</h5>
+            <div class="modal-header bg-light">
+                <h5 class="modal-title"><i class="fas fa-building me-2"></i>Create new supplier</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Add a new supplier that is not already in the system.
+                </div>
+                
+                <div class="form-group mb-3">
+                    <label class="form-label fw-bold">Supplier name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-lg" id="newSupplierName" required 
+                           placeholder="Enter supplier name" autocomplete="off">
+                    <div class="invalid-feedback">Please enter a supplier name</div>
+                </div>
+                
                 <div class="form-group">
-                    <label>Supplier name</label>
-                    <input type="text" class="form-control" id="newSupplierName" required>
+                    <label class="form-label">Additional information (optional)</label>
+                    <textarea class="form-control" id="newSupplierNotes" rows="2" 
+                              placeholder="Optional notes about this supplier"></textarea>
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="createNewSupplier()">Create supplier</button>
+                <button type="button" class="btn btn-primary" id="createSupplierBtn" onclick="createNewSupplier()">
+                    <i class="fas fa-plus me-1"></i> Create supplier
+                </button>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+    // Add enter key support for the supplier modal
+    document.addEventListener('DOMContentLoaded', function() {
+        const newSupplierName = document.getElementById('newSupplierName');
+        const newSupplierNotes = document.getElementById('newSupplierNotes');
+        
+        if (newSupplierName) {
+            newSupplierName.addEventListener('keyup', function(event) {
+                // Validate input
+                if (this.value.trim()) {
+                    this.classList.remove('is-invalid');
+                } else {
+                    this.classList.add('is-invalid');
+                }
+                
+                // Submit on Enter key
+                if (event.key === 'Enter' && this.value.trim()) {
+                    createNewSupplier();
+                }
+            });
+        }
+        
+        if (newSupplierNotes) {
+            newSupplierNotes.addEventListener('keydown', function(event) {
+                // Submit on Ctrl+Enter
+                if (event.key === 'Enter' && event.ctrlKey && newSupplierName.value.trim()) {
+                    createNewSupplier();
+                }
+            });
+        }
+        
+        // Focus name field when modal opens
+        const newSupplierModal = document.getElementById('newSupplierModal');
+        if (newSupplierModal) {
+            newSupplierModal.addEventListener('shown.bs.modal', function() {
+                newSupplierName.focus();
+            });
+        }
+    });
+</script>
