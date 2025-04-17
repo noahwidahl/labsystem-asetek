@@ -2,7 +2,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-light">
-                <h5 class="modal-title"><i class="fas fa-copy me-2"></i>Use previous registration</h5>
+                <h5 class="modal-title"><i class="fas fa-copy me-2"></i>Use any registered sample</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -60,14 +60,22 @@
 </div>
 
 <script>
-    // Update preview when selection changes
     document.addEventListener('DOMContentLoaded', function() {
         const existingRegistrations = document.getElementById('existingRegistrations');
         const searchInput = document.getElementById('sampleSearchInput');
         const searchButton = document.getElementById('sampleSearchButton');
+        const copyRegistrationModal = document.getElementById('copyRegistrationModal');
         
         // Store all samples for filtering
         let allSamples = [];
+        
+        // Add modal show event listener to load samples
+        if (copyRegistrationModal) {
+            copyRegistrationModal.addEventListener('shown.bs.modal', function() {
+                console.log("Modal shown, loading samples...");
+                loadPreviousRegistrations();
+            });
+        }
         
         // Function to update the preview area
         function updatePreview() {
@@ -308,9 +316,9 @@
             });
         }
         
-        // Override the loadPreviousRegistrations function to store all samples
-        const originalLoadFunction = window.loadPreviousRegistrations;
-        window.loadPreviousRegistrations = function() {
+        // Define loadPreviousRegistrations function directly
+        function loadPreviousRegistrations() {
+            console.log("Loading previous registrations");
             const dropdown = document.getElementById('existingRegistrations');
             
             // Clear existing options
@@ -333,6 +341,7 @@
             .then(data => {
                 // Store all samples for filtering
                 allSamples = data.success && data.samples ? data.samples : [];
+                console.log(`Received ${allSamples.length} samples from server`);
                 
                 // Clear dropdown
                 dropdown.innerHTML = '';
@@ -360,5 +369,8 @@
                 console.error('Error loading previous registrations:', error);
             });
         };
+        
+        // Make the function globally available
+        window.loadPreviousRegistrations = loadPreviousRegistrations;
     });
 </script>

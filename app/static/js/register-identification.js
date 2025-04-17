@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup scanner functionality
     setupScannerListeners();
     
+    // Setup supplier search functionality
+    setupSupplierSearch();
+    
     // Mark this module as loaded in the global state
     if (window.registerApp) {
         window.registerApp.modulesLoaded.identification = true;
@@ -17,6 +20,171 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('registerApp not found - identification module cannot register');
     }
 });
+
+// Setup supplier search functionality
+function setupSupplierSearch() {
+    const supplierSearchInput = document.getElementById('supplierSearchInput');
+    const supplierIdInput = document.getElementById('supplierIdInput');
+    const supplierResults = document.getElementById('supplierResults');
+    const selectedSupplierDisplay = document.getElementById('selectedSupplierDisplay');
+    const selectedSupplierName = document.getElementById('selectedSupplierName');
+    const clearSupplierBtn = document.getElementById('clearSupplierBtn');
+    
+    if (!supplierSearchInput || !supplierResults) {
+        console.log('Supplier search elements not found');
+        return;
+    }
+    
+    // Get all suppliers from page
+    const suppliersData = window.suppliers || [];
+    console.log('Loaded suppliers:', suppliersData);
+    
+    // Debounce function to avoid too many searches
+    let searchTimeout;
+    
+    // Add event listener for input
+    supplierSearchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        
+        searchTimeout = setTimeout(() => {
+            const searchTerm = this.value.trim().toLowerCase();
+            
+            if (searchTerm.length === 0) {
+                supplierResults.classList.add('d-none');
+                return;
+            }
+            
+            // Filter suppliers based on search term
+            const filteredSuppliers = suppliersData.filter(supplier => 
+                supplier.SupplierName.toLowerCase().includes(searchTerm)
+            );
+            
+            // Show results
+            showSupplierResults(filteredSuppliers, searchTerm);
+        }, 300);
+    });
+    
+    // Handle keyboard navigation
+    supplierSearchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowDown' && !supplierResults.classList.contains('d-none')) {
+            e.preventDefault();
+            const firstItem = supplierResults.querySelector('.supplier-search-item');
+            if (firstItem) {
+                firstItem.classList.add('active');
+                firstItem.focus();
+            }
+        } else if (e.key === 'Escape') {
+            supplierResults.classList.add('d-none');
+        }
+    });
+    
+    // Function to display search results
+    function showSupplierResults(suppliers, searchTerm) {
+        // Clear previous results
+        supplierResults.innerHTML = '';
+        
+        if (suppliers.length === 0) {
+            supplierResults.innerHTML = `
+                <div class="supplier-search-empty">
+                    No suppliers found matching "${searchTerm}"
+                </div>
+                <div class="p-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary w-100" 
+                           data-bs-toggle="modal" data-bs-target="#newSupplierModal">
+                        <i class="fas fa-plus me-1"></i> Create new supplier
+                    </button>
+                </div>
+            `;
+        } else {
+            // Add each supplier to results
+            suppliers.forEach(supplier => {
+                const item = document.createElement('div');
+                item.classList.add('supplier-search-item');
+                item.setAttribute('tabindex', '0');
+                item.dataset.supplierId = supplier.SupplierID;
+                item.textContent = supplier.SupplierName;
+                
+                // Add click event to select supplier
+                item.addEventListener('click', function() {
+                    selectSupplier(supplier.SupplierID, supplier.SupplierName);
+                });
+                
+                // Add keyboard handling
+                item.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        selectSupplier(supplier.SupplierID, supplier.SupplierName);
+                    } else if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        const nextItem = this.nextElementSibling;
+                        if (nextItem && nextItem.classList.contains('supplier-search-item')) {
+                            this.classList.remove('active');
+                            nextItem.classList.add('active');
+                            nextItem.focus();
+                        }
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        const prevItem = this.previousElementSibling;
+                        if (prevItem && prevItem.classList.contains('supplier-search-item')) {
+                            this.classList.remove('active');
+                            prevItem.classList.add('active');
+                            prevItem.focus();
+                        } else {
+                            this.classList.remove('active');
+                            supplierSearchInput.focus();
+                        }
+                    } else if (e.key === 'Escape') {
+                        supplierResults.classList.add('d-none');
+                        supplierSearchInput.focus();
+                    }
+                });
+                
+                supplierResults.appendChild(item);
+            });
+        }
+        
+        // Show results
+        supplierResults.classList.remove('d-none');
+    }
+    
+    // Function to select a supplier
+    function selectSupplier(supplierId, supplierName) {
+        if (supplierIdInput && selectedSupplierName && selectedSupplierDisplay) {
+            // Update hidden input
+            supplierIdInput.value = supplierId;
+            
+            // Update display
+            selectedSupplierName.textContent = supplierName;
+            selectedSupplierDisplay.classList.remove('d-none');
+            
+            // Update search input
+            supplierSearchInput.value = '';
+            supplierSearchInput.placeholder = 'Supplier selected';
+            
+            // Hide results
+            supplierResults.classList.add('d-none');
+        }
+    }
+    
+    // Handle clear button
+    if (clearSupplierBtn) {
+        clearSupplierBtn.addEventListener('click', function() {
+            // Clear supplier
+            if (supplierIdInput) supplierIdInput.value = '';
+            if (selectedSupplierDisplay) selectedSupplierDisplay.classList.add('d-none');
+            if (supplierSearchInput) {
+                supplierSearchInput.placeholder = 'Search for supplier...';
+                supplierSearchInput.focus();
+            }
+        });
+    }
+    
+    // Close results when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!supplierSearchInput.contains(e.target) && !supplierResults.contains(e.target)) {
+            supplierResults.classList.add('d-none');
+        }
+    });
+}
 
 // Scanner functionality
 function setupScannerListeners() {

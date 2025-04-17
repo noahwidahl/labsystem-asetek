@@ -114,6 +114,284 @@ window.registerApp = {
     }
 };
 
+// Helper function to populate form fields from sample data
+function populateFormWithSampleData(sampleData) {
+    console.log("Populating form with sample data:", sampleData);
+    
+    try {
+        // Populate Step 1: Reception Details
+        // Handle supplier - try multiple ways as the field might be differently implemented
+        if (sampleData.SupplierID) {
+            // First try the newer search interface
+            const supplierIdInput = document.getElementById('supplierIdInput');
+            const selectedSupplierDisplay = document.getElementById('selectedSupplierDisplay');
+            const selectedSupplierName = document.getElementById('selectedSupplierName');
+            
+            if (supplierIdInput && selectedSupplierDisplay && selectedSupplierName) {
+                // New supplier search interface
+                supplierIdInput.value = sampleData.SupplierID;
+                
+                // Update the display with supplier name if available
+                if (sampleData.SupplierName) {
+                    selectedSupplierName.textContent = sampleData.SupplierName;
+                } else {
+                    // Use the supplier name from the data if available
+                    const allSuppliers = window.suppliers || [];
+                    const supplier = allSuppliers.find(s => s.SupplierID == sampleData.SupplierID);
+                    if (supplier) {
+                        selectedSupplierName.textContent = supplier.SupplierName;
+                    } else {
+                        selectedSupplierName.textContent = "Supplier #" + sampleData.SupplierID;
+                    }
+                }
+                
+                selectedSupplierDisplay.classList.remove('d-none');
+                
+                // Update search input placeholder
+                const supplierSearchInput = document.getElementById('supplierSearchInput');
+                if (supplierSearchInput) {
+                    supplierSearchInput.placeholder = "Supplier selected";
+                }
+            }
+            
+            // Then try the traditional dropdown as a fallback
+            const supplierSelect = document.getElementById('supplier');
+            if (supplierSelect) {
+                for (let i = 0; i < supplierSelect.options.length; i++) {
+                    if (supplierSelect.options[i].value == sampleData.SupplierID) {
+                        supplierSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Populate Step 2: Sample Information
+        // Part Number
+        const partNumberField = document.querySelector('input[name="partNumber"]');
+        if (partNumberField && sampleData.PartNumber) {
+            partNumberField.value = sampleData.PartNumber;
+        }
+        
+        // Description/Sample Name
+        const descriptionField = document.querySelector('input[name="description"]');
+        if (descriptionField && sampleData.Description) {
+            descriptionField.value = sampleData.Description;
+        }
+        
+        // Units
+        if (sampleData.UnitID) {
+            const unitSelect = document.querySelector('select[name="unit"], #unit');
+            if (unitSelect) {
+                for (let i = 0; i < unitSelect.options.length; i++) {
+                    if (unitSelect.options[i].value == sampleData.UnitID) {
+                        unitSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Handle all radio buttons 
+        if (sampleData.SampleTypeID) {
+            const sampleTypeRadios = document.querySelectorAll('input[name="sampleType"]');
+            for (let i = 0; i < sampleTypeRadios.length; i++) {
+                if (sampleTypeRadios[i].value == sampleData.SampleTypeID) {
+                    sampleTypeRadios[i].checked = true;
+                    // Trigger change event to update UI if needed
+                    sampleTypeRadios[i].dispatchEvent(new Event('change'));
+                    break;
+                }
+            }
+        }
+        
+        // Handle all checkboxes (for multi-select options)
+        if (sampleData.Options) {
+            let options = [];
+            
+            // Try to parse options if it's a string
+            if (typeof sampleData.Options === 'string') {
+                try {
+                    options = JSON.parse(sampleData.Options);
+                } catch (e) {
+                    // If it's a comma-separated string
+                    options = sampleData.Options.split(',').map(opt => opt.trim());
+                }
+            } else if (Array.isArray(sampleData.Options)) {
+                options = sampleData.Options;
+            }
+            
+            // Check all checkboxes that match the options
+            if (options.length > 0) {
+                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                checkboxes.forEach(checkbox => {
+                    if (options.includes(checkbox.value) || 
+                        options.includes(checkbox.name) || 
+                        options.includes(checkbox.id)) {
+                        checkbox.checked = true;
+                        checkbox.dispatchEvent(new Event('change'));
+                    }
+                });
+            }
+        }
+        
+        // Handle dropdown selects (for single-select options)
+        document.querySelectorAll('select').forEach(select => {
+            // Skip the unit select which is already handled
+            if (select.id === 'unit' || select.name === 'unit') return;
+            
+            // Try to find a matching field in sample data based on select name
+            const fieldName = select.name || select.id;
+            if (fieldName && sampleData[fieldName]) {
+                for (let i = 0; i < select.options.length; i++) {
+                    if (select.options[i].value == sampleData[fieldName]) {
+                        select.selectedIndex = i;
+                        select.dispatchEvent(new Event('change'));
+                        break;
+                    }
+                }
+            }
+        });
+        
+        // Handle custom fields based on sample type
+        if (sampleData.CustomFields) {
+            try {
+                let customFields = {};
+                
+                // Allow for different formats of custom fields
+                if (typeof sampleData.CustomFields === 'string') {
+                    customFields = JSON.parse(sampleData.CustomFields);
+                } else if (typeof sampleData.CustomFields === 'object') {
+                    customFields = sampleData.CustomFields;
+                }
+                
+                for (const fieldName in customFields) {
+                    const field = document.querySelector(`[name="${fieldName}"]`);
+                    if (field) {
+                        field.value = customFields[fieldName];
+                        // Trigger change event
+                        field.dispatchEvent(new Event('change'));
+                    }
+                }
+            } catch (e) {
+                console.warn("Could not parse custom fields:", e);
+            }
+        }
+        
+        // Show success message
+        const dataCopiedAlert = document.getElementById('dataCopiedAlert');
+        const dataCopiedMessage = document.getElementById('dataCopiedMessage');
+        if (dataCopiedAlert && dataCopiedMessage) {
+            dataCopiedMessage.textContent = `Sample data copied from ${sampleData.SampleIDFormatted || 'previous sample'}`;
+            dataCopiedAlert.classList.remove('d-none');
+            
+            // Auto-hide the alert after 5 seconds
+            setTimeout(() => {
+                dataCopiedAlert.classList.add('d-none');
+            }, 5000);
+        }
+        
+        // Validate the form if possible
+        if (typeof validateIdentificationSection === 'function') {
+            validateIdentificationSection();
+        }
+        
+        // Try to move to next step if we're on step 1
+        if (registerApp && registerApp.currentStep === 1) {
+            // Only move to step 2 if we have the necessary fields
+            if (typeof showStep === 'function') {
+                showStep(2);
+            }
+        }
+        
+        return true;
+    } catch (error) {
+        console.error("Error populating form:", error);
+        return false;
+    }
+}
+
+// Copy registration from modal to form
+function copyRegistration() {
+    console.log("Copying registration data...");
+    
+    // Get the selected sample from the dropdown
+    const dropdown = document.getElementById('existingRegistrations');
+    
+    if (!dropdown || dropdown.selectedIndex < 0) {
+        alert("Please select a sample first");
+        return;
+    }
+    
+    const selectedOption = dropdown.options[dropdown.selectedIndex];
+    
+    if (!selectedOption || !selectedOption.dataset.sample) {
+        alert("Error: No sample data available");
+        return;
+    }
+    
+    try {
+        // Parse the sample data
+        const sampleData = JSON.parse(selectedOption.dataset.sample);
+        
+        // Populate form with the data
+        const success = populateFormWithSampleData(sampleData);
+        
+        if (success) {
+            // Close the modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('copyRegistrationModal'));
+            if (modal) {
+                modal.hide();
+            }
+        } else {
+            alert("There was a problem copying the sample data");
+        }
+    } catch (error) {
+        console.error("Error copying registration:", error);
+        alert("An error occurred while copying the registration data");
+    }
+}
+
+// Load and copy the last registered sample
+function copyLastRegisteredSample() {
+    console.log("Copying last registered sample...");
+    
+    // Show loading spinner on the button
+    const copyLastButton = document.getElementById('copyLastButton');
+    if (copyLastButton) {
+        const originalText = copyLastButton.innerHTML;
+        copyLastButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Loading...';
+        copyLastButton.disabled = true;
+        
+        // Fetch the most recent sample
+        fetch('/api/samples/recent?limit=1')
+        .then(response => response.json())
+        .then(data => {
+            copyLastButton.innerHTML = originalText;
+            copyLastButton.disabled = false;
+            
+            if (data.success && data.samples && data.samples.length > 0) {
+                const lastSample = data.samples[0];
+                
+                // Populate form with the last sample data
+                const success = populateFormWithSampleData(lastSample);
+                
+                if (!success) {
+                    alert("There was a problem copying the last sample data");
+                }
+            } else {
+                alert("No previous samples found to copy");
+            }
+        })
+        .catch(error => {
+            copyLastButton.innerHTML = originalText;
+            copyLastButton.disabled = false;
+            console.error("Error fetching last sample:", error);
+            alert("Error loading last sample: " + error.message);
+        });
+    }
+}
+
 // Global variables to ensure we only initialize once
 window._REGISTER_INITIALIZED = window._REGISTER_INITIALIZED || false;
 window._REGISTER_INIT_TIMER = null;
@@ -165,6 +443,14 @@ document.addEventListener('DOMContentLoaded', function() {
     window._REGISTER_INIT_TIMER = setTimeout(function() {
         console.log('Initializing form system...');
         registerApp.init();
+        
+        // Add event listener for the "Use last registered sample" button
+        const copyLastButton = document.getElementById('copyLastButton');
+        if (copyLastButton) {
+            copyLastButton.addEventListener('click', function() {
+                copyLastRegisteredSample();
+            });
+        }
     }, 500);
 });
 

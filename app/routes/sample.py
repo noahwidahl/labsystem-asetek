@@ -102,9 +102,9 @@ def init_sample(blueprint, mysql):
             cursor.execute("SELECT DISTINCT Status FROM Sample")
             statuses = [row[0] for row in cursor.fetchall()]
             
-            # Først prøver vi at hente data fra databasen
+            # First we try to fetch data from the database
             try:
-                # Hent alle samples inklusive disposed samples
+                # Get all samples including disposed samples
                 query = """
                 SELECT 
                     s.SampleID, 
@@ -133,9 +133,9 @@ def init_sample(blueprint, mysql):
                 db_results = cursor.fetchall()
                 print(f"Found {len(db_results)} samples from database")
                 
-                # Hvis der er resultater, erstat vores hardcoded data
+                # If there are results, replace our hardcoded data
                 if db_results and len(db_results) > 0:
-                    # Erstat vores hardcoded data med database data
+                    # Replace our hardcoded data with database data
                     samples_for_template = []
                     
                     for row in db_results:
@@ -1470,7 +1470,11 @@ def init_sample(blueprint, mysql):
                     s.Description,
                     s.PartNumber,
                     s.UnitID,
-                    u.UnitName,
+                    CASE
+                        WHEN u.UnitName IS NULL THEN 'pcs'
+                        WHEN LOWER(u.UnitName) = 'stk' THEN 'pcs'
+                        ELSE u.UnitName
+                    END as UnitName,
                     s.OwnerID,
                     DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y %H:%i') as RegisteredDate
                 FROM Sample s
@@ -1516,7 +1520,11 @@ def init_sample(blueprint, mysql):
                     s.Description,
                     s.PartNumber,
                     s.UnitID,
-                    u.UnitName,
+                    CASE
+                        WHEN u.UnitName IS NULL THEN 'pcs'
+                        WHEN LOWER(u.UnitName) = 'stk' THEN 'pcs'
+                        ELSE u.UnitName
+                    END as UnitName,
                     s.OwnerID,
                     DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y %H:%i') as RegisteredDate
                 FROM Sample s

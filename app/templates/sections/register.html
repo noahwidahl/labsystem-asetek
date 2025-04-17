@@ -3,6 +3,49 @@
 {% block title %}Register Samples - Laboratory Sample System{% endblock %}
 
 {% block content %}
+<!-- Custom styles for supplier search -->
+<style>
+    .supplier-search-results {
+        position: absolute;
+        z-index: 1000;
+        background: white;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        max-height: 250px;
+        overflow-y: auto;
+        width: 100%;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .supplier-search-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    .supplier-search-item:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .supplier-search-item.active {
+        background-color: #e9ecef;
+    }
+    
+    .supplier-search-empty {
+        padding: 8px 12px;
+        color: #6c757d;
+        font-style: italic;
+    }
+    
+    .selected-supplier {
+        margin-top: 5px;
+    }
+    
+    .selected-supplier .badge {
+        font-size: 14px;
+        padding: 5px 8px;
+    }
+</style>
 <!-- Include modals -->
 {% include 'modals/new_supplier_modal.html' %}
 {% include 'modals/copy_registration_modal.html' %}
@@ -35,12 +78,22 @@
                 <div class="form-group">
                     <label>Supplier</label>
                     <div class="mb-2">
-                        <select class="form-control selectpicker" name="supplier" id="supplierSelect" data-live-search="true">
-                            <option value="">No supplier (internal sender)</option>
-                            {% for supplier in suppliers %}
-                            <option value="{{ supplier.SupplierID }}">{{ supplier.SupplierName }}</option>
-                            {% endfor %}
-                        </select>
+                        <div class="input-group">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            </div>
+                            <input type="text" class="form-control" id="supplierSearchInput" placeholder="Search for supplier..." autocomplete="off">
+                            <input type="hidden" name="supplier" id="supplierIdInput" value="">
+                        </div>
+                        <div id="supplierResults" class="supplier-search-results mt-1 d-none">
+                            <!-- Search results will appear here -->
+                        </div>
+                        <div id="selectedSupplierDisplay" class="selected-supplier mt-2 d-none">
+                            <span class="badge bg-primary">
+                                <span id="selectedSupplierName">No supplier selected</span>
+                                <button type="button" class="btn btn-sm text-white" id="clearSupplierBtn" style="border: none; background: none; padding: 0 4px;">×</button>
+                            </span>
+                        </div>
                     </div>
                     <div>
                         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#newSupplierModal">
@@ -70,7 +123,7 @@
                     </button>
                     <button class="btn-copy btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#copyRegistrationModal">
                         <i class="fas fa-copy me-1"></i>
-                        Use previously registered sample
+                        Use any registered sample
                     </button>
                 </div>
                 
@@ -551,6 +604,11 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- Global data -->
+<script>
+window.suppliers = {{ suppliers|tojson }};
+</script>
+
 <!-- Load critical dependencies first -->
 <script src="{{ url_for('static', filename='js/package-locations.js') }}"></script>
 <script src="{{ url_for('static', filename='js/container.js') }}"></script>
@@ -840,89 +898,237 @@
             });
         });
         
-        // Initialize supplier dropdown with search functionality
-        console.log("Setting up supplier dropdown");
-        const supplierSelect = document.getElementById('supplierSelect');
-        if (supplierSelect) {
-            console.log("Supplier select element found");
+        // Initialize supplier search functionality
+        console.log("Setting up supplier search");
+        
+        // Wait for DOM to be fully loaded to ensure all elements exist
+        setTimeout(() => {
+            // Store suppliers data
+            const suppliers = [
+                { id: "", name: "No supplier (internal sender)" }
+                {% for supplier in suppliers %}
+                , { id: "{{ supplier.SupplierID }}", name: "{{ supplier.SupplierName }}" }
+                {% endfor %}
+            ];
             
-            // Initialize supplier search if bootstrap-select is available
-            if (typeof $ !== 'undefined' && typeof $.fn !== 'undefined' && typeof $.fn.selectpicker !== 'undefined') {
-                console.log("Bootstrap-select is available, initializing");
+            console.log(`Found ${suppliers.length} suppliers`);
+            
+            const supplierSearchInput = document.getElementById('supplierSearchInput');
+            const supplierResults = document.getElementById('supplierResults');
+            const supplierIdInput = document.getElementById('supplierIdInput');
+            const selectedSupplierDisplay = document.getElementById('selectedSupplierDisplay');
+            const selectedSupplierName = document.getElementById('selectedSupplierName');
+            const clearSupplierBtn = document.getElementById('clearSupplierBtn');
+            
+            if (!supplierSearchInput) console.error("Could not find supplierSearchInput");
+            if (!supplierResults) console.error("Could not find supplierResults");
+            if (!supplierIdInput) console.error("Could not find supplierIdInput");
+        }, 100);
+        
+        setTimeout(() => {
+            const supplierSearchInput = document.getElementById('supplierSearchInput');
+            const supplierResults = document.getElementById('supplierResults');
+            const supplierIdInput = document.getElementById('supplierIdInput');
+            const selectedSupplierDisplay = document.getElementById('selectedSupplierDisplay');
+            const selectedSupplierName = document.getElementById('selectedSupplierName');
+            const clearSupplierBtn = document.getElementById('clearSupplierBtn');
+            
+            // Store suppliers data
+            const suppliers = [
+                { id: "", name: "No supplier (internal sender)" }
+                {% for supplier in suppliers %}
+                , { id: "{{ supplier.SupplierID }}", name: "{{ supplier.SupplierName }}" }
+                {% endfor %}
+            ];
+            
+            if (supplierSearchInput && supplierResults) {
+                console.log(`Supplier search elements found - ${suppliers.length} suppliers available`);
                 
-                try {
-                    $(supplierSelect).selectpicker({
-                        liveSearch: true,
-                        size: 10,
-                        noneResultsText: "No results found for {0}",
-                        title: "Search for supplier...",
-                    });
-                    console.log("Bootstrap-select initialized successfully");
-                    
-                    // Initialize the clear button after a short delay to ensure the selectpicker has rendered
-                    setTimeout(() => {
-                        try {
-                            const searchBox = document.querySelector('.bs-searchbox input');
-                            if (searchBox) {
-                                console.log("Adding clear button to supplier search");
-                                
-                                // Create clear button
-                                const clearBtn = document.createElement('button');
-                                clearBtn.type = 'button';
-                                clearBtn.className = 'btn btn-sm position-absolute end-0 top-0 mt-1 me-1';
-                                clearBtn.innerHTML = '<i class="fas fa-times"></i>';
-                                clearBtn.style.display = 'none';
-                                
-                                // Add click handler
-                                clearBtn.addEventListener('click', function() {
-                                    searchBox.value = '';
-                                    searchBox.dispatchEvent(new Event('input'));
-                                    this.style.display = 'none';
-                                    
-                                    // Refresh the selectpicker to show all options
-                                    try {
-                                        $(supplierSelect).selectpicker('refresh');
-                                    } catch (e) {
-                                        console.error("Error refreshing selectpicker:", e);
-                                    }
-                                });
-                                
-                                // Add input handler
-                                searchBox.addEventListener('input', function() {
-                                    clearBtn.style.display = this.value ? 'block' : 'none';
-                                });
-                                
-                                // Append button to searchbox
-                                const searchBoxContainer = document.querySelector('.bs-searchbox');
-                                if (searchBoxContainer) {
-                                    searchBoxContainer.style.position = 'relative';
-                                    searchBoxContainer.appendChild(clearBtn);
-                                }
-                            } else {
-                                console.warn("Could not find search box for supplier select");
-                            }
-                        } catch (e) {
-                            console.error("Error setting up clear button:", e);
-                        }
-                    }, 500);
-                } catch (e) {
-                    console.error("Error initializing bootstrap-select:", e);
-                }
-            } else {
-                console.warn("Bootstrap-select not available, falling back to basic select");
-                // Add basic search functionality
-                supplierSelect.addEventListener('keydown', function(e) {
-                    const text = e.key.toLowerCase();
-                    if (/^[a-z0-9]$/i.test(text)) {
-                        for (let i = 0; i < this.options.length; i++) {
-                            if (this.options[i].textContent.toLowerCase().startsWith(text)) {
-                                this.selectedIndex = i;
-                                break;
-                            }
-                        }
+                // Function to filter suppliers based on search text
+                function filterSuppliers(searchText) {
+                    if (!searchText) {
+                        return suppliers;
                     }
+                    
+                    searchText = searchText.toLowerCase();
+                    return suppliers.filter(supplier => 
+                        supplier.name.toLowerCase().includes(searchText)
+                    );
+                }
+                
+                // Function to show filtered suppliers
+                function showFilteredSuppliers(filteredSuppliers) {
+                    console.log(`Showing ${filteredSuppliers.length} filtered suppliers`);
+                    supplierResults.innerHTML = '';
+                    
+                    if (filteredSuppliers.length === 0) {
+                        supplierResults.innerHTML = '<div class="supplier-search-empty">No suppliers found</div>';
+                    } else {
+                        filteredSuppliers.forEach(supplier => {
+                            const item = document.createElement('div');
+                            item.className = 'supplier-search-item';
+                            item.dataset.id = supplier.id;
+                            item.textContent = supplier.name;
+                            
+                            // Add click handler to select this supplier
+                            item.addEventListener('click', function() {
+                                selectSupplier(supplier.id, supplier.name);
+                                supplierResults.classList.add('d-none');
+                            });
+                            
+                            supplierResults.appendChild(item);
+                        });
+                    }
+                    
+                    // Show results
+                    supplierResults.classList.remove('d-none');
+                }
+            
+            // Function to select a supplier
+            function selectSupplier(id, name) {
+                supplierIdInput.value = id;
+                
+                if (id) {
+                    selectedSupplierName.textContent = name;
+                    selectedSupplierDisplay.classList.remove('d-none');
+                    supplierSearchInput.placeholder = "Supplier selected";
+                } else {
+                    selectedSupplierName.textContent = "No supplier selected";
+                    selectedSupplierDisplay.classList.add('d-none');
+                    supplierSearchInput.placeholder = "Search for supplier...";
+                }
+                
+                // Clear the search input
+                supplierSearchInput.value = '';
+            }
+            
+            // Add input handler with debouncing
+            let debounceTimeout;
+            supplierSearchInput.addEventListener('input', function() {
+                clearTimeout(debounceTimeout);
+                
+                const searchText = this.value.trim();
+                console.log("Input changed:", searchText);
+                
+                if (searchText) {
+                    debounceTimeout = setTimeout(() => {
+                        console.log("Debounce triggered for:", searchText);
+                        const filteredSuppliers = filterSuppliers(searchText);
+                        showFilteredSuppliers(filteredSuppliers);
+                    }, 200);
+                } else {
+                    supplierResults.classList.add('d-none');
+                }
+            });
+            
+            // Handle keyboard navigation in the results
+            supplierSearchInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    // Close the results dropdown
+                    supplierResults.classList.add('d-none');
+                    this.blur();
+                    return;
+                }
+                
+                if (e.key === 'ArrowDown' && !supplierResults.classList.contains('d-none')) {
+                    e.preventDefault();
+                    // Focus the first item
+                    const firstItem = supplierResults.querySelector('.supplier-search-item');
+                    if (firstItem) {
+                        firstItem.classList.add('active');
+                        firstItem.focus();
+                    }
+                }
+                
+                if (e.key === 'Enter' && !supplierResults.classList.contains('d-none')) {
+                    e.preventDefault();
+                    // Select the first item
+                    const firstItem = supplierResults.querySelector('.supplier-search-item');
+                    if (firstItem) {
+                        const id = firstItem.dataset.id;
+                        const name = firstItem.textContent;
+                        selectSupplier(id, name);
+                        supplierResults.classList.add('d-none');
+                    }
+                }
+            });
+            
+            // Handle keyboard navigation in the results list
+            supplierResults.addEventListener('keydown', function(e) {
+                const items = Array.from(this.querySelectorAll('.supplier-search-item'));
+                const activeItem = this.querySelector('.supplier-search-item.active');
+                const activeIndex = activeItem ? items.indexOf(activeItem) : -1;
+                
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (activeIndex < items.length - 1) {
+                        if (activeItem) {
+                            activeItem.classList.remove('active');
+                        }
+                        items[activeIndex + 1].classList.add('active');
+                        items[activeIndex + 1].focus();
+                    }
+                }
+                
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (activeIndex > 0) {
+                        activeItem.classList.remove('active');
+                        items[activeIndex - 1].classList.add('active');
+                        items[activeIndex - 1].focus();
+                    } else {
+                        // Focus back to the search input
+                        if (activeItem) {
+                            activeItem.classList.remove('active');
+                        }
+                        supplierSearchInput.focus();
+                    }
+                }
+                
+                if (e.key === 'Enter' && activeItem) {
+                    e.preventDefault();
+                    const id = activeItem.dataset.id;
+                    const name = activeItem.textContent;
+                    selectSupplier(id, name);
+                    supplierResults.classList.add('d-none');
+                }
+                
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    supplierResults.classList.add('d-none');
+                    supplierSearchInput.focus();
+                }
+            });
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!supplierSearchInput.contains(e.target) && !supplierResults.contains(e.target)) {
+                    supplierResults.classList.add('d-none');
+                }
+            });
+            
+            // Clear button functionality
+            if (clearSupplierBtn) {
+                clearSupplierBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    selectSupplier('', '');
                 });
             }
+            
+            // Focus the search input when clicking on it
+            supplierSearchInput.addEventListener('focus', function() {
+                if (this.value.trim()) {
+                    const filteredSuppliers = filterSuppliers(this.value.trim());
+                    showFilteredSuppliers(filteredSuppliers);
+                }
+            });
+            
+            // Initialize with "No supplier" selected
+            selectSupplier('', '');
+        } else {
+            console.warn("Could not find supplier search elements");
+        }
         }
     });
 </script>
@@ -2158,5 +2364,10 @@
             window.getComputedStyle(formNavigation).display;
         }
     }, 250); // Run very frequently (4 times per second)
+</script>
+
+<!-- Global supplier data from backend -->
+<script>
+    window.suppliers = {{ suppliers|tojson }};
 </script>
 {% endblock %}
