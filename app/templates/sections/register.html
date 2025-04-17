@@ -841,49 +841,72 @@
         });
         
         // Initialize supplier dropdown with search functionality
+        console.log("Setting up supplier dropdown");
         const supplierSelect = document.getElementById('supplierSelect');
         if (supplierSelect) {
+            console.log("Supplier select element found");
+            
             // Initialize supplier search if bootstrap-select is available
-            if (typeof $.fn.selectpicker !== 'undefined') {
-                $(supplierSelect).selectpicker({
-                    liveSearch: true,
-                    size: 10,
-                    noneResultsText: "No results found for {0}",
-                    title: "Search for supplier...",
-                    liveSearchPlaceholder: "Type to search suppliers...",
-                    liveSearchStyle: 'contains',  // Search anywhere in the text, not just the beginning
-                    mobile: $(window).width() < 768, // Better mobile support
-                    style: 'btn-outline-secondary'
-                });
+            if (typeof $ !== 'undefined' && typeof $.fn !== 'undefined' && typeof $.fn.selectpicker !== 'undefined') {
+                console.log("Bootstrap-select is available, initializing");
                 
-                // Add a clear button for the search
-                const searchBox = document.querySelector('.bs-searchbox input');
-                if (searchBox) {
-                    searchBox.classList.add('pe-5'); // Add padding for the clear button
-                    
-                    // Create clear button for search
-                    const clearBtn = document.createElement('button');
-                    clearBtn.type = 'button';
-                    clearBtn.className = 'btn btn-sm position-absolute end-0 top-0 mt-1 me-1';
-                    clearBtn.innerHTML = '<i class="fas fa-times"></i>';
-                    clearBtn.style.display = 'none';
-                    clearBtn.onclick = function() {
-                        searchBox.value = '';
-                        searchBox.dispatchEvent(new Event('input'));
-                        this.style.display = 'none';
-                    };
-                    
-                    // Show/hide clear button based on input
-                    searchBox.addEventListener('input', function() {
-                        clearBtn.style.display = this.value ? 'block' : 'none';
+                try {
+                    $(supplierSelect).selectpicker({
+                        liveSearch: true,
+                        size: 10,
+                        noneResultsText: "No results found for {0}",
+                        title: "Search for supplier...",
                     });
+                    console.log("Bootstrap-select initialized successfully");
                     
-                    // Append the clear button
-                    const searchBoxContainer = document.querySelector('.bs-searchbox');
-                    if (searchBoxContainer) {
-                        searchBoxContainer.style.position = 'relative';
-                        searchBoxContainer.appendChild(clearBtn);
-                    }
+                    // Initialize the clear button after a short delay to ensure the selectpicker has rendered
+                    setTimeout(() => {
+                        try {
+                            const searchBox = document.querySelector('.bs-searchbox input');
+                            if (searchBox) {
+                                console.log("Adding clear button to supplier search");
+                                
+                                // Create clear button
+                                const clearBtn = document.createElement('button');
+                                clearBtn.type = 'button';
+                                clearBtn.className = 'btn btn-sm position-absolute end-0 top-0 mt-1 me-1';
+                                clearBtn.innerHTML = '<i class="fas fa-times"></i>';
+                                clearBtn.style.display = 'none';
+                                
+                                // Add click handler
+                                clearBtn.addEventListener('click', function() {
+                                    searchBox.value = '';
+                                    searchBox.dispatchEvent(new Event('input'));
+                                    this.style.display = 'none';
+                                    
+                                    // Refresh the selectpicker to show all options
+                                    try {
+                                        $(supplierSelect).selectpicker('refresh');
+                                    } catch (e) {
+                                        console.error("Error refreshing selectpicker:", e);
+                                    }
+                                });
+                                
+                                // Add input handler
+                                searchBox.addEventListener('input', function() {
+                                    clearBtn.style.display = this.value ? 'block' : 'none';
+                                });
+                                
+                                // Append button to searchbox
+                                const searchBoxContainer = document.querySelector('.bs-searchbox');
+                                if (searchBoxContainer) {
+                                    searchBoxContainer.style.position = 'relative';
+                                    searchBoxContainer.appendChild(clearBtn);
+                                }
+                            } else {
+                                console.warn("Could not find search box for supplier select");
+                            }
+                        } catch (e) {
+                            console.error("Error setting up clear button:", e);
+                        }
+                    }, 500);
+                } catch (e) {
+                    console.error("Error initializing bootstrap-select:", e);
                 }
             } else {
                 console.warn("Bootstrap-select not available, falling back to basic select");

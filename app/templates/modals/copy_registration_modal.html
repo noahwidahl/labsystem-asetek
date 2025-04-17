@@ -23,6 +23,10 @@
                             Search
                         </button>
                     </div>
+                    <div id="searchFeedback" class="text-muted mb-2" style="display: none;">
+                        <small><span id="searchResultCount">0</span> results found</small>
+                        <button type="button" class="btn btn-sm btn-link" id="clearSearchBtn">Clear search</button>
+                    </div>
                     <select class="form-select form-select-lg" id="existingRegistrations" size="8" style="height: auto;">
                         <!-- Populated dynamically -->
                         <option disabled selected>Loading samples...</option>
@@ -95,154 +99,112 @@
         
         // Function to filter samples based on search term
         function filterSamples(searchTerm) {
-            if (!allSamples.length) return;
+            console.log("Filtering samples with term:", searchTerm);
+            
+            if (!allSamples || allSamples.length === 0) {
+                console.log("No samples to filter");
+                return;
+            }
             
             // Clear dropdown
             existingRegistrations.innerHTML = '';
             
             // If no search term, show all samples
-            if (!searchTerm) {
+            if (!searchTerm || searchTerm.trim() === '') {
+                console.log("No search term, showing all samples:", allSamples.length);
                 populateDropdown(allSamples);
+                
+                // Hide search feedback
+                const searchFeedback = document.getElementById('searchFeedback');
+                if (searchFeedback) {
+                    searchFeedback.style.display = 'none';
+                }
                 return;
             }
             
             // Convert to lowercase for case-insensitive search
             searchTerm = searchTerm.toLowerCase().trim();
+            console.log("Searching for:", searchTerm);
             
-            // Split search term into words for better matching
-            const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
-            
-            // Score and filter samples based on search term
-            const scoredSamples = allSamples.map(sample => {
+            // Simple filter first - more straightforward matching
+            const filteredSamples = allSamples.filter(sample => {
                 const description = (sample.Description || '').toLowerCase();
                 const partNumber = (sample.PartNumber || '').toLowerCase();
                 const sampleId = (sample.SampleIDFormatted || '').toLowerCase();
                 
-                // Calculate match score - higher is better
-                let score = 0;
-                
-                // Exact matches get highest score
-                if (description === searchTerm) score += 100;
-                if (partNumber === searchTerm) score += 100;
-                if (sampleId === searchTerm) score += 100;
-                
-                // Starts with matches get high score
-                if (description.startsWith(searchTerm)) score += 50;
-                if (partNumber.startsWith(searchTerm)) score += 50;
-                if (sampleId.startsWith(searchTerm)) score += 50;
-                
-                // Contains matches get medium score
-                if (description.includes(searchTerm)) score += 25;
-                if (partNumber.includes(searchTerm)) score += 25;
-                if (sampleId.includes(searchTerm)) score += 25;
-                
-                // Word matches get scores too
-                for (const word of searchWords) {
-                    if (word.length < 2) continue; // Skip very short words
-                    
-                    if (description.includes(word)) score += 10;
-                    if (partNumber.includes(word)) score += 10;
-                    if (sampleId.includes(word)) score += 10;
-                    
-                    // Partial word matches get lower score
-                    const wordPattern = new RegExp(word.split('').join('.*'), 'i');
-                    if (wordPattern.test(description)) score += 5;
-                    if (wordPattern.test(partNumber)) score += 5;
-                    if (wordPattern.test(sampleId)) score += 5;
-                }
-                
-                return { sample, score };
-            }).filter(item => item.score > 0)
-              .sort((a, b) => b.score - a.score) // Sort by score, highest first
-              .map(item => item.sample); // Just return the sample objects
+                return description.includes(searchTerm) || 
+                      partNumber.includes(searchTerm) || 
+                      sampleId.includes(searchTerm);
+            });
+            
+            console.log("Found matches:", filteredSamples.length);
+            
+            // Show search feedback
+            const searchFeedback = document.getElementById('searchFeedback');
+            const searchResultCount = document.getElementById('searchResultCount');
+            
+            if (searchFeedback && searchResultCount) {
+                searchResultCount.textContent = filteredSamples.length;
+                searchFeedback.style.display = 'block';
+            }
             
             // Populate dropdown with filtered samples
-            populateDropdown(scoredSamples);
+            populateDropdown(filteredSamples);
             
             // Update message if no results
-            if (scoredSamples.length === 0) {
+            if (filteredSamples.length === 0) {
                 const noResultsOption = document.createElement('option');
                 noResultsOption.textContent = `No results found for "${searchTerm}"`;
                 noResultsOption.disabled = true;
                 existingRegistrations.appendChild(noResultsOption);
             }
-            
-            // Add status message showing result count
-            if (scoredSamples.length > 0) {
-                const countMessage = document.getElementById('sampleSearchCount');
-                if (countMessage) {
-                    countMessage.textContent = `Found ${scoredSamples.length} matches`;
-                    countMessage.classList.remove('d-none');
-                } else {
-                    const messageElement = document.createElement('div');
-                    messageElement.id = 'sampleSearchCount';
-                    messageElement.className = 'text-muted small mt-1';
-                    messageElement.textContent = `Found ${scoredSamples.length} matches`;
-                    const parentElement = existingRegistrations.parentElement;
-                    if (parentElement) {
-                        parentElement.insertBefore(messageElement, existingRegistrations.nextSibling);
-                    }
-                }
-            } else {
-                const countMessage = document.getElementById('sampleSearchCount');
-                if (countMessage) {
-                    countMessage.classList.add('d-none');
-                }
-            }
-            
-            // Highlight matching text in dropdown options (visual feedback)
-            if (searchTerm && scoredSamples.length > 0) {
-                for (let i = 0; i < existingRegistrations.options.length; i++) {
-                    const option = existingRegistrations.options[i];
-                    const text = option.textContent;
-                    
-                    // Skip if it's a disabled option
-                    if (option.disabled) continue;
-                    
-                    // Add title with match info
-                    let matchInfo = [];
-                    const sample = scoredSamples[i];
-                    
-                    if (sample.Description && sample.Description.toLowerCase().includes(searchTerm)) {
-                        matchInfo.push(`Match in description: "${sample.Description}"`);
-                    }
-                    
-                    if (sample.PartNumber && sample.PartNumber.toLowerCase().includes(searchTerm)) {
-                        matchInfo.push(`Match in part number: "${sample.PartNumber}"`);
-                    }
-                    
-                    if (sample.SampleIDFormatted && sample.SampleIDFormatted.toLowerCase().includes(searchTerm)) {
-                        matchInfo.push(`Match in sample ID: "${sample.SampleIDFormatted}"`);
-                    }
-                    
-                    // Set title with match info
-                    if (matchInfo.length > 0) {
-                        option.title = matchInfo.join('\n');
-                    }
-                }
-            }
-        }
         }
         
         // Function to populate dropdown with samples
         function populateDropdown(samples) {
+            console.log("Populating dropdown with samples:", samples.length);
+            
             // Clear existing options
             existingRegistrations.innerHTML = '';
+            
+            if (samples.length === 0) {
+                // If no samples, add a message
+                const noSamplesOption = document.createElement('option');
+                noSamplesOption.textContent = 'No samples to display';
+                noSamplesOption.disabled = true;
+                existingRegistrations.appendChild(noSamplesOption);
+                return;
+            }
             
             // Add samples to dropdown
             samples.forEach(sample => {
                 const option = document.createElement('option');
                 option.value = sample.SampleID;
-                option.textContent = `${sample.SampleIDFormatted}: ${sample.Description || ''} ${sample.PartNumber ? '(' + sample.PartNumber + ')' : ''}`;
+                
+                // Create a readable display text
+                let displayText = sample.SampleIDFormatted || `Sample ${sample.SampleID}`;
+                
+                if (sample.Description) {
+                    displayText += `: ${sample.Description}`;
+                }
+                
+                if (sample.PartNumber) {
+                    displayText += ` (${sample.PartNumber})`;
+                }
+                
+                option.textContent = displayText;
+                
+                // Store the entire sample data for later use
                 option.dataset.sample = JSON.stringify(sample);
                 existingRegistrations.appendChild(option);
             });
             
-            // Update preview if samples exist
-            if (samples.length > 0) {
-                existingRegistrations.selectedIndex = 0;
-                updatePreview();
-            }
+            // Update preview for the first sample
+            existingRegistrations.selectedIndex = 0;
+            updatePreview();
+            
+            // Add a "showing results" message
+            console.log("Dropdown populated with", samples.length, "samples");
         }
         
         // Set up event listeners
@@ -251,18 +213,22 @@
         }
         
         if (searchInput) {
+            console.log("Setting up search input events");
             // Search on input with debounce
             let debounceTimeout;
             searchInput.addEventListener('input', function() {
+                console.log("Input changed to:", this.value);
                 clearTimeout(debounceTimeout);
                 
                 // Show/hide clear button based on input
                 const clearButton = document.getElementById('sampleSearchClear');
                 if (clearButton) {
-                    clearButton.style.display = this.value ? 'block' : 'none';
+                    clearButton.style.display = this.value ? 'inline-block' : 'none';
                 }
                 
+                // Set timeout for debounce
                 debounceTimeout = setTimeout(() => {
+                    console.log("Debounce timeout triggered with value:", this.value);
                     filterSamples(this.value.trim());
                 }, 300);
             });
@@ -270,44 +236,75 @@
             // Search on Enter key
             searchInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
+                    console.log("Enter key pressed with value:", this.value);
                     e.preventDefault();
                     filterSamples(this.value.trim());
                 }
             });
             
-            // Add clear button to search input
+            // Create a simple clear button that sits on the right side of the input
+            const clearButton = document.createElement('button');
+            clearButton.type = 'button';
+            clearButton.className = 'btn btn-sm btn-outline-secondary';
+            clearButton.id = 'sampleSearchClear';
+            clearButton.innerHTML = '<i class="fas fa-times"></i>';
+            clearButton.style.display = 'none';
+            clearButton.style.position = 'absolute';
+            clearButton.style.right = '50px'; // Position before the search button
+            clearButton.style.top = '5px';
+            clearButton.style.zIndex = '10';
+            clearButton.title = 'Clear search';
+            
+            // Handle clear button click
+            clearButton.addEventListener('click', function(e) {
+                console.log("Clear button clicked");
+                e.preventDefault();
+                e.stopPropagation();
+                searchInput.value = '';
+                searchInput.focus();
+                this.style.display = 'none';
+                filterSamples(''); // Show all samples
+            });
+            
+            // Add the clear button to the input group
             const inputGroup = searchInput.parentElement;
             if (inputGroup) {
-                const clearButton = document.createElement('button');
-                clearButton.type = 'button';
-                clearButton.className = 'btn btn-outline-secondary position-absolute end-0 top-0 bottom-0 d-none';
-                clearButton.id = 'sampleSearchClear';
-                clearButton.innerHTML = '<i class="fas fa-times"></i>';
-                clearButton.style.zIndex = '5';
-                clearButton.style.border = 'none';
-                clearButton.style.display = 'none';
-                clearButton.style.borderRadius = '0 4px 4px 0';
-                clearButton.title = 'Clear search';
-                
-                // Position the clear button
                 inputGroup.style.position = 'relative';
-                
-                // Handle clear button click
-                clearButton.addEventListener('click', function() {
-                    searchInput.value = '';
-                    searchInput.focus();
-                    this.style.display = 'none';
-                    filterSamples(''); // Show all samples
-                });
-                
-                // Insert after search input but before search button
-                inputGroup.insertBefore(clearButton, searchButton);
+                inputGroup.appendChild(clearButton);
             }
         }
         
         if (searchButton) {
             searchButton.addEventListener('click', function() {
+                console.log("Search button clicked with value:", searchInput.value);
                 filterSamples(searchInput.value.trim());
+            });
+        }
+        
+        // Set up clear search button functionality
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+        if (clearSearchBtn) {
+            clearSearchBtn.addEventListener('click', function() {
+                console.log("Clear search button clicked");
+                
+                // Clear the search input
+                if (searchInput) {
+                    searchInput.value = '';
+                }
+                
+                // Show all samples
+                filterSamples('');
+                
+                // Hide the search feedback
+                const searchFeedback = document.getElementById('searchFeedback');
+                if (searchFeedback) {
+                    searchFeedback.style.display = 'none';
+                }
+                
+                // Focus on the search input
+                if (searchInput) {
+                    searchInput.focus();
+                }
             });
         }
         
