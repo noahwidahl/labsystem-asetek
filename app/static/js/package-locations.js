@@ -105,6 +105,19 @@ window.PackageLocations = (function() {
         dumpState: function() {
             console.log("PackageLocations state:", JSON.stringify(packageLocations));
             return packageLocations.length;
+        },
+        
+        // DEBUG: Add this helper function to inspect package locations state
+        debug: function() {
+            if (packageLocations.length === 0) {
+                console.log("DEBUG: No package locations defined");
+                return;
+            }
+            
+            console.log("DEBUG: Current package locations:");
+            packageLocations.forEach(loc => {
+                console.log(`  Package ${loc.packageNumber}: ${loc.locationName} (ID: ${loc.locationId})`);
+            });
         }
     };
 })();

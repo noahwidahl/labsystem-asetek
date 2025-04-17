@@ -159,17 +159,35 @@ function validateCurrentStep() {
             // For multiple samples with container storage - one container per package
             else if (sampleType === 'multiple' && storageOption === 'container') {
                 const oneContainerPerPackage = document.getElementById('oneContainerPerPackage')?.checked || false;
-                if (oneContainerPerPackage) {
+                
+                // Also check the alternative selector (multiContainerOption)
+                const multiContainerOption = document.querySelector('input[name="multiContainerOption"]:checked')?.value;
+                const usingMultipleContainers = oneContainerPerPackage || multiContainerOption === 'multiple';
+                
+                if (usingMultipleContainers) {
                     const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
+                    const separateStorage = document.getElementById('separateStorage')?.checked || false;
+                    
+                    console.log(`Multiple container validation: packageCount=${packageCount}, separateStorage=${separateStorage}`);
                     
                     // Ensure PackageLocations is available
                     checkPackageLocations();
                     
                     const selectedLocations = PackageLocations.getSelectedLocations();
-                    if (selectedLocations.length < packageCount) {
+                    console.log("Validating locations:", selectedLocations);
+                    
+                    // Only require separate locations if separate storage is checked
+                    if (separateStorage && selectedLocations.length < packageCount) {
                         showErrorMessage(`You need to select ${packageCount} locations for containers. You have selected ${selectedLocations.length}.`);
                         return false;
                     }
+                    
+                    // If we have a saved multi-containers form data, attach it to the formData
+                    if (window._multipleContainersFormData) {
+                        console.log("Found saved multi-containers form data:", window._multipleContainersFormData);
+                        registerApp.multipleContainersFormData = window._multipleContainersFormData;
+                    }
+                    
                     return true;
                 }
                 // For one container for all - need just one location
@@ -519,15 +537,32 @@ function handleFormSubmission() {
                 }
                 
                 // For multiple containers, each container will use its own location
-                // Ensure PackageLocations is available
-                checkPackageLocations();
-                
-                const packageLocations = PackageLocations.getSelectedLocations();
-                formData.containerLocations = packageLocations.map(loc => ({
-                    packageNumber: loc.packageNumber,
-                    locationId: loc.locationId
-                }));
-                console.log("Using multiple container locations:", formData.containerLocations);
+                // First check if we have saved multi-container form data
+                if (registerApp.multipleContainersFormData) {
+                    console.log("Using saved multi-container form data");
+                    
+                    // Copy saved form data
+                    formData.containerLocations = registerApp.multipleContainersFormData.containerLocations || [];
+                    formData.packageLocations = registerApp.multipleContainersFormData.packageLocations || [];
+                    
+                    // Ensure we have the right flags
+                    formData.createMultipleContainers = true;
+                    formData.multiContainerOption = 'multiple';
+                    
+                    console.log("Using saved container locations:", formData.containerLocations);
+                } else {
+                    // If no saved data, get it from PackageLocations
+                    // Ensure PackageLocations is available
+                    checkPackageLocations();
+                    
+                    const packageLocations = PackageLocations.getSelectedLocations();
+                    formData.containerLocations = packageLocations.map(loc => ({
+                        packageNumber: loc.packageNumber,
+                        locationId: loc.locationId
+                    }));
+                    formData.packageLocations = formData.containerLocations;
+                    console.log("Using multiple container locations from PackageLocations:", formData.containerLocations);
+                }
             }
         }
     }

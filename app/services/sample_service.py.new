@@ -522,8 +522,12 @@ class SampleService:
                             sample_data['containerTypeId'] = cursor.lastrowid
                             print(f"DEBUG: Created basic container type: {sample_data['containerTypeId']}")
                     
-                    # Ensure containerLocationId is set
-                    if not sample_data.get('containerLocationId'):
+                    # Skip containerLocationId validation for multiple containers
+                    # In that case, the locations come from containerLocations array
+                    if sample_data.get('createMultipleContainers', False):
+                        print("DEBUG: Skipping containerLocationId validation for multiple containers mode")
+                    # Ensure containerLocationId is set for single container
+                    elif not sample_data.get('containerLocationId'):
                         if sample_data.get('storageLocation'):
                             sample_data['containerLocationId'] = sample_data.get('storageLocation')
                             print(f"DEBUG: Using storageLocation as containerLocationId: {sample_data['containerLocationId']}")

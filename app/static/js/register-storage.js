@@ -171,17 +171,96 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
                         }
                     }
                     
-                    // For one container per package mode, ensure we have all locations selected
+                    // For one container per package mode, handle package location selection
                     if (oneContainerPerPackage && typeof window.PackageLocations !== 'undefined') {
                         const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
-                        const selectedLocations = window.PackageLocations.getSelectedLocations();
+                        // IMPORTANT: Get the actual selected locations
+                        const selectedLocations = window.PackageLocations ? window.PackageLocations.getSelectedLocations() : [];
                         
+                        console.log("DEBUG: Getting selected locations:", JSON.stringify(selectedLocations));
                         console.log("DEBUG: Validating container locations before submission", 
                             {packageCount, selectedCount: selectedLocations.length, locations: selectedLocations});
+                        
+                        // Check if separate storage is enabled
+                        const separateStorage = document.getElementById('separateStorage')?.checked || false;
+                        console.log("DEBUG: Separate storage enabled:", separateStorage);
+                        
+                        // Save selected locations for later access in form submission
+                        // CRITICAL FIX: Always save these locations regardless of validation outcome
+                        if (selectedLocations.length > 0) {
+                            window._multipleContainersFormData = {
+                                createMultipleContainers: true,
+                                multiContainerOption: 'multiple',
+                                packageLocations: selectedLocations,
+                                containerLocations: selectedLocations
+                            };
+                            console.log("DEBUG: Saved package locations:", selectedLocations);
+                        } else {
+                            console.log("DEBUG: No package locations to save");
+                        }
+                        
+                        if (separateStorage) {
+                            // VALIDATE: When separate storage is enabled, we need locations for all packages
+                            console.log(`DEBUG: Separate storage is enabled - checking if we have ${packageCount} locations`);
                             
-                        if (selectedLocations.length !== packageCount) {
-                            alert(`Error: Please select a storage location for each container. You need to select ${packageCount} locations (one for each package).`);
-                            return; // Prevent form submission
+                            // CRITICAL: We need at least one location selected
+                            if (selectedLocations.length === 0) {
+                                alert(`Error: Please select at least one storage location for the containers.`);
+                                return; // Prevent form submission
+                            }
+                        
+                            // Extract package numbers from selected locations
+                            const allPackageNumbers = selectedLocations.map(loc => parseInt(loc.packageNumber));
+                            allPackageNumbers.sort((a, b) => a - b);
+                            console.log("DEBUG: Selected package numbers:", allPackageNumbers);
+                        
+                            // Log what locations we have for debugging
+                            selectedLocations.forEach(loc => {
+                                console.log(`DEBUG: Package ${loc.packageNumber} -> Location ${loc.locationName} (ID: ${loc.locationId})`);
+                            });
+                            
+                            // Check if we have all packages covered when separate storage is required
+                            const packagesWithoutLocation = [];
+                            for (let i = 1; i <= packageCount; i++) {
+                                if (!allPackageNumbers.includes(i)) {
+                                    packagesWithoutLocation.push(i);
+                                }
+                            }
+                        
+                            if (packagesWithoutLocation.length > 0) {
+                                alert(`Error: Missing storage locations for packages: ${packagesWithoutLocation.join(', ')}`);
+                                return; // Prevent form submission
+                            }
+                        } else {
+                            // When separate storage is NOT enabled, we just need one location
+                            // that will be used for all packages/containers
+                            console.log("DEBUG: Separate storage is disabled - only need one location");
+                            
+                            // If the user hasn't selected any locations in the grid but 
+                            // separate storage is disabled, it's fine to use one default location
+                            if (selectedLocations.length === 0) {
+                                // This ensures we always have at least one valid location
+                                // No need to show an error message here
+                                console.log("DEBUG: No locations selected but separate storage is disabled - " +
+                                           "continuing with default location");
+                            } else if (selectedLocations.length > 0) {
+                                // Ensure user knows we'll only use one location
+                                console.log("DEBUG: Using the first selected location for all containers");
+                            }
+                        }
+                        
+                        // CRITICAL: Always proceed with form submission at this point
+                        console.log("DEBUG: Package location validation passed, proceeding to form submission");
+                        
+                        // Extra check to make sure we have multiple containers form data when needed
+                        if (!window._multipleContainersFormData && selectedLocations.length > 0) {
+                            window._multipleContainersFormData = {
+                                createMultipleContainers: true,
+                                multiContainerOption: 'multiple',
+                                packageLocations: selectedLocations,
+                                containerLocations: selectedLocations
+                            };
+                            console.log("DEBUG: Added missing _multipleContainersFormData", window._multipleContainersFormData);
                         }
                         
                         // Also verify that we've set the amountPerPackage correctly
@@ -202,7 +281,10 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
                         const formData = {
                             // Set this explicitly to ensure it's sent
                             createMultipleContainers: true,
-                            multiContainerOption: 'multiple'
+                            multiContainerOption: 'multiple',
+                            // Include the package locations directly 
+                            packageLocations: selectedLocations,
+                            containerLocations: selectedLocations
                         };
                         
                         // The main form submission will include these with the form data
@@ -396,15 +478,30 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
                     }
                 }
                 
-                // Add visual indicator for multi-package selection
-                if ((sampleType === 'multiple' && separateStorage) || oneContainerPerPackage) {
+                // Check for "One container for all" option - we shouldn't use multi-select in this case
+                const oneContainerForAll = document.getElementById('oneContainerForAll')?.checked || false;
+                if (oneContainerForAll && storageOption === 'container' && sampleType === 'multiple') {
+                    console.log("DEBUG: 'One container for all samples' is selected - NOT using multi-select mode");
+                    oneContainerPerPackage = false;
+                }
+                
+                // Check if separate storage is enabled - important for oneContainerPerPackage mode
+                const separateStorageEnabled = document.getElementById('separateStorage')?.checked || false;
+                console.log(`Checking separate storage: ${separateStorageEnabled}`);
+                
+                // Add visual indicator for multi-package selection ONLY when separate storage is checked
+                // OR when oneContainerPerPackage is selected with separate storage
+                if ((sampleType === 'multiple' && separateStorageEnabled && !oneContainerForAll) || 
+                    (oneContainerPerPackage && separateStorageEnabled)) {
                     cell.setAttribute('data-toggle', 'tooltip');
                     cell.setAttribute('title', 'Click to select for a package');
                     cell.classList.add('multi-selectable-cell');
                 }
                 
-                // Use multi-select if either separate storage OR one container per package is active
-                if ((sampleType === 'multiple' && separateStorage) || oneContainerPerPackage) {
+                // Use multi-select if either separate storage OR one container per package with separate storage is active
+                // BUT never use it for one container for all option
+                if (((sampleType === 'multiple' && separateStorageEnabled) || 
+                     (oneContainerPerPackage && separateStorageEnabled)) && !oneContainerForAll) {
                     // In multi-selection mode, mark cells as available for selection
                     cell.classList.add('multi-package-available');
                     
@@ -686,25 +783,36 @@ function handleMultiPackageSelection(cell) {
     // Get required count based on selection
     const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
     const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
+    const separateStorage = document.getElementById('separateStorage')?.checked || false;
+    
+    // CRITICAL FIX: Always check both ways of determining oneContainerPerPackage
+    // This ensures we detect this mode correctly regardless of which UI control was used
+    const oneContainerPerPackage = document.getElementById('oneContainerPerPackage')?.checked || false;
+    const multiContainerOption = document.querySelector('input[name="multiContainerOption"]:checked')?.value;
+    const isMultiContainerMode = oneContainerPerPackage || multiContainerOption === 'multiple';
     
     let packageCount = 1;
     
-    // For multiple samples with separate storage
-    if (sampleType === 'multiple' && document.getElementById('separateStorage')?.checked) {
-        packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
-    }
-    // For multiple samples with one container per package
-    else if (sampleType === 'multiple' && storageOption === 'container' && document.getElementById('oneContainerPerPackage')?.checked) {
+    // Calculate package count based on configuration
+    if (sampleType === 'multiple') {
         packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
     }
     
-    const selectedCellsCount = document.querySelectorAll('.storage-cell.multi-package-selected').length;
+    // Log current configuration
+    console.log(`MultiPackageSelection: sampleType=${sampleType}, storageOption=${storageOption}, ` +
+                `separateStorage=${separateStorage}, packageCount=${packageCount}, ` + 
+                `multiContainerMode=${isMultiContainerMode}`);
     
     // Ensure PackageLocations is available
     if (typeof window.PackageLocations === 'undefined') {
         console.error("PackageLocations module not available");
         alert("Error: Package location tracking is not available. Please refresh the page and try again.");
         return;
+    }
+    
+    // CRITICAL: Debug output for current package locations
+    if (typeof window.PackageLocations.debug === 'function') {
+        window.PackageLocations.debug();
     }
     
     // Check if cell is already selected
@@ -725,6 +833,9 @@ function handleMultiPackageSelection(cell) {
         if (packageNumber) {
             // If we know the package number, use it
             window.PackageLocations.removeLocation(packageNumber);
+            
+            // CRITICAL: Clear the package number attribute from the cell
+            delete cell.dataset.packageNumber;
         } else {
             // Otherwise remove by name
             window.PackageLocations.removeLocationByName(locationText);
@@ -732,46 +843,43 @@ function handleMultiPackageSelection(cell) {
         
         // Always update the summary when removing a location
         updatePackageSelectionSummary();
+        updateLocationSummary();
         
         // Debug: dump state
         console.log("After removal, package locations:", window.PackageLocations.dumpState());
     } else {
-        // Check if we already selected maximum number of locations
-        if (selectedCellsCount < packageCount) {
+        // Get location ID and name from the cell
+        const locationId = cell.dataset.locationId;
+        const locationText = cell.querySelector('.location').textContent;
+        
+        // We want to allow reusing the same location for multiple packages,
+        // so check for package numbers that don't have a location yet
+        const allPackageNumbers = window.PackageLocations.getSelectedLocations()
+            .map(loc => parseInt(loc.packageNumber));
+        
+        // Find packages without locations
+        const missingPackages = [];
+        for (let i = 1; i <= packageCount; i++) {
+            if (!allPackageNumbers.includes(i)) {
+                missingPackages.push(i);
+            }
+        }
+        
+        // Debug - log missing packages
+        console.log("Packages without locations:", missingPackages);
+        
+        // Allow location selection if we haven't assigned all packages
+        if (missingPackages.length > 0) {
             // Select cell
             cell.classList.add('multi-package-selected');
             cell.classList.remove('multi-package-available');
             
-            // Get location info from cell
-            const locationText = cell.querySelector('.location').textContent;
-            const locationId = cell.dataset.locationId;
+            // Use the first missing package number as the next one to assign
+            let nextPackageNumber = missingPackages[0];
             
-            // Find the next available package number
-            let nextPackageNumber = 1;
+            console.log(`Assigning location ${locationText} to package ${nextPackageNumber}`);
             
-            // Get all currently selected packages
-            const selectedPackages = [];
-            window.PackageLocations.getSelectedLocations().forEach(loc => {
-                selectedPackages.push(parseInt(loc.packageNumber));
-            });
-            
-            // If there are packages already selected, find the next available
-            if (selectedPackages.length > 0) {
-                selectedPackages.sort((a, b) => a - b);
-                
-                // Find first gap in sequence or use next number
-                for (let i = 1; i <= packageCount; i++) {
-                    if (!selectedPackages.includes(i)) {
-                        nextPackageNumber = i;
-                        break;
-                    }
-                }
-            }
-            
-            // Debug log
-            console.log("Adding location from cell:", locationText, "with ID:", locationId, "as package:", nextPackageNumber);
-            
-            // Store the package number in a data attribute on the cell for later reference
+            // CRITICAL: Store the package number on the cell so we can find it again
             cell.dataset.packageNumber = nextPackageNumber;
             
             // Add location with the determined package number
@@ -779,6 +887,15 @@ function handleMultiPackageSelection(cell) {
             
             // Always update the summary when adding a location
             updatePackageSelectionSummary();
+            updateLocationSummary();
+            
+            // CRITICAL: Save in global state
+            window._multipleContainersFormData = {
+                createMultipleContainers: true,
+                multiContainerOption: 'multiple',
+                packageLocations: window.PackageLocations.getSelectedLocations(),
+                containerLocations: window.PackageLocations.getSelectedLocations()
+            };
             
             // Debug: dump state
             console.log("After addition, package locations:", window.PackageLocations.dumpState());

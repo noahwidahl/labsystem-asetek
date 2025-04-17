@@ -638,6 +638,10 @@
                 if (oneContainerForAll && oneContainerForAll.checked) {
                     // Creating one container for all samples
                     formData.createSingleContainer = true;
+                    
+                    // CRITICAL: Set flag to use single container for all packages
+                    formData.useSingleContainerForAll = true;
+                    
                     // Get container description and log it for debugging
                     const containerDesc = document.getElementById('containerDescription')?.value || '';
                     formData.containerDescription = containerDesc || formData.description || 'Container';
@@ -704,6 +708,13 @@
                     formData.containerTypeId = document.getElementById('containerType')?.value || '';
                     formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
                     
+                    // CRITICAL: Explicitly set containerLocationId to null for "one container per package"
+                    // This prevents backend from expecting a specific location
+                    formData.containerLocationId = null;
+                    
+                    // CRITICAL: Explicitly set container location to null to prevent backend from expecting it
+                    formData.containerLocationId = null;
+
                     // For multiple containers, get package locations
                     if (typeof window.PackageLocations !== 'undefined') {
                         // Log state for debug
@@ -714,9 +725,16 @@
                         const packageLocations = window.PackageLocations.getSelectedLocations();
                         console.log('DEBUG: Package locations for multiple containers:', packageLocations);
                         
-                        // Ensure we have the right number of locations for all packages
-                        if (packageLocations.length !== packageCount) {
-                            alert(`Error: You need to select ${packageCount} locations for your packages. Currently selected: ${packageLocations.length}`);
+                        // Get separate storage status
+                        const separateStorage = document.getElementById('separateStorage')?.checked || false;
+                        console.log('DEBUG: Separate storage enabled:', separateStorage);
+                        
+                        // CRITICAL FIX: Only enforce all locations when separate storage is enabled
+                        // Otherwise we just need at least one location
+                        
+                        if (packageLocations.length === 0) {
+                            // No locations at all - this is always an error
+                            alert('Error: Please select at least one storage location in the grid.');
                             
                             // Remove processing toast if showing
                             toast.remove();
@@ -724,6 +742,21 @@
                             // Prevent form submission
                             return false;
                         }
+                        else if (separateStorage && packageLocations.length !== packageCount) {
+                            // When separate storage is enabled, we need exactly one location per package
+                            alert(`Error: You need to select ${packageCount} locations for your packages. Currently selected: ${packageLocations.length}. Each package needs its own location.`);
+                            
+                            // Remove processing toast if showing
+                            toast.remove();
+                            
+                            // Prevent form submission
+                            return false;
+                        }
+                        
+                        // If we get here, either:
+                        // 1. separate storage is enabled and we have exactly the right number of locations, or
+                        // 2. separate storage is disabled and we have at least one location (will use first)
+                        console.log(`Validation passed with ${packageLocations.length} locations, separateStorage=${separateStorage}, packageCount=${packageCount}`);
                         
                         // Sort package locations by package number to ensure they're in order
                         const sortedLocations = [...packageLocations].sort((a, b) => 
@@ -734,14 +767,19 @@
                             packageNumber: loc.packageNumber,
                             locationId: loc.locationId
                         }));
-                        formData.differentLocations = true; // Explicitly set flag for backend processing
+                        
+                        // Set differentLocations based on separate storage checkbox
+                        formData.differentLocations = separateStorage;
+                        formData.useSeparateStorage = separateStorage; // Make this explicit for the backend
+                        
                         formData.packageLocations = sortedLocations.map(loc => ({
                             packageNumber: loc.packageNumber,
                             locationId: loc.locationId
                         }));
                         
                         // Log packaged data
-                        console.log('DEBUG: Sending container locations:', formData.containerLocations);
+                        console.log('DEBUG: Sending container locations:', formData.containerLocations, 
+                                   'useSeparateStorage:', separateStorage);
                         
                         // CRITICAL FLAGS - set all needed flags to ensure multiple samples are created
                         formData.createMultipleContainers = true;
@@ -852,13 +890,14 @@
                     multiLocationInfo.style.display = 'block';
                 }
                 
-                // Auto-check the "separate storage" checkbox for multiple storage
+                // REMOVE automatic checking of "separate storage" checkbox
+                // This lets users decide if they want separate storage or not
                 const separateStorage = document.getElementById('separateStorage');
                 if (separateStorage) {
-                    separateStorage.checked = true;
-                    // Disable the checkbox to prevent changes when in this mode
-                    separateStorage.disabled = true;
-                    // Trigger any associated events
+                    // Do NOT force checked state
+                    // Do NOT disable the checkbox - let users change it
+                    
+                    // Just trigger associated events to update the UI
                     separateStorage.dispatchEvent(new Event('change'));
                 }
             } else {
@@ -960,13 +999,14 @@
                     multiLocationInfo.style.display = 'block';
                 }
                 
-                // Auto-check the "separate storage" checkbox for multiple storage
+                // REMOVE automatic checking of "separate storage" checkbox
+                // This lets users decide if they want separate storage or not
                 const separateStorage = document.getElementById('separateStorage');
                 if (separateStorage) {
-                    separateStorage.checked = true;
-                    // Disable the checkbox to prevent changes when in this mode
-                    separateStorage.disabled = true;
-                    // Trigger any associated events
+                    // Do NOT force checked state
+                    // Do NOT disable the checkbox - let users change it
+                    
+                    // Just trigger associated events to update the UI
                     separateStorage.dispatchEvent(new Event('change'));
                 }
             } else {
@@ -1488,12 +1528,23 @@
                             }
                         }
                         
-                        // Check container location
-                        const containerLocation = document.getElementById('containerLocation')?.value;
-                        if (!containerLocation) {
-                            alert('Error: Please select a storage location for the container.');
-                            document.getElementById('containerLocation')?.focus();
-                            return false;
+                        // Check if we're in "one container per package" mode
+                        const oneContainerPerPackage = document.getElementById('oneContainerPerPackage')?.checked || false;
+                        const multiContainerOption = document.querySelector('input[name="multiContainerOption"]:checked')?.value;
+                        const isMultiContainerMode = oneContainerPerPackage || multiContainerOption === 'multiple';
+                        
+                        // If we're in multi-container mode, skip the containerLocation check
+                        // because it uses package locations from grid view instead
+                        if (!isMultiContainerMode) {
+                            // Only check container location for single container mode
+                            const containerLocation = document.getElementById('containerLocation')?.value;
+                            if (!containerLocation) {
+                                alert('Error: Please select a storage location for the container.');
+                                document.getElementById('containerLocation')?.focus();
+                                return false;
+                            }
+                        } else {
+                            console.log("Skipping containerLocation check in one-container-per-package mode");
                         }
                     } else {
                         // Using existing container
@@ -1521,5 +1572,78 @@
             updateRegistrationSummary: typeof window.updateRegistrationSummary === 'function'
         });
     });
+    
+    // SUPER CRITICAL FIX FOR DISAPPEARING BUTTONS:
+    // This is a comprehensive fix that will ensure ALL buttons remain visible ALWAYS
+    // It runs very frequently and forces the display to be visible
+    setInterval(function() {
+        const currentStep = window.registerApp ? window.registerApp.currentStep : 4;
+        
+        // Find all navigation buttons
+        const nextButton = document.getElementById('nextButton');
+        const prevButton = document.getElementById('prevButton');
+        const fixedNextButton = document.getElementById('fixedNextButton');
+        const fixedPrevButton = document.getElementById('fixedPrevButton');
+        
+        // Make next button always visible
+        if (nextButton) {
+            if (nextButton.style.display !== 'block') {
+                console.log("CRITICAL FIX: Next button was hidden, forcing visible");
+                nextButton.style.display = 'block';
+                
+                // Force browser to recognize style change
+                window.getComputedStyle(nextButton).display;
+            }
+            
+            // Also ensure correct text
+            if (currentStep === 4) {
+                nextButton.textContent = 'Save';
+                nextButton.classList.add('btn-success');
+                nextButton.classList.remove('btn-primary');
+            }
+        }
+        
+        // Make prev button visible except on first step
+        if (prevButton && currentStep > 1) {
+            if (prevButton.style.display !== 'block') {
+                console.log("CRITICAL FIX: Prev button was hidden, forcing visible");
+                prevButton.style.display = 'block';
+                
+                // Force browser to recognize style change
+                window.getComputedStyle(prevButton).display;
+            }
+        }
+        
+        // Make fixed buttons visible on step 4
+        if (currentStep === 4) {
+            if (fixedNextButton && fixedNextButton.style.display !== 'block') {
+                console.log("CRITICAL FIX: Fixed next button was hidden, forcing visible");
+                fixedNextButton.style.display = 'block';
+                fixedNextButton.textContent = 'Save';
+                fixedNextButton.classList.add('btn-success');
+                
+                // Force browser to recognize style change
+                window.getComputedStyle(fixedNextButton).display;
+            }
+            
+            if (fixedPrevButton && fixedPrevButton.style.display !== 'block') {
+                console.log("CRITICAL FIX: Fixed prev button was hidden, forcing visible");
+                fixedPrevButton.style.display = 'block';
+                
+                // Force browser to recognize style change
+                window.getComputedStyle(fixedPrevButton).display;
+            }
+        }
+        
+        // Also check the form navigation container
+        const formNavigation = document.querySelector('.form-navigation');
+        if (formNavigation && formNavigation.style.display === 'none') {
+            console.log("CRITICAL FIX: Form navigation was hidden, forcing visible");
+            formNavigation.style.display = 'block';
+            
+            // Force browser to recognize style change
+            window.getComputedStyle(formNavigation).display;
+        }
+    }, 250); // Run very frequently (4 times per second)
 </script>
 {% endblock %}

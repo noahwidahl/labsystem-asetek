@@ -12,6 +12,50 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup registration form steps
     setupRegistrationSteps();
     
+    // CRITICAL FIX FOR DISAPPEARING NEXT BUTTON:
+    // Add a persistent interval to ensure Next button is always visible
+    // This handles cases where CSS or DOM modifications might hide it unexpectedly
+    setInterval(function() {
+        // Check regular Next button
+        const nextButton = document.getElementById('nextButton');
+        if (nextButton && nextButton.style.display !== 'block') {
+            console.log("INTERVAL FIX: Next button was hidden, forcing visible");
+            nextButton.style.display = 'block';
+            
+            // Force immediate style application
+            window.getComputedStyle(nextButton).display;
+        }
+        
+        // Also check fixed button in step 4
+        const fixedNextButton = document.getElementById('fixedNextButton');
+        if (fixedNextButton && registerApp.currentStep >= 4) {
+            if (fixedNextButton.style.display !== 'block') {
+                console.log("INTERVAL FIX: Fixed next button was hidden, forcing visible");
+                fixedNextButton.style.display = 'block';
+                
+                // Force immediate style application
+                window.getComputedStyle(fixedNextButton).display;
+            }
+            
+            // Set the correct text based on current step
+            if (registerApp.currentStep === registerApp.totalSteps) {
+                fixedNextButton.textContent = 'Save';
+                fixedNextButton.classList.add('btn-success');
+                fixedNextButton.classList.remove('btn-primary');
+            }
+        }
+        
+        // Check Previous button too for completeness
+        const prevButton = document.getElementById('prevButton');
+        if (prevButton && registerApp.currentStep > 1 && prevButton.style.display !== 'block') {
+            console.log("INTERVAL FIX: Previous button was hidden, forcing visible");
+            prevButton.style.display = 'block';
+            
+            // Force immediate style application
+            window.getComputedStyle(prevButton).display;
+        }
+    }, 300); // Check every 300ms for faster response
+    
     // Add a simple mechanism to prevent the unexpected navigation issue
     // This is the simplest possible fix: If we've already been to step 2 in this session,
     // don't let the form jump back to step 1 unexpectedly
@@ -127,17 +171,45 @@ function showStep(step) {
         // Update current step global variable
         registerApp.currentStep = step;
         
-        // Make sure navigation buttons are visible
+        // CRITICAL: Make sure navigation buttons are visible and styled correctly
         const nextButton = document.getElementById('nextButton');
         const prevButton = document.getElementById('prevButton');
         
         if (nextButton) {
+            // MUST be block, never 'none'
             nextButton.style.display = 'block';
-            nextButton.textContent = step === registerApp.totalSteps ? 'Save' : 'Next';
+            
+            // Ensure correct styling for the current step
+            if (step === registerApp.totalSteps) {
+                nextButton.textContent = 'Save';
+                nextButton.classList.add('btn-success');
+                nextButton.classList.remove('btn-primary');
+            } else {
+                nextButton.textContent = 'Next';
+                nextButton.classList.add('btn-primary');
+                nextButton.classList.remove('btn-success');
+            }
+            
+            // Force the computed style to take effect (prevents Chrome rendering issues)
+            window.getComputedStyle(nextButton).display;
+            console.log(`Next button should be visible in step ${step}, display = ${nextButton.style.display}`);
         }
         
         if (prevButton) {
             prevButton.style.display = step > 1 ? 'block' : 'none';
+            
+            // Force the computed style to take effect
+            window.getComputedStyle(prevButton).display;
+        }
+        
+        // Also check for fixed navigation buttons in step 4
+        const fixedNextButton = document.getElementById('fixedNextButton');
+        if (fixedNextButton && step === 4) {
+            fixedNextButton.style.display = 'block';
+            fixedNextButton.textContent = 'Save';
+            
+            // Force the computed style to take effect
+            window.getComputedStyle(fixedNextButton).display;
         }
     } else {
         console.error(`Step element #step${step} not found`);
@@ -177,7 +249,50 @@ function updateNavigationButtons(step) {
     }
 
     if (nextButton) {
-        nextButton.textContent = step === registerApp.totalSteps ? 'Save' : 'Next';
+        // CRITICAL: Ensure the Next/Save button is ALWAYS visible
+        nextButton.style.display = 'block';
+        
+        // Make button more prominent in final step
+        if (step === registerApp.totalSteps) {
+            nextButton.textContent = 'Save';
+            nextButton.classList.add('btn-success');
+            nextButton.classList.remove('btn-primary');
+        } else {
+            nextButton.textContent = 'Next';
+            nextButton.classList.add('btn-primary');
+            nextButton.classList.remove('btn-success');
+        }
+        
+        // SUPER IMPORTANT: Schedule another visibility check after a short delay
+        // This helps with browser rendering issues where display: block gets overridden
+        setTimeout(function() {
+            console.log("Extra visibility check for Next button");
+            if (nextButton.style.display !== 'block') {
+                console.log("FIXING: Next button was hidden, forcing visible");
+                nextButton.style.display = 'block';
+            }
+        }, 100);
+    }
+    
+    // Also update the fixed buttons in the storage step if they exist
+    const fixedPrevButton = document.getElementById('fixedPrevButton');
+    const fixedNextButton = document.getElementById('fixedNextButton');
+    
+    if (fixedPrevButton) {
+        fixedPrevButton.style.display = step === 1 ? 'none' : 'block';
+    }
+    
+    if (fixedNextButton) {
+        fixedNextButton.style.display = 'block';
+        if (step === registerApp.totalSteps) {
+            fixedNextButton.textContent = 'Save';
+            fixedNextButton.classList.add('btn-success');
+            fixedNextButton.classList.remove('btn-primary');
+        } else {
+            fixedNextButton.textContent = 'Next';
+            fixedNextButton.classList.add('btn-primary');
+            fixedNextButton.classList.remove('btn-success');
+        }
     }
 }
 
@@ -384,7 +499,24 @@ function previousStep() {
     // Make sure we don't go below the first step
     registerApp.currentStep = Math.max(registerApp.currentStep, 1);
     
+    console.log(`Going to previous step: ${registerApp.currentStep}`);
+    
+    // Force Next button visibility BEFORE showing step 
+    const nextButton = document.getElementById('nextButton');
+    if (nextButton) {
+        nextButton.style.display = 'block';
+        console.log("Ensuring next button visibility before step change");
+    }
+    
     showStep(registerApp.currentStep);
+    
+    // Force Next button visibility AFTER showing step too
+    if (nextButton) {
+        setTimeout(function() {
+            nextButton.style.display = 'block';
+            console.log("Re-ensuring next button visibility after step change");
+        }, 50);
+    }
 }
 
 // UI Message functions

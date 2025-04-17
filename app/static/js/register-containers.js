@@ -161,6 +161,22 @@ function setupContainerOptions() {
                 }
             }
             
+            // Check if we need to auto-enable separate storage
+            if (this.checked) {
+                const separateStorage = document.getElementById('separateStorage');
+                if (separateStorage) {
+                    // Enable separate storage by default for better UX, but don't force it
+                    // Separage storage is now optional for one container per package
+                    console.log("One container per package selected - enabling separate storage checkbox");
+                }
+            }
+            
+            // Clear any existing PackageLocations when changing container options
+            if (window.PackageLocations && typeof window.PackageLocations.reset === 'function') {
+                window.PackageLocations.reset();
+                console.log("Reset package locations due to container option change");
+            }
+            
             // Always update storage instructions
             updateStorageInstructions();
         });
@@ -345,3 +361,62 @@ function fetchContainerLocation(containerId) {
         })
         .catch(error => console.error("ERROR: Failed to fetch container location:", error));
 }
+
+// Define a new globally-accessible function that will override any existing implementations
+window.updateContainerLocationVisibility = function() {
+    console.log("FIXED implementation of updateContainerLocationVisibility called");
+    const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
+    const containerLocationSection = document.getElementById('containerLocationSelectSection');
+    const multiLocationInfo = document.getElementById('multiLocationInfo');
+    
+    if (oneContainerPerPackage && containerLocationSection) {
+        // Hide location dropdown when "one container per package" is selected
+        if (oneContainerPerPackage.checked) {
+            // Hide location dropdown
+            containerLocationSection.classList.add('d-none');
+            // Remove required attribute when hidden
+            const containerLocationSelect = document.getElementById('containerLocation');
+            if (containerLocationSelect) {
+                containerLocationSelect.removeAttribute('required');
+                // Clear any selected value to prevent it from being submitted
+                containerLocationSelect.value = '';
+            }
+            
+            // Show the multi-location info alert
+            if (multiLocationInfo) {
+                multiLocationInfo.style.display = 'block';
+            }
+            
+            // CRITICAL FIX: Do *not* automatically check or disable "separate storage" checkbox
+            // Let users explicitly decide if they want separate storage or not
+            const separateStorage = document.getElementById('separateStorage');
+            if (separateStorage) {
+                // Do nothing with the checked state - leave it as the user set it
+                // Make sure it's enabled so user can change it
+                separateStorage.disabled = false;
+                
+                // Just trigger associated events to update the UI
+                separateStorage.dispatchEvent(new Event('change'));
+            }
+        } else {
+            // Show location dropdown
+            containerLocationSection.classList.remove('d-none');
+            // Add required attribute when visible
+            const containerLocationSelect = document.getElementById('containerLocation');
+            if (containerLocationSelect) {
+                containerLocationSelect.setAttribute('required', 'required');
+            }
+            
+            // Hide the multi-location info alert
+            if (multiLocationInfo) {
+                multiLocationInfo.style.display = 'none';
+            }
+            
+            // Re-enable the separate storage checkbox
+            const separateStorage = document.getElementById('separateStorage');
+            if (separateStorage) {
+                separateStorage.disabled = false;
+            }
+        }
+    }
+};
