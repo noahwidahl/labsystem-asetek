@@ -57,15 +57,15 @@ window.loadSampleDetails = function(sampleId) {
                 document.getElementById('sample-description').textContent = sample.Description || '-';
                 document.getElementById('sample-part-number').textContent = sample.PartNumber || '-';
                 
-                // Make sure amount is displayed correctly
+                // Make sure amount is displayed correctly with unit
                 let displayAmount = '-';
                 if (sample.Amount !== null && sample.Amount !== undefined) {
                     // Try to format the amount, handle both string and number
                     try {
                         const amount = parseFloat(sample.Amount);
-                        displayAmount = amount.toString();
+                        displayAmount = `${amount} ${sample.Unit || 'pcs'}`;
                     } catch (e) {
-                        displayAmount = String(sample.Amount);
+                        displayAmount = `${String(sample.Amount)} ${sample.Unit || 'pcs'}`;
                     }
                 }
                 document.getElementById('sample-amount').textContent = displayAmount;
@@ -76,9 +76,9 @@ window.loadSampleDetails = function(sampleId) {
                 // Update storage information
                 document.getElementById('sample-location').textContent = sample.Location || '-';
                 document.getElementById('sample-container').textContent = sample.ContainerID ? `Container ${sample.ContainerID}` : 'None';
-                document.getElementById('sample-tracking-number').textContent = sample.TrackingNumber || '-';
-                document.getElementById('sample-supplier').textContent = sample.Supplier || '-';
-                document.getElementById('sample-units').textContent = sample.Units || '-';
+                document.getElementById('sample-tracking-number').textContent = '-'; // Removed from query
+                document.getElementById('sample-supplier').textContent = '-'; // Removed from query
+                document.getElementById('sample-units').textContent = sample.Unit || '-';
                 
                 // Update comments
                 document.getElementById('sample-comments').textContent = sample.Comments || 'No comments';

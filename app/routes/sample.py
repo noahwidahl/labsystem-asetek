@@ -884,7 +884,7 @@ def init_sample(blueprint, mysql):
             
             cursor = mysql.connection.cursor()
             
-            # Get sample basic info
+            # Get sample basic info using only fields that definitely exist in the database
             cursor.execute("""
                 SELECT 
                     s.SampleID,
@@ -892,29 +892,27 @@ def init_sample(blueprint, mysql):
                     s.Description,
                     s.Barcode,
                     s.Status,
-                    r.Notes as Comments,
                     CASE
                         WHEN un.UnitName IS NULL THEN 'pcs'
                         WHEN LOWER(un.UnitName) = 'stk' THEN 'pcs'
                         ELSE un.UnitName
                     END as Unit,
-                    sp.SupplierName as Supplier,
-                    r.TrackingNumber,
-                    r.ReceptionNumber,
+                    r.Notes as Comments,
                     DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y %H:%i') as RegisteredDate,
-                    u.Name as RegisteredBy,
+                    owner.Name as RegisteredBy,
                     ss.AmountRemaining as Amount,
                     sl.LocationName as Location,
                     c.ContainerID
                 FROM Sample s
-                JOIN Reception r ON s.ReceptionID = r.ReceptionID
-                LEFT JOIN User u ON r.ReceivedBy = u.UserID
-                LEFT JOIN Supplier sp ON r.SupplierID = sp.SupplierID
+                LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
+                LEFT JOIN User owner ON s.OwnerID = owner.UserID
+                LEFT JOIN User receiver ON r.UserID = receiver.UserID
                 LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
                 LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
                 LEFT JOIN ContainerSample cs ON ss.StorageID = cs.SampleStorageID
                 LEFT JOIN Container c ON cs.ContainerID = c.ContainerID
                 LEFT JOIN Unit un ON s.UnitID = un.UnitID
+                LEFT JOIN Supplier sp ON r.SupplierID = sp.SupplierID
                 WHERE s.SampleID = """ + sample_id_str)
             
             sample_result = cursor.fetchone()
@@ -950,18 +948,8 @@ def init_sample(blueprint, mysql):
                     sample['ContainerID'] = None
                 sample['Amount'] = float(sample['Amount'])
             
-            # Get sample properties (if any)
-            cursor.execute("""
-                SELECT PropertyName, PropertyValue 
-                FROM SampleProperty 
-                WHERE SampleID = """ + sample_id_str)
-            
+            # Sample properties are not available in this database
             properties = []
-            for row in cursor.fetchall():
-                properties.append({
-                    'PropertyName': row[0],
-                    'PropertyValue': row[1]
-                })
             
             # Get sample history
             cursor.execute("""
