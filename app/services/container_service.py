@@ -338,9 +338,14 @@ class ContainerService:
                 
                 # Add the location_id to the insert query
                 if container.container_type_id:
-                    # If no capacity provided and we're not creating a new type, get default from existing container type
+                    # Improved logic for container capacity determination
+                    # Priority: 1. Explicit capacity, 2. Default from type, 3. Reasonable fallback
+                    
+                    # Start with the explicitly provided capacity if any
                     capacity = container.capacity
-                    if not capacity and not new_container_type:
+                    
+                    # If no explicit capacity and not creating a new type, get default from container type
+                    if (capacity is None or capacity == 0) and not new_container_type:
                         # Get default capacity from container type
                         cursor.execute("""
                             SELECT DefaultCapacity 
@@ -352,6 +357,24 @@ class ContainerService:
                         if type_result and type_result[0]:
                             capacity = type_result[0]
                             print(f"DEBUG: Using default capacity {capacity} from existing container type {container.container_type_id}")
+                        else:
+                            # If no default capacity is found, use a reasonable default
+                            capacity = 100
+                            print(f"DEBUG: No DefaultCapacity found for container type {container.container_type_id}, using standard default {capacity}")
+                    
+                    # Verify capacity is a valid number and greater than zero
+                    try:
+                        if capacity is not None:
+                            capacity = int(capacity)
+                            if capacity <= 0:
+                                capacity = 100
+                                print(f"DEBUG: Invalid capacity value ({capacity}), using standard default 100")
+                        else:
+                            capacity = 100
+                            print(f"DEBUG: No capacity specified, using standard default 100")
+                    except (ValueError, TypeError):
+                        capacity = 100
+                        print(f"DEBUG: Non-numeric capacity value, using standard default 100")
                     
                     query = f"""
                         INSERT INTO {table_name} (
@@ -372,6 +395,24 @@ class ContainerService:
                         location_id
                     ))
                 else:
+                    # Even when container type is not specified, we should properly handle capacity
+                    capacity = container.capacity
+                    
+                    # If no capacity is specified, use a reasonable default
+                    if capacity is None or capacity == 0:
+                        capacity = 100
+                        print(f"DEBUG: No container type or capacity specified, using standard default capacity {capacity}")
+                    
+                    # Verify capacity is a valid number and greater than zero
+                    try:
+                        capacity = int(capacity)
+                        if capacity <= 0:
+                            capacity = 100
+                            print(f"DEBUG: Invalid capacity value ({capacity}), using standard default 100")
+                    except (ValueError, TypeError):
+                        capacity = 100
+                        print(f"DEBUG: Non-numeric capacity value, using standard default 100")
+                    
                     query = f"""
                         INSERT INTO {table_name} (
                             Description,
@@ -385,7 +426,7 @@ class ContainerService:
                     cursor.execute(query, (
                         container.description,
                         1 if container.is_mixed else 0,
-                        container.capacity,
+                        capacity,
                         location_id
                     ))
                 
@@ -422,6 +463,7 @@ class ContainerService:
             
     def add_sample_to_container(self, container_id, sample_id, amount=1, user_id=None, force_add=False):
         print(f"DEBUG: add_sample_to_container called with container_id={container_id}, sample_id={sample_id}, amount={amount}, force_add={force_add}")
+        # Note: This function now MOVES samples to containers rather than adding them
         try:
             with self.db.transaction() as cursor:
                 # Container table is just named 'container' in this database
@@ -519,12 +561,19 @@ class ContainerService:
                 
                 container_sample_id = cursor.lastrowid
                 
-                # Reduce the amount in storage
+                # IMPORTANT: We don't reduce the sample amount in storage
+                # When adding a sample to a container, we're changing its location, not removing it
+                # This ensures samples remain visible in sample overview with correct amount
+                # The amount information is tracked in both SampleStorage and ContainerSample tables
+                
+                # Update the sample's location to match the container's location
                 cursor.execute("""
                     UPDATE SampleStorage 
-                    SET AmountRemaining = AmountRemaining - %s
-                    WHERE StorageID = %s AND AmountRemaining >= %s
-                """, (amount, storage_id, amount))
+                    SET LocationID = (SELECT LocationID FROM container WHERE ContainerID = %s)
+                    WHERE StorageID = %s
+                """, (container_id, storage_id))
+                
+                print(f"DEBUG: Sample moved to container {container_id} without reducing amount. Updated location to match container.")
                 
                 # Log the activity
                 if user_id:
@@ -543,10 +592,10 @@ class ContainerService:
                         )
                         VALUES (NOW(), %s, %s, %s, %s)
                     """, (
-                        'Sample added to container',
+                        'Sample moved to container',
                         user_id,
                         sample_id,
-                        f"Sample {sample_id} added to Container {container_id}, amount: {amount}{capacity_note}"
+                        f"Sample {sample_id} moved to Container {container_id}, amount: {amount}{capacity_note}"
                     ))
                 
                 return {

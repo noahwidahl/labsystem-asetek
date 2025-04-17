@@ -221,10 +221,28 @@
           "Description": "Default container type"
         },
         {
-          "ContainerTypeID": 2,
-          "TypeName": "Red plastic box",
-          "DefaultCapacity": 250,
-          "Description": "Red plastic box for O-rings"
+          "ContainerTypeID": 3,
+          "TypeName": "Plastic box",
+          "DefaultCapacity": 50,
+          "Description": "Plastic box of sample xx"
+        },
+        {
+          "ContainerTypeID": 4,
+          "TypeName": "Tester New Type",
+          "DefaultCapacity": 55,
+          "Description": "2"
+        },
+        {
+          "ContainerTypeID": 5,
+          "TypeName": "beeopbop",
+          "DefaultCapacity": 50,
+          "Description": "TEST"
+        },
+        {
+          "ContainerTypeID": 6,
+          "TypeName": "Type name here",
+          "DefaultCapacity": 28,
+          "Description": ""
         }
       ]
     },
@@ -971,7 +989,48 @@
           "Extra": ""
         }
       ],
-      "sample_data": []
+      "sample_data": [
+        {
+          "TestID": 1,
+          "TestNo": "T1.1",
+          "TestName": "Test Type",
+          "Description": "Description",
+          "CreatedDate": "2025-04-10T12:01:32",
+          "UserID": 1
+        },
+        {
+          "TestID": 2,
+          "TestNo": "T1.2",
+          "TestName": "Test Type",
+          "Description": "Iteration of test T1.1",
+          "CreatedDate": "2025-04-10T12:01:55",
+          "UserID": 1
+        },
+        {
+          "TestID": 3,
+          "TestNo": "T2.1",
+          "TestName": "Test Type 2",
+          "Description": "",
+          "CreatedDate": "2025-04-10T12:16:07",
+          "UserID": 1
+        },
+        {
+          "TestID": 4,
+          "TestNo": "T3.1",
+          "TestName": "Thermal",
+          "Description": "Description",
+          "CreatedDate": "2025-04-10T12:48:10",
+          "UserID": 1
+        },
+        {
+          "TestID": 5,
+          "TestNo": "T3.2",
+          "TestName": "Thermal",
+          "Description": "Iteration of test T3.1",
+          "CreatedDate": "2025-04-10T12:48:46",
+          "UserID": 1
+        }
+      ]
     },
     {
       "name": "testsample",
@@ -1017,7 +1076,43 @@
           "Extra": ""
         }
       ],
-      "sample_data": []
+      "sample_data": [
+        {
+          "TestSampleID": 1,
+          "SampleID": 14,
+          "TestID": 1,
+          "TestIteration": 1,
+          "GeneratedIdentifier": "T1.1_1"
+        },
+        {
+          "TestSampleID": 2,
+          "SampleID": 14,
+          "TestID": 2,
+          "TestIteration": 1,
+          "GeneratedIdentifier": "T1.2_1"
+        },
+        {
+          "TestSampleID": 3,
+          "SampleID": 13,
+          "TestID": 3,
+          "TestIteration": 1,
+          "GeneratedIdentifier": "T2.1_1"
+        },
+        {
+          "TestSampleID": 4,
+          "SampleID": 13,
+          "TestID": 3,
+          "TestIteration": 2,
+          "GeneratedIdentifier": "T2.1_2"
+        },
+        {
+          "TestSampleID": 5,
+          "SampleID": 13,
+          "TestID": 3,
+          "TestIteration": 3,
+          "GeneratedIdentifier": "T2.1_3"
+        }
+      ]
     },
     {
       "name": "unit",

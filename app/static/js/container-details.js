@@ -195,7 +195,7 @@ function addSampleToContainer(forceAdd = false) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showSuccessMessage('Sample added to container!');
+            showSuccessMessage('Sample moved to container successfully!');
             
             // Check if there's a capacity warning
             if (data.capacity_warning) {

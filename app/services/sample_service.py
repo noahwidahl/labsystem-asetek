@@ -636,28 +636,46 @@ class SampleService:
                                 if default_type_result:
                                     container_type_id = default_type_result[0]
                             
-                            # Get capacity from parameters or use amount_per_package
-                            # If we're using a single container for all packages, use total amount
-                            if sample_data.get('useSingleContainerForAll', False):
-                                total_amount = int(sample_data.get('totalAmount', 0))
-                                capacity = total_amount
-                                print(f"DEBUG: Using total amount {capacity} as capacity for single container for all samples")
-                            # If creating a new container type, use its capacity value
-                            elif sample_data.get('newContainerType'):
-                                capacity = sample_data.get('newContainerType').get('capacity') or amount_per_package
-                                print(f"DEBUG: Using capacity {capacity} from new container type for container")
-                            # If user specified container capacity, use that
-                            elif sample_data.get('containerCapacity'):
-                                capacity = sample_data.get('containerCapacity')
+                            # Prioritized logic for determining container capacity
+                            # 1. First check if user explicitly specified container capacity
+                            if sample_data.get('containerCapacity'):
+                                capacity = int(sample_data.get('containerCapacity'))
                                 print(f"DEBUG: Using user-specified capacity {capacity} for container")
-                            # For multiple containers mode (one per package), always use amount_per_package
-                            elif sample_data.get('createMultipleContainers', False):
-                                capacity = int(sample_data.get('amountPerPackage', 1))
-                                print(f"DEBUG: Using amount per package {capacity} as capacity for container in multiple containers mode")
-                            # Otherwise use the amount per package
+                            # 2. If creating a new container type, use its capacity value
+                            elif sample_data.get('newContainerType') and sample_data.get('newContainerType').get('capacity'):
+                                capacity = int(sample_data.get('newContainerType').get('capacity'))
+                                print(f"DEBUG: Using capacity {capacity} from new container type for container")
+                            # 3. If we have a container type ID, get its default capacity from the database
+                            elif container_type_id:
+                                # Query the container type's default capacity
+                                cursor.execute("""
+                                    SELECT DefaultCapacity 
+                                    FROM ContainerType 
+                                    WHERE ContainerTypeID = %s
+                                """, (container_type_id,))
+                                type_result = cursor.fetchone()
+                                if type_result and type_result[0]:
+                                    capacity = int(type_result[0])
+                                    print(f"DEBUG: Using DefaultCapacity {capacity} from container type {container_type_id}")
+                                else:
+                                    # Fallback if no default capacity
+                                    capacity = 100  # Default to 100 units as a reasonable fallback
+                                    print(f"DEBUG: No DefaultCapacity found for container type {container_type_id}, using default value {capacity}")
+                            # 4. Fallbacks in priority order
                             else:
-                                capacity = amount_per_package
-                                print(f"DEBUG: Using amount_per_package {capacity} as default container capacity")
+                                # If all else fails, determine a capacity based on the context
+                                if sample_data.get('useSingleContainerForAll', False):
+                                    # For "one container for all" mode, suggest a larger capacity
+                                    capacity = max(100, int(sample_data.get('totalAmount', 0)) * 2)
+                                    print(f"DEBUG: No capacity specified for single container for all samples, using {capacity} (2x total amount)")
+                                elif sample_data.get('createMultipleContainers', False):
+                                    # For "one container per package", suggest a reasonable multiple of amount per package
+                                    capacity = max(50, int(sample_data.get('amountPerPackage', 1)) * 5)
+                                    print(f"DEBUG: No capacity specified for container in multiple containers mode, using {capacity} (5x amount per package)")
+                                else:
+                                    # Default reasonable capacity
+                                    capacity = 100
+                                    print(f"DEBUG: No capacity information available, using default capacity {capacity}")
                             
                             # Get location from parameters or use the one already determined
                             # Check for multiple container locations
