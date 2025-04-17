@@ -174,13 +174,52 @@
                             </div>
                         </div>
                         
-                        <!-- Separate Storage Option -->
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="separateStorage" name="separateStorage" checked>
-                            <label class="form-check-label" for="separateStorage">
-                                <strong>Use separate storage for each package</strong>
-                            </label>
-                            <small class="text-muted d-block ms-4">Place each package at a different location</small>
+                        <!-- Separate Storage Option as Radio Buttons -->
+                        <div class="mb-3">
+                            <label class="mb-2"><strong>Use separate storage for each package?</strong></label>
+                            <div class="ms-3">
+                                <div class="form-check mb-1">
+                                    <input class="form-check-input" type="radio" name="separateStorage" id="separateStorageYes" value="true" checked>
+                                    <label class="form-check-label" for="separateStorageYes">
+                                        Yes - Place each package at a different location
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="separateStorage" id="separateStorageNo" value="false">
+                                    <label class="form-check-label" for="separateStorageNo">
+                                        No - Use the same location for all packages
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <script>
+                                // Set up event handlers for separate storage and container options
+                                document.addEventListener('DOMContentLoaded', function() {
+                                    const separateStorageYes = document.getElementById('separateStorageYes');
+                                    const separateStorageNo = document.getElementById('separateStorageNo');
+                                    const oneContainerForAll = document.getElementById('oneContainerForAll');
+                                    
+                                    // When "One container for all" is selected, automatically select "No" for separate storage
+                                    if (oneContainerForAll) {
+                                        oneContainerForAll.addEventListener('change', function() {
+                                            if (this.checked && separateStorageNo) {
+                                                separateStorageNo.checked = true;
+                                                // No error message or red text needed
+                                            }
+                                        });
+                                    }
+                                    
+                                    // Just for compatibility with other code that checks separateStorage.checked
+                                    // Create a virtual property that other code can check
+                                    Object.defineProperty(window, 'separateStorage', {
+                                        get: function() {
+                                            return {
+                                                checked: document.getElementById('separateStorageYes')?.checked || false
+                                            };
+                                        }
+                                    });
+                                });
+                            </script>
                         </div>
 
                         <!-- Amounts Explanation -->
@@ -220,16 +259,21 @@
                         <div id="multipleContainerOptions" class="d-none">
                             <div class="form-group mb-3">
                                 <div class="d-flex align-items-center mb-2">
-                                    <input type="radio" name="multiContainerOption" id="oneContainerForAll" value="single" checked onchange="if(typeof updateContainerLocationVisibility === 'function') updateContainerLocationVisibility()">
-                                    <label for="oneContainerForAll" class="ms-2 mb-0">One container for all samples</label>
+                                    <input type="radio" name="multiContainerOption" id="oneContainerPerPackage" value="multiple" checked onchange="if(typeof updateContainerLocationVisibility === 'function') updateContainerLocationVisibility()">
+                                    <label for="oneContainerPerPackage" class="ms-2 mb-0">One container per package</label>
                                 </div>
                                 <div class="d-flex align-items-center">
-                                    <input type="radio" name="multiContainerOption" id="oneContainerPerPackage" value="multiple" onchange="if(typeof updateContainerLocationVisibility === 'function') updateContainerLocationVisibility()">
-                                    <label for="oneContainerPerPackage" class="ms-2 mb-0">One container per package</label>
+                                    <input type="radio" name="multiContainerOption" id="oneContainerForAll" value="single" onchange="if(typeof updateContainerLocationVisibility === 'function') updateContainerLocationVisibility()">
+                                    <label for="oneContainerForAll" class="ms-2 mb-0">One container for all samples</label>
                                 </div>
                                 <div class="alert alert-info mt-2" id="multiLocationInfo" style="display: none;">
                                     <i class="fas fa-info-circle"></i>
                                     <span>Select one location for each package in the grid during Step 4.</span>
+                                </div>
+                                <!-- Error message area for container options -->
+                                <div class="alert alert-danger mt-2 d-none" id="containerOptionsError">
+                                    <i class="fas fa-exclamation-circle"></i>
+                                    <span id="containerOptionsErrorMessage"></span>
                                 </div>
                             </div>
                         </div>

@@ -290,6 +290,11 @@ class SampleService:
             # Save original package count to handle amount calculations correctly
             original_package_count = package_count
                 
+            # VALIDATION: Check for incompatible options
+            # Cannot use separate storage with one container for all samples
+            if sample_data.get('createSingleContainer', False) and sample_data.get('differentLocations', False):
+                raise Exception("Incompatible options: Cannot use 'One container for all samples' with 'Use separate storage for each package'.")
+            
             # If using existing container, force package count to 1
             if sample_data.get('useExistingContainer', False):
                 package_count = 1

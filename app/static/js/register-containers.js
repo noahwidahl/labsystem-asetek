@@ -49,9 +49,13 @@ function setupStorageOptions() {
             
             // Make sure the right option is selected
             if (isMultiple) {
-                // Select "One container for all" by default
+                // Select "One container per package" by default
+                const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
+                if (oneContainerPerPackage) oneContainerPerPackage.checked = true;
+                
+                // Make sure "one container for all" is NOT selected
                 const oneContainerForAll = document.getElementById('oneContainerForAll');
-                if (oneContainerForAll) oneContainerForAll.checked = true;
+                if (oneContainerForAll) oneContainerForAll.checked = false;
             } else {
                 // Select "New container" by default
                 const newContainerOption = document.getElementById('newContainerOption');
@@ -126,6 +130,19 @@ function setupContainerOptions() {
     // Handle multiple container options
     if (oneContainerForAll && oneContainerPerPackage) {
         oneContainerForAll.addEventListener('change', function() {
+            // When "one container for all" is selected, auto-select "No" for separate storage
+            if (this.checked) {
+                // With radio buttons, we just need to select the "No" option
+                const separateStorageNo = document.getElementById('separateStorageNo');
+                if (separateStorageNo) {
+                    separateStorageNo.checked = true;
+                    
+                    // Trigger change event to ensure UI updates
+                    const event = new Event('change');
+                    separateStorageNo.dispatchEvent(event);
+                }
+            }
+            
             // Update container location visibility if function is available
             if (typeof updateContainerLocationVisibility === 'function') {
                 updateContainerLocationVisibility();

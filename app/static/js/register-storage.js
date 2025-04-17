@@ -783,7 +783,8 @@ function handleMultiPackageSelection(cell) {
     // Get required count based on selection
     const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
     const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
-    const separateStorage = document.getElementById('separateStorage')?.checked || false;
+    // Check separate storage - using radio buttons now
+    const separateStorage = document.getElementById('separateStorageYes')?.checked || false;
     
     // CRITICAL FIX: Always check both ways of determining oneContainerPerPackage
     // This ensures we detect this mode correctly regardless of which UI control was used
