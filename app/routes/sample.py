@@ -1014,6 +1014,269 @@ def init_sample(blueprint, mysql):
                 'error': str(e)
             }), 500
     
+    @blueprint.route('/api/samples/<int:sample_id>/move-location', methods=['POST'])
+    def move_sample_to_location(sample_id):
+        """
+        Move a sample to a direct storage location 
+        Used by the Move Sample functionality
+        """
+        try:
+            data = request.json
+            location_id = data.get('locationId')
+            
+            if not location_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'Location ID is required'
+                }), 400
+                
+            # Get current user
+            current_user = get_current_user()
+            user_id = current_user['UserID']
+            
+            cursor = mysql.connection.cursor()
+            
+            try:
+                # Start transaction
+                cursor.execute("START TRANSACTION")
+                
+                # Check if sample exists
+                cursor.execute("SELECT SampleID, Status FROM Sample WHERE SampleID = " + str(sample_id))
+                sample_result = cursor.fetchone()
+                
+                if not sample_result:
+                    cursor.execute("ROLLBACK")
+                    return jsonify({
+                        'success': False,
+                        'error': f'Sample with ID {sample_id} not found'
+                    }), 404
+                    
+                if sample_result[1] == 'Disposed':
+                    cursor.execute("ROLLBACK")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Cannot move a disposed sample'
+                    }), 400
+                
+                # Get sample storage information
+                cursor.execute("""
+                    SELECT 
+                        ss.StorageID,
+                        ss.LocationID,
+                        ss.AmountRemaining,
+                        IFNULL(sl.LocationName, 'Unknown') as OldLocationName
+                    FROM SampleStorage ss
+                    LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                    WHERE ss.SampleID = """ + str(sample_id))
+                storage_result = cursor.fetchone()
+                
+                if not storage_result:
+                    # No existing storage record - create one
+                    cursor.execute("""
+                        INSERT INTO SampleStorage (
+                            SampleID,
+                            LocationID,
+                            AmountRemaining,
+                            LastUpdated
+                        ) VALUES (%s, %s, %s, NOW())
+                    """, (
+                        sample_id,
+                        location_id,
+                        1  # Default amount if no existing record
+                    ))
+                    
+                    storage_id = cursor.lastrowid
+                    old_location_name = 'None'
+                    
+                    # Set sample status to 'In Storage'
+                    cursor.execute("""
+                        UPDATE Sample 
+                        SET Status = 'In Storage' 
+                        WHERE SampleID = """ + str(sample_id))
+                else:
+                    storage_id = storage_result[0]
+                    old_location_id = storage_result[1]
+                    amount = storage_result[2]
+                    old_location_name = storage_result[3]
+                    
+                    # Remove from any containers
+                    cursor.execute("""
+                        DELETE FROM ContainerSample 
+                        WHERE SampleStorageID = %s
+                    """, (storage_id,))
+                    
+                    # Update storage record with new location
+                    cursor.execute("""
+                        UPDATE SampleStorage 
+                        SET LocationID = %s, LastUpdated = NOW() 
+                        WHERE StorageID = %s
+                    """, (location_id, storage_id))
+                
+                # Get new location name for history
+                cursor.execute("""
+                    SELECT LocationName 
+                    FROM StorageLocation 
+                    WHERE LocationID = """ + str(location_id))
+                new_location_result = cursor.fetchone()
+                new_location_name = new_location_result[0] if new_location_result else 'Unknown'
+                
+                # Log the movement in history
+                cursor.execute("""
+                    INSERT INTO History (
+                        Timestamp, 
+                        ActionType, 
+                        UserID, 
+                        SampleID, 
+                        Notes
+                    )
+                    VALUES (NOW(), %s, %s, %s, %s)
+                """, (
+                    'Sample moved',
+                    user_id,
+                    sample_id,
+                    f"Sample moved from location {old_location_name} to {new_location_name}"
+                ))
+                
+                # Commit transaction
+                cursor.execute("COMMIT")
+                
+                return jsonify({
+                    'success': True,
+                    'message': f"Sample SMP-{sample_id} moved to {new_location_name}",
+                    'sample_id': sample_id,
+                    'new_location': new_location_name
+                })
+                
+            except Exception as tx_error:
+                # Rollback on error
+                cursor.execute("ROLLBACK")
+                raise tx_error
+                
+            finally:
+                cursor.close()
+                
+        except Exception as e:
+            print(f"API error moving sample to location: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+            
+    @blueprint.route('/api/samples/<int:sample_id>/remove-from-container', methods=['POST'])
+    def remove_sample_from_container(sample_id):
+        """
+        Remove a sample from its current container
+        Used by the Move Sample functionality
+        """
+        try:
+            # Get current user
+            current_user = get_current_user()
+            user_id = current_user['UserID']
+            
+            cursor = mysql.connection.cursor()
+            
+            try:
+                # Start transaction
+                cursor.execute("START TRANSACTION")
+                
+                # Check if sample exists
+                cursor.execute("SELECT SampleID, Status FROM Sample WHERE SampleID = " + str(sample_id))
+                sample_result = cursor.fetchone()
+                
+                if not sample_result:
+                    cursor.execute("ROLLBACK")
+                    return jsonify({
+                        'success': False,
+                        'error': f'Sample with ID {sample_id} not found'
+                    }), 404
+                    
+                if sample_result[1] == 'Disposed':
+                    cursor.execute("ROLLBACK")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Cannot modify a disposed sample'
+                    }), 400
+                
+                # Check if sample is in a container
+                cursor.execute("""
+                    SELECT 
+                        cs.ContainerSampleID,
+                        cs.ContainerID,
+                        c.ContainerName,
+                        cs.Amount
+                    FROM SampleStorage ss
+                    JOIN ContainerSample cs ON ss.StorageID = cs.SampleStorageID
+                    JOIN Container c ON cs.ContainerID = c.ContainerID
+                    WHERE ss.SampleID = """ + str(sample_id))
+                container_results = cursor.fetchall()
+                
+                if not container_results:
+                    cursor.execute("ROLLBACK")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Sample is not currently in any container'
+                    }), 400
+                
+                # Remove from all containers
+                container_names = []
+                for container_result in container_results:
+                    container_sample_id = container_result[0]
+                    container_id = container_result[1]
+                    container_name = container_result[2] or f"Container {container_id}"
+                    
+                    cursor.execute("""
+                        DELETE FROM ContainerSample 
+                        WHERE ContainerSampleID = %s
+                    """, (container_sample_id,))
+                    
+                    container_names.append(container_name)
+                
+                # Log the removal in history
+                cursor.execute("""
+                    INSERT INTO History (
+                        Timestamp, 
+                        ActionType, 
+                        UserID, 
+                        SampleID, 
+                        Notes
+                    )
+                    VALUES (NOW(), %s, %s, %s, %s)
+                """, (
+                    'Container updated',
+                    user_id,
+                    sample_id,
+                    f"Sample removed from containers: {', '.join(container_names)}"
+                ))
+                
+                # Commit transaction
+                cursor.execute("COMMIT")
+                
+                return jsonify({
+                    'success': True,
+                    'message': f"Sample SMP-{sample_id} removed from containers",
+                    'sample_id': sample_id,
+                    'containers': container_names
+                })
+                
+            except Exception as tx_error:
+                # Rollback on error
+                cursor.execute("ROLLBACK")
+                raise tx_error
+                
+            finally:
+                cursor.close()
+                
+        except Exception as e:
+            print(f"API error removing sample from container: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+            
     @blueprint.route('/disposal')
     def disposal_page():
         """

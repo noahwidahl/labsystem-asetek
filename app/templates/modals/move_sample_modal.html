@@ -1,0 +1,69 @@
+<!-- app/templates/modals/move_sample_modal.html -->
+<div class="modal fade" id="moveSampleModal" tabindex="-1" aria-labelledby="moveSampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="moveSampleModalLabel">Move Sample</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="moveSampleForm">
+                    <input type="hidden" id="moveSampleId" name="sampleId">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Sample:</label>
+                        <div class="border rounded p-2 bg-light mb-3">
+                            <div><strong id="moveSampleName">-</strong></div>
+                            <div class="small text-muted" id="moveSampleInfo">-</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="moveType" id="moveToContainer" value="container" checked>
+                            <label class="form-check-label" for="moveToContainer">Move to Container</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="moveType" id="moveToLocation" value="location">
+                            <label class="form-check-label" for="moveToLocation">Move to Direct Location</label>
+                        </div>
+                    </div>
+                    
+                    <!-- Container selection (shown by default) -->
+                    <div id="containerSelectionGroup">
+                        <div class="mb-3">
+                            <label for="moveContainerSelect" class="form-label">Select Container:</label>
+                            <select class="form-select" id="moveContainerSelect" name="containerId">
+                                <option value="">-- Select Container --</option>
+                                <!-- Options will be populated by JavaScript -->
+                            </select>
+                            <div class="form-text">Choose a container to move the sample to</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="moveAmount" class="form-label">Amount to Move:</label>
+                            <input type="number" class="form-control" id="moveAmount" name="amount" min="1" value="1">
+                            <div class="form-text">How many samples to move to the container</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Location selection (hidden by default) -->
+                    <div id="locationSelectionGroup" style="display: none;">
+                        <div class="mb-3">
+                            <label for="moveLocationSelect" class="form-label">Select Location:</label>
+                            <select class="form-select" id="moveLocationSelect" name="locationId">
+                                <option value="">-- Select Location --</option>
+                                <!-- Options will be populated by JavaScript -->
+                            </select>
+                            <div class="form-text">Choose a direct storage location for the sample</div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmMoveBtn">Move Sample</button>
+            </div>
+        </div>
+    </div>
+</div>

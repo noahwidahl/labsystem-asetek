@@ -5,36 +5,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add event listeners for sample detail buttons
     setupSampleDetailButtons();
     
-    // Add listener for move sample button in details modal
-    const moveSampleBtn = document.getElementById('move-sample-btn');
-    if (moveSampleBtn) {
-        moveSampleBtn.addEventListener('click', function() {
-            // Get sample ID from the modal
-            const sampleId = document.getElementById('sample-id').textContent;
-            if (sampleId && sampleId !== '-') {
-                // Hide the details modal
-                const detailsModal = bootstrap.Modal.getInstance(document.getElementById('sampleDetailsModal'));
-                if (detailsModal) detailsModal.hide();
-                
-                // Show the move sample modal if it exists
-                const moveModal = document.getElementById('addSampleToContainerModal');
-                if (moveModal) {
-                    // Pre-select the sample in the move modal if possible
-                    const sampleSelect = document.getElementById('sampleSelect');
-                    if (sampleSelect) {
-                        // Try to find and select the option with the sample ID
-                        const option = Array.from(sampleSelect.options).find(opt => opt.textContent.includes(sampleId));
-                        if (option) {
-                            sampleSelect.value = option.value;
-                        }
-                    }
-                    
-                    const moveModalInstance = new bootstrap.Modal(moveModal);
-                    moveModalInstance.show();
-                }
-            }
-        });
-    }
+    // The move button event listener is now handled by move-sample.js
 });
 
 function setupSampleDetailButtons() {

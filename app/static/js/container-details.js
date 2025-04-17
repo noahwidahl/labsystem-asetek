@@ -119,6 +119,10 @@ window.loadContainerDetails = function(containerId) {
                                            data-sample-id="${sampleId}">
                                         Details
                                     </button>
+                                    <button class="btn btn-sm btn-danger sample-move-btn" 
+                                           data-sample-id="${sampleId}">
+                                        Move
+                                    </button>
                                 </td>
                             </tr>
                         `;
@@ -140,6 +144,26 @@ window.loadContainerDetails = function(containerId) {
                                 loadSampleDetails(sampleId);
                                 const sampleModal = new bootstrap.Modal(document.getElementById('sampleDetailsModal'));
                                 sampleModal.show();
+                            }
+                        });
+                    });
+                    
+                    // Add event listeners to the move sample buttons
+                    document.querySelectorAll('#container-samples-list .sample-move-btn').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const sampleId = this.dataset.sampleId;
+                            if (sampleId) {
+                                // Hide container details modal
+                                const containerModal = bootstrap.Modal.getInstance(document.getElementById('containerDetailsModal'));
+                                if (containerModal) containerModal.hide();
+                                
+                                // Prepare and show the move sample modal
+                                if (typeof prepareMoveModal === 'function') {
+                                    prepareMoveModal('container', sampleId);
+                                } else {
+                                    console.error('Move sample function not available. Make sure move-sample.js is loaded.');
+                                    showErrorMessage('Unable to move sample. Please try again later.');
+                                }
                             }
                         });
                     });

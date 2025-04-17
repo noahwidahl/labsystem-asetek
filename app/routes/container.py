@@ -244,6 +244,69 @@ def init_container(blueprint, mysql):
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500
             
+    @blueprint.route('/api/locations')
+    def get_all_locations():
+        try:
+            # Direct database query for all storage locations
+            cursor = mysql.connection.cursor()
+            
+            query = """
+                SELECT 
+                    sl.LocationID,
+                    sl.LocationName,
+                    sl.Rack,
+                    sl.Section, 
+                    sl.Shelf,
+                    l.LabName
+                FROM storagelocation sl
+                JOIN lab l ON sl.LabID = l.LabID
+                ORDER BY sl.Rack, sl.Section, sl.Shelf
+            """
+                
+            cursor.execute(query)
+            
+            # Convert to list of dicts with column names
+            location_cols = [col[0] for col in cursor.description]
+            locations = [dict(zip(location_cols, row)) for row in cursor.fetchall()]
+            
+            cursor.close()
+            
+            return jsonify({'success': True, 'locations': locations})
+        except Exception as e:
+            print(f"API error getting all locations: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+            
+    @blueprint.route('/api/basic-locations')
+    def get_basic_locations():
+        try:
+            # Simplified query for just location IDs and names
+            cursor = mysql.connection.cursor()
+            
+            query = """
+                SELECT 
+                    LocationID,
+                    LocationName
+                FROM storagelocation
+                ORDER BY Rack, Section, Shelf
+            """
+                
+            cursor.execute(query)
+            
+            # Convert to list of dicts
+            location_cols = [col[0] for col in cursor.description]
+            locations = [dict(zip(location_cols, row)) for row in cursor.fetchall()]
+            
+            cursor.close()
+            
+            return jsonify({'success': True, 'locations': locations})
+        except Exception as e:
+            print(f"API error getting basic locations: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+            
     @blueprint.route('/api/containers/add-sample', methods=['POST'])
     def add_sample_to_container():
         try:
