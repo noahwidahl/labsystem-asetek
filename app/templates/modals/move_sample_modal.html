@@ -29,6 +29,13 @@
                         </div>
                     </div>
                     
+                    <!-- Amount to move - visible for both options -->
+                    <div class="mb-3">
+                        <label for="moveAmount" class="form-label">Amount to Move:</label>
+                        <input type="number" class="form-control" id="moveAmount" name="amount" min="1" value="1">
+                        <div class="form-text">How many samples to move</div>
+                    </div>
+                
                     <!-- Container selection (shown by default) -->
                     <div id="containerSelectionGroup">
                         <div class="mb-3">
@@ -38,12 +45,6 @@
                                 <!-- Options will be populated by JavaScript -->
                             </select>
                             <div class="form-text">Choose a container to move the sample to</div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="moveAmount" class="form-label">Amount to Move:</label>
-                            <input type="number" class="form-control" id="moveAmount" name="amount" min="1" value="1">
-                            <div class="form-text">How many samples to move to the container</div>
                         </div>
                     </div>
                     

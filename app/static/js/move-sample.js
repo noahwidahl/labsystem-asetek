@@ -128,12 +128,38 @@ function fetchContainersForMove() {
                 const containerSelect = document.getElementById('moveContainerSelect');
                 containerSelect.innerHTML = '<option value="">-- Select Container --</option><option value="none">No Container</option>';
                 
-                data.containers.forEach(container => {
+                // Sort containers by ID (descending to show newest first)
+                const sortedContainers = [...data.containers].sort((a, b) => b.ContainerID - a.ContainerID);
+                
+                sortedContainers.forEach(container => {
                     const option = document.createElement('option');
                     option.value = container.ContainerID;
-                    option.textContent = `${container.ContainerID}: ${container.Description || 'Container'} - ${container.TypeName || 'Standard'}`;
+                    
+                    // Create a more informative description
+                    let containerDesc = `${container.ContainerID}: ${container.Description || 'Container'}`;
+                    
+                    // Add type and capacity info if available
+                    if (container.TypeName) {
+                        containerDesc += ` (${container.TypeName})`;
+                    }
+                    
+                    // Add location if available
+                    if (container.LocationName) {
+                        containerDesc += ` - Location: ${container.LocationName}`;
+                    }
+                    
+                    // Add capacity information if available
+                    if (container.ContainerCapacity) {
+                        const currentAmount = container.CurrentAmount || 0;
+                        containerDesc += ` - ${currentAmount}/${container.ContainerCapacity}`;
+                    }
+                    
+                    option.textContent = containerDesc;
                     containerSelect.appendChild(option);
                 });
+                
+                // Add search functionality to the container select
+                setupSearchableSelect('moveContainerSelect');
             }
         })
         .catch(error => {
@@ -143,45 +169,88 @@ function fetchContainersForMove() {
         });
 }
 
+// Helper function to make selects searchable
+function setupSearchableSelect(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    
+    // Check if this select already has a search input to avoid duplicates
+    if (select.parentNode.classList.contains('searchable-select-wrapper')) {
+        return;
+    }
+    
+    // Create a wrapper div
+    const wrapper = document.createElement('div');
+    wrapper.className = 'searchable-select-wrapper';
+    wrapper.style.position = 'relative';
+    
+    // Create search input
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'form-control searchable-select-input mb-2';
+    searchInput.placeholder = 'Type to search...';
+    
+    // Insert search input before select
+    select.parentNode.insertBefore(wrapper, select);
+    wrapper.appendChild(searchInput);
+    wrapper.appendChild(select);
+    
+    // Filter options on input
+    searchInput.addEventListener('input', function() {
+        const filter = this.value.toLowerCase();
+        const options = select.options;
+        
+        for (let i = 0; i < options.length; i++) {
+            const text = options[i].textContent.toLowerCase();
+            // Always show the first option (the placeholder)
+            if (i === 0 || text.indexOf(filter) > -1) {
+                options[i].style.display = '';
+            } else {
+                options[i].style.display = 'none';
+            }
+        }
+    });
+}
+
 // Function to fetch locations for the move modal
 function fetchLocationsForMove() {
-    fetch('/api/locations')
+    fetch('/api/basic-locations')
         .then(response => response.json())
         .then(data => {
             if (data.success && data.locations) {
                 const locationSelect = document.getElementById('moveLocationSelect');
                 locationSelect.innerHTML = '<option value="">-- Select Location --</option>';
                 
-                data.locations.forEach(location => {
+                // Sort locations by name (assuming format like 1.1.1)
+                const sortedLocations = [...data.locations].sort((a, b) => {
+                    // Parse location names into components
+                    const partsA = a.LocationName.split('.').map(Number);
+                    const partsB = b.LocationName.split('.').map(Number);
+                    
+                    // Compare each component
+                    for (let i = 0; i < Math.min(partsA.length, partsB.length); i++) {
+                        if (partsA[i] !== partsB[i]) {
+                            return partsA[i] - partsB[i];
+                        }
+                    }
+                    return partsA.length - partsB.length;
+                });
+                
+                sortedLocations.forEach(location => {
                     const option = document.createElement('option');
                     option.value = location.LocationID;
-                    option.textContent = `${location.LocationName}: ${location.LabName || 'Lab'}`;
+                    option.textContent = location.LocationName;
                     locationSelect.appendChild(option);
                 });
+                
+                // Add search functionality to the select element
+                setupSearchableSelect('moveLocationSelect');
             }
         })
         .catch(error => {
             console.error('Error fetching locations for move:', error);
             const locationSelect = document.getElementById('moveLocationSelect');
             locationSelect.innerHTML = '<option value="">Error loading locations</option>';
-            
-            // Fallback: try to fetch minimal location data
-            fetch('/api/basic-locations')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.locations) {
-                        locationSelect.innerHTML = '<option value="">-- Select Location --</option>';
-                        data.locations.forEach(location => {
-                            const option = document.createElement('option');
-                            option.value = location.LocationID;
-                            option.textContent = location.LocationName;
-                            locationSelect.appendChild(option);
-                        });
-                    }
-                })
-                .catch(innerError => {
-                    console.error('Error fetching basic locations:', innerError);
-                });
         });
 }
 
@@ -194,18 +263,19 @@ function executeMoveSample() {
         sampleId: sampleId
     };
     
+    // Get amount to move (used for both container and location)
+    const amount = parseInt(document.getElementById('moveAmount').value, 10);
+    if (isNaN(amount) || amount < 1) {
+        showErrorMessage('Amount must be at least 1');
+        return;
+    }
+    
     // Based on move type, prepare different request data
     if (moveType === 'container') {
         const containerId = document.getElementById('moveContainerSelect').value;
-        const amount = document.getElementById('moveAmount').value;
         
         if (!containerId) {
             showErrorMessage('Please select a container');
-            return;
-        }
-        
-        if (amount < 1) {
-            showErrorMessage('Amount must be at least 1');
             return;
         }
         
@@ -214,7 +284,7 @@ function executeMoveSample() {
             requestData.removeFromContainer = true;
         } else {
             // Normal container move
-            requestData.containerId = containerId;
+            requestData.containerId = parseInt(containerId, 10);
             requestData.amount = amount;
         }
         
@@ -229,7 +299,8 @@ function executeMoveSample() {
             return;
         }
         
-        requestData.locationId = locationId;
+        requestData.locationId = parseInt(locationId, 10);
+        requestData.amount = amount; // Also send amount for location moves
         
         // Send to location move endpoint
         moveToLocation(requestData);

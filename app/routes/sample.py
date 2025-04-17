@@ -1011,6 +1011,8 @@ def init_sample(blueprint, mysql):
         try:
             data = request.json
             location_id = data.get('locationId')
+            # Optional move amount - default to all if not specified
+            move_amount = int(data.get('amount', 0))
             
             if not location_id:
                 return jsonify({
@@ -1028,8 +1030,22 @@ def init_sample(blueprint, mysql):
                 # Start transaction
                 cursor.execute("START TRANSACTION")
                 
-                # Check if sample exists
-                cursor.execute("SELECT SampleID, Status FROM Sample WHERE SampleID = " + str(sample_id))
+                # Check if sample exists and get its details
+                cursor.execute("""
+                    SELECT 
+                        s.SampleID, 
+                        s.Status, 
+                        s.Description,
+                        s.PartNumber,
+                        s.Barcode,
+                        s.UnitID,
+                        s.ReceptionID,
+                        s.OwnerID,
+                        s.Amount,
+                        s.Type,
+                        s.IsUnique
+                    FROM Sample s
+                    WHERE s.SampleID = """ + str(sample_id))
                 sample_result = cursor.fetchone()
                 
                 if not sample_result:
@@ -1045,6 +1061,17 @@ def init_sample(blueprint, mysql):
                         'success': False,
                         'error': 'Cannot move a disposed sample'
                     }), 400
+                
+                # Sample data
+                sample_description = sample_result[2]
+                sample_part_number = sample_result[3]
+                sample_barcode = sample_result[4]
+                sample_unit_id = sample_result[5]
+                sample_reception_id = sample_result[6]
+                sample_owner_id = sample_result[7]
+                sample_amount = sample_result[8] if sample_result[8] is not None else 0
+                sample_type = sample_result[9] or 'multiple'
+                sample_is_unique = sample_result[10] or 0
                 
                 # Get sample storage information
                 cursor.execute("""
@@ -1064,9 +1091,8 @@ def init_sample(blueprint, mysql):
                         INSERT INTO SampleStorage (
                             SampleID,
                             LocationID,
-                            AmountRemaining,
-                            LastUpdated
-                        ) VALUES (%s, %s, %s, NOW())
+                            AmountRemaining
+                        ) VALUES (%s, %s, %s)
                     """, (
                         sample_id,
                         location_id,
@@ -1075,6 +1101,7 @@ def init_sample(blueprint, mysql):
                     
                     storage_id = cursor.lastrowid
                     old_location_name = 'None'
+                    total_amount = 1
                     
                     # Set sample status to 'In Storage'
                     cursor.execute("""
@@ -1084,21 +1111,96 @@ def init_sample(blueprint, mysql):
                 else:
                     storage_id = storage_result[0]
                     old_location_id = storage_result[1]
-                    amount = storage_result[2]
+                    total_amount = int(storage_result[2])
                     old_location_name = storage_result[3]
                     
-                    # Remove from any containers
-                    cursor.execute("""
-                        DELETE FROM ContainerSample 
-                        WHERE SampleStorageID = %s
-                    """, (storage_id,))
+                    # If move_amount not specified, move all
+                    if move_amount <= 0 or move_amount > total_amount:
+                        move_amount = total_amount
                     
-                    # Update storage record with new location
-                    cursor.execute("""
-                        UPDATE SampleStorage 
-                        SET LocationID = %s, LastUpdated = NOW() 
-                        WHERE StorageID = %s
-                    """, (location_id, storage_id))
+                    # If we're moving ALL samples, just update the location
+                    if move_amount == total_amount:
+                        # Remove from any containers
+                        cursor.execute("""
+                            DELETE FROM ContainerSample 
+                            WHERE SampleStorageID = %s
+                        """, (storage_id,))
+                        
+                        # Update storage record with new location
+                        cursor.execute("""
+                            UPDATE SampleStorage 
+                            SET LocationID = %s 
+                            WHERE StorageID = %s
+                        """, (location_id, storage_id))
+                    else:
+                        # We're moving SOME of the samples - create a new sample record
+                        
+                        # First, reduce the amount in both sample and samplestorage tables
+                        new_amount = total_amount - move_amount
+                        
+                        # Update SampleStorage.AmountRemaining
+                        cursor.execute("""
+                            UPDATE SampleStorage 
+                            SET AmountRemaining = %s 
+                            WHERE StorageID = %s
+                        """, (new_amount, storage_id))
+                        
+                        # Also update Sample.Amount for consistency
+                        cursor.execute("""
+                            UPDATE Sample 
+                            SET Amount = %s 
+                            WHERE SampleID = %s
+                        """, (new_amount, sample_id))
+                        
+                        # Create timestamp for unique barcode
+                        import datetime
+                        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                        new_barcode = f"{sample_barcode}-{timestamp}" if sample_barcode else f"MOVED-{sample_id}-{timestamp}"
+                        
+                        # Now create a new Sample record for the moved portion
+                        cursor.execute("""
+                            INSERT INTO Sample (
+                                PartNumber,
+                                Description,
+                                Barcode,
+                                Status,
+                                Amount,
+                                UnitID,
+                                OwnerID,
+                                ReceptionID,
+                                Type,
+                                IsUnique
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (
+                            sample_part_number,
+                            sample_description,
+                            new_barcode,  # Create a unique barcode with timestamp
+                            'In Storage',
+                            move_amount,  # Set the correct amount for the new sample
+                            sample_unit_id,
+                            sample_owner_id,
+                            sample_reception_id,
+                            sample_type,
+                            sample_is_unique
+                        ))
+                        
+                        new_sample_id = cursor.lastrowid
+                        
+                        # Create storage record for the new sample
+                        cursor.execute("""
+                            INSERT INTO SampleStorage (
+                                SampleID,
+                                LocationID,
+                                AmountRemaining
+                            ) VALUES (%s, %s, %s)
+                        """, (
+                            new_sample_id,
+                            location_id,
+                            move_amount
+                        ))
+                        
+                        # Update sample_id for response
+                        moved_sample_id = new_sample_id
                 
                 # Get new location name for history
                 cursor.execute("""
@@ -1122,7 +1224,7 @@ def init_sample(blueprint, mysql):
                     'Sample moved',
                     user_id,
                     sample_id,
-                    f"Sample moved from location {old_location_name} to {new_location_name}"
+                    f"Sample moved ({move_amount} units) from location {old_location_name} to {new_location_name}"
                 ))
                 
                 # Commit transaction
@@ -1132,6 +1234,7 @@ def init_sample(blueprint, mysql):
                     'success': True,
                     'message': f"Sample SMP-{sample_id} moved to {new_location_name}",
                     'sample_id': sample_id,
+                    'moved_amount': move_amount,
                     'new_location': new_location_name
                 })
                 

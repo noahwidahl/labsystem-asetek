@@ -148,13 +148,15 @@ class ContainerService:
                 HAVING CurrentAmount < c.ContainerCapacity OR c.ContainerCapacity IS NULL
             """
             
-            result, cursor = self.db.execute_query(query)
+            # Direkte brug af MySQL cursor i stedet for db utils
+            cursor = self.mysql.connection.cursor()
+            cursor.execute(query)
             
             # Konverterer rå resultater til dict
             columns = [col[0] for col in cursor.description]
             containers = []
             
-            for row in result:
+            for row in cursor.fetchall():
                 container_dict = dict(zip(columns, row))
                 
                 # Beregn tilgængelig kapacitet
@@ -170,6 +172,7 @@ class ContainerService:
                 
                 containers.append(container_dict)
             
+            cursor.close()
             print(f"DEBUG: Returning {len(containers)} available containers")
             
             return containers
@@ -503,7 +506,20 @@ class ContainerService:
                 
                 # Check if sample exists and is available
                 cursor.execute("""
-                    SELECT s.SampleID, ss.StorageID, ss.AmountRemaining, ss.LocationID
+                    SELECT 
+                        s.SampleID, 
+                        ss.StorageID, 
+                        ss.AmountRemaining, 
+                        ss.LocationID,
+                        s.Description,
+                        s.PartNumber,
+                        s.Barcode,
+                        s.UnitID,
+                        s.ReceptionID,
+                        s.OwnerID,
+                        s.Amount,
+                        s.Type,
+                        s.IsUnique
                     FROM Sample s
                     JOIN SampleStorage ss ON s.SampleID = ss.SampleID
                     WHERE s.SampleID = %s AND ss.AmountRemaining >= %s
@@ -517,7 +533,19 @@ class ContainerService:
                     }
                 
                 storage_id = sample_data[1]
+                sample_amount_remaining = sample_data[2]
                 sample_location_id = sample_data[3]
+                
+                # Extract all sample data for potential new sample creation
+                sample_description = sample_data[4]
+                sample_part_number = sample_data[5]
+                sample_barcode = sample_data[6]
+                sample_unit_id = sample_data[7]
+                sample_reception_id = sample_data[8]
+                sample_owner_id = sample_data[9]
+                sample_original_amount = sample_data[10] if sample_data[10] is not None else 0
+                sample_type = sample_data[11] or 'multiple'
+                sample_is_unique = sample_data[12] or 0
                 
                 # Update container's location to match the sample's location if not set
                 cursor.execute("""
@@ -561,19 +589,105 @@ class ContainerService:
                 
                 container_sample_id = cursor.lastrowid
                 
-                # IMPORTANT: We don't reduce the sample amount in storage
-                # When adding a sample to a container, we're changing its location, not removing it
-                # This ensures samples remain visible in sample overview with correct amount
-                # The amount information is tracked in both SampleStorage and ContainerSample tables
+                # Check if we are moving all items or just some
+                # If moving all items, just update the location
+                # If moving some items, create a new sample record and reduce the original
                 
-                # Update the sample's location to match the container's location
-                cursor.execute("""
-                    UPDATE SampleStorage 
-                    SET LocationID = (SELECT LocationID FROM container WHERE ContainerID = %s)
-                    WHERE StorageID = %s
-                """, (container_id, storage_id))
-                
-                print(f"DEBUG: Sample moved to container {container_id} without reducing amount. Updated location to match container.")
+                if amount >= sample_amount_remaining:
+                    # Moving ALL items - just update the location
+                    cursor.execute("""
+                        UPDATE SampleStorage 
+                        SET LocationID = (SELECT LocationID FROM container WHERE ContainerID = %s)
+                        WHERE StorageID = %s
+                    """, (container_id, storage_id))
+                    
+                    print(f"DEBUG: Sample moved to container {container_id} (all units). Updated location to match container.")
+                else:
+                    # Moving SOME items - create a new sample and reduce the original
+                    # First, reduce the amount in both sample and samplestorage tables
+                    new_amount = sample_amount_remaining - amount
+                    
+                    # Update SampleStorage.AmountRemaining
+                    cursor.execute("""
+                        UPDATE SampleStorage 
+                        SET AmountRemaining = %s 
+                        WHERE StorageID = %s
+                    """, (new_amount, storage_id))
+                    
+                    # Also update Sample.Amount for consistency
+                    cursor.execute("""
+                        UPDATE Sample 
+                        SET Amount = %s 
+                        WHERE SampleID = %s
+                    """, (new_amount, sample_id))
+                    
+                    # Create timestamp for unique barcode
+                    import datetime
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                    new_barcode = f"{sample_barcode}-{timestamp}" if sample_barcode else f"MOVED-{sample_id}-{timestamp}"
+                    
+                    # Now create a new Sample record for the moved portion
+                    cursor.execute("""
+                        INSERT INTO Sample (
+                            PartNumber,
+                            Description,
+                            Barcode,
+                            Status,
+                            Amount,
+                            UnitID,
+                            OwnerID,
+                            ReceptionID,
+                            Type,
+                            IsUnique
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        sample_part_number,
+                        sample_description,
+                        new_barcode,  # Create a unique barcode with timestamp
+                        'In Storage',
+                        amount,  # Set the correct amount for the new sample
+                        sample_unit_id,
+                        sample_owner_id,
+                        sample_reception_id,
+                        sample_type,
+                        sample_is_unique
+                    ))
+                    
+                    new_sample_id = cursor.lastrowid
+                    
+                    # Get container's location
+                    cursor.execute("SELECT LocationID FROM container WHERE ContainerID = %s", (container_id,))
+                    container_location_result = cursor.fetchone()
+                    container_location_id = container_location_result[0] if container_location_result else None
+                    
+                    # Create storage record for the new sample
+                    cursor.execute("""
+                        INSERT INTO SampleStorage (
+                            SampleID,
+                            LocationID,
+                            AmountRemaining
+                        ) VALUES (%s, %s, %s)
+                    """, (
+                        new_sample_id,
+                        container_location_id,
+                        amount
+                    ))
+                    
+                    # Get the new storage ID
+                    new_storage_id = cursor.lastrowid
+                    
+                    # Update ContainerSample to point to the new storage record
+                    cursor.execute("""
+                        UPDATE ContainerSample
+                        SET SampleStorageID = %s
+                        WHERE ContainerSampleID = %s
+                    """, (new_storage_id, container_sample_id))
+                    
+                    print(f"DEBUG: Created new sample {new_sample_id} for {amount} units moved to container {container_id}")
+                    
+                # Legacy comment for context:
+                # IMPORTANT: We now DO reduce the sample amount when splitting. This ensures accurate tracking
+                # in both SampleStorage.AmountRemaining and Sample.Amount tables
                 
                 # Log the activity
                 if user_id:
