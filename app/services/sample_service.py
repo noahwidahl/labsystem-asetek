@@ -584,47 +584,66 @@ class SampleService:
                             table_name = "container"
                             
                             # Check if we need to create a new container type first
+                            # For clarity, we'll set a created container type ID variable if we create a new type
+                            created_container_type_id = None
+                            
                             if sample_data.get('newContainerType'):
                                 print(f"DEBUG: Creating new container type from sample registration")
                                 new_type = sample_data.get('newContainerType')
                                 
-                                # Insert the new container type
-                                cursor.execute("""
-                                    INSERT INTO ContainerType (
-                                        TypeName,
-                                        Description,
-                                        DefaultCapacity
-                                    )
-                                    VALUES (%s, %s, %s)
-                                """, (
-                                    new_type.get('typeName'),
-                                    new_type.get('description', ''),
-                                    new_type.get('capacity')
-                                ))
-                                
-                                # Get the new container type ID
-                                container_type_id = cursor.lastrowid
-                                print(f"DEBUG: Created new container type with ID: {container_type_id}")
-                                
-                                # IMPORTANT: Get the capacity from the new container type
-                                # This ensures that when creating a new container type, we use its capacity
-                                capacity = new_type.get('capacity')
-                                print(f"DEBUG: Using capacity {capacity} from new container type {container_type_id}")
-                                
-                                # Log the container type creation
-                                cursor.execute("""
-                                    INSERT INTO History (
-                                        Timestamp, 
-                                        ActionType, 
-                                        UserID, 
-                                        Notes
-                                    )
-                                    VALUES (NOW(), %s, %s, %s)
-                                """, (
-                                    'Container type created',
-                                    user_id,
-                                    f"Container type '{new_type.get('typeName')}' created during sample registration"
-                                ))
+                                # Check if this is the first container in a multi-container scenario
+                                # If we already have a created container type, use that instead of creating a new one
+                                if i == 0 or len(container_ids) == 0:
+                                    # First container in a batch - create the new container type
+                                    # Insert the new container type
+                                    cursor.execute("""
+                                        INSERT INTO ContainerType (
+                                            TypeName,
+                                            Description,
+                                            DefaultCapacity
+                                        )
+                                        VALUES (%s, %s, %s)
+                                    """, (
+                                        new_type.get('typeName'),
+                                        new_type.get('description', ''),
+                                        new_type.get('capacity')
+                                    ))
+                                    
+                                    # Get the new container type ID
+                                    container_type_id = cursor.lastrowid
+                                    created_container_type_id = container_type_id
+                                    # Store the container type ID in sample_data so it can be reused for other containers
+                                    sample_data['createdContainerTypeId'] = container_type_id
+                                    print(f"DEBUG: Created new container type with ID: {container_type_id} for first container")
+                                    
+                                    # IMPORTANT: Get the capacity from the new container type
+                                    # This ensures that when creating a new container type, we use its capacity
+                                    capacity = new_type.get('capacity')
+                                    print(f"DEBUG: Using capacity {capacity} from new container type {container_type_id}")
+                                    
+                                    # Log the container type creation
+                                    cursor.execute("""
+                                        INSERT INTO History (
+                                            Timestamp, 
+                                            ActionType, 
+                                            UserID, 
+                                            Notes
+                                        )
+                                        VALUES (NOW(), %s, %s, %s)
+                                    """, (
+                                        'Container type created',
+                                        user_id,
+                                        f"Container type '{new_type.get('typeName')}' created during sample registration"
+                                    ))
+                                else:
+                                    # For subsequent containers, reuse the previously created container type
+                                    container_type_id = sample_data.get('createdContainerTypeId')
+                                    capacity = new_type.get('capacity')
+                                    print(f"DEBUG: Reusing container type ID {container_type_id} for container {i+1}")
+                            elif sample_data.get('createdContainerTypeId'):
+                                # This is a subsequent container in a batch and we have a previously created container type
+                                container_type_id = sample_data.get('createdContainerTypeId')
+                                print(f"DEBUG: Using previously created container type ID {container_type_id} for container {i+1}")
                             elif sample_data.get('containerTypeId'):
                                 # Use the supplied container type ID
                                 container_type_id = sample_data.get('containerTypeId')
@@ -637,45 +656,48 @@ class SampleService:
                                     container_type_id = default_type_result[0]
                             
                             # Prioritized logic for determining container capacity
-                            # 1. First check if user explicitly specified container capacity
-                            if sample_data.get('containerCapacity'):
-                                capacity = int(sample_data.get('containerCapacity'))
-                                print(f"DEBUG: Using user-specified capacity {capacity} for container")
-                            # 2. If creating a new container type, use its capacity value
-                            elif sample_data.get('newContainerType') and sample_data.get('newContainerType').get('capacity'):
+                            # 1. First check if we have a new container type with capacity
+                            if sample_data.get('newContainerType') and sample_data.get('newContainerType').get('capacity'):
                                 capacity = int(sample_data.get('newContainerType').get('capacity'))
-                                print(f"DEBUG: Using capacity {capacity} from new container type for container")
+                                print(f"DEBUG: Using capacity {capacity} from new container type for container #{i+1}")
+                            # 2. If user explicitly specified container capacity
+                            elif sample_data.get('containerCapacity'):
+                                capacity = int(sample_data.get('containerCapacity'))
+                                print(f"DEBUG: Using user-specified capacity {capacity} for container #{i+1}")
                             # 3. If we have a container type ID, get its default capacity from the database
                             elif container_type_id:
                                 # Query the container type's default capacity
                                 cursor.execute("""
-                                    SELECT DefaultCapacity 
+                                    SELECT DefaultCapacity, TypeName
                                     FROM ContainerType 
                                     WHERE ContainerTypeID = %s
                                 """, (container_type_id,))
                                 type_result = cursor.fetchone()
                                 if type_result and type_result[0]:
                                     capacity = int(type_result[0])
-                                    print(f"DEBUG: Using DefaultCapacity {capacity} from container type {container_type_id}")
+                                    type_name = type_result[1]
+                                    print(f"DEBUG: Using DefaultCapacity {capacity} from container type '{type_name}' (ID: {container_type_id}) for container #{i+1}")
                                 else:
                                     # Fallback if no default capacity
                                     capacity = 100  # Default to 100 units as a reasonable fallback
-                                    print(f"DEBUG: No DefaultCapacity found for container type {container_type_id}, using default value {capacity}")
+                                    print(f"DEBUG: No DefaultCapacity found for container type {container_type_id}, using default value {capacity} for container #{i+1}")
                             # 4. Fallbacks in priority order
                             else:
                                 # If all else fails, determine a capacity based on the context
                                 if sample_data.get('useSingleContainerForAll', False):
                                     # For "one container for all" mode, suggest a larger capacity
                                     capacity = max(100, int(sample_data.get('totalAmount', 0)) * 2)
-                                    print(f"DEBUG: No capacity specified for single container for all samples, using {capacity} (2x total amount)")
+                                    print(f"DEBUG: No capacity specified for single container for all samples, using {capacity} (2x total amount) for container #{i+1}")
                                 elif sample_data.get('createMultipleContainers', False):
                                     # For "one container per package", suggest a reasonable multiple of amount per package
                                     capacity = max(50, int(sample_data.get('amountPerPackage', 1)) * 5)
-                                    print(f"DEBUG: No capacity specified for container in multiple containers mode, using {capacity} (5x amount per package)")
+                                    print(f"DEBUG: No capacity specified for container in multiple containers mode, using {capacity} (5x amount per package) for container #{i+1}")
                                 else:
                                     # Default reasonable capacity
                                     capacity = 100
-                                    print(f"DEBUG: No capacity information available, using default capacity {capacity}")
+                                    print(f"DEBUG: No capacity information available, using default capacity {capacity} for container #{i+1}")
+                            
+                            print(f"CONTAINER CREATION: Container #{i+1}/{package_count}, Type ID: {container_type_id}, Capacity: {capacity}, Description: '{container_desc}'")
                             
                             # Get location from parameters or use the one already determined
                             # Check for multiple container locations
@@ -712,6 +734,78 @@ class SampleService:
                                 print(f"DEBUG: Using storage location {container_location_id} as fallback for container of package {i+1}")
                             
                             # Create container with location and container type
+                            # Check if container_location_id is a string in format "x.x.x"
+                            location_id_to_use = container_location_id
+                            
+                            # If container_location_id is a string in format "x.x.x", try to find or create the location
+                            if isinstance(container_location_id, str) and container_location_id.count('.') == 2:
+                                try:
+                                    location_name = container_location_id
+                                    print(f"DEBUG: Looking up location by name: {location_name}")
+                                    
+                                    # Try to find the location by name
+                                    cursor.execute("""
+                                        SELECT LocationID FROM StorageLocation WHERE LocationName = %s
+                                    """, (location_name,))
+                                    
+                                    location_result = cursor.fetchone()
+                                    if location_result:
+                                        # Found existing location
+                                        location_id_to_use = location_result[0]
+                                        print(f"DEBUG: Found existing location with ID: {location_id_to_use}")
+                                    else:
+                                        # Parse rack, section, shelf from the format x.x.x
+                                        parts = location_name.split('.')
+                                        if len(parts) == 3:
+                                            rack = parts[0]
+                                            section = parts[1]
+                                            shelf = parts[2]
+                                            
+                                            # Create a new location
+                                            print(f"DEBUG: Creating new location: Rack={rack}, Section={section}, Shelf={shelf}")
+                                            
+                                            # Get lab ID (use first available lab)
+                                            cursor.execute("SELECT LabID FROM Lab LIMIT 1")
+                                            lab_result = cursor.fetchone()
+                                            lab_id = lab_result[0] if lab_result else 1
+                                            
+                                            # Insert the new location
+                                            cursor.execute("""
+                                                INSERT INTO StorageLocation (
+                                                    LocationName, 
+                                                    Rack, 
+                                                    Section, 
+                                                    Shelf, 
+                                                    LabID
+                                                )
+                                                VALUES (%s, %s, %s, %s, %s)
+                                            """, (
+                                                location_name,
+                                                rack,
+                                                section,
+                                                shelf,
+                                                lab_id
+                                            ))
+                                            
+                                            location_id_to_use = cursor.lastrowid
+                                            print(f"DEBUG: Created new location with ID: {location_id_to_use}")
+                                        else:
+                                            # Fall back to default location if format is invalid
+                                            cursor.execute("SELECT LocationID FROM StorageLocation LIMIT 1")
+                                            location_result = cursor.fetchone()
+                                            location_id_to_use = location_result[0] if location_result else 1
+                                            print(f"DEBUG: Using default location ID: {location_id_to_use}")
+                                except Exception as loc_error:
+                                    print(f"DEBUG: Error processing location: {loc_error}")
+                                    # Fall back to using a default location
+                                    cursor.execute("SELECT LocationID FROM StorageLocation LIMIT 1")
+                                    location_result = cursor.fetchone()
+                                    location_id_to_use = location_result[0] if location_result else 1
+                                    print(f"DEBUG: Using fallback location ID after error: {location_id_to_use}")
+                            
+                            print(f"DEBUG: Using location ID for container: {location_id_to_use}")
+                            
+                            # Create container with the determined location ID and container type
                             if container_type_id:
                                 query = f"""
                                     INSERT INTO {table_name} (
@@ -729,7 +823,7 @@ class SampleService:
                                     container_type_id,
                                     1 if sample_data.get('containerIsMixed', False) else 0,
                                     capacity,  # Use supplied capacity or default to amount_per_package
-                                    container_location_id  # Use container-specific location if specified
+                                    location_id_to_use  # Use container-specific location if specified
                                 ))
                             else:
                                 # No container type found, create without it
@@ -747,7 +841,7 @@ class SampleService:
                                     container_desc,
                                     1 if sample_data.get('containerIsMixed', False) else 0,
                                     capacity,  # Use supplied capacity or default to amount_per_package
-                                    container_location_id  # Use container-specific location if specified
+                                    location_id_to_use  # Use container-specific location if specified
                                 ))
                             
                             container_id = cursor.lastrowid

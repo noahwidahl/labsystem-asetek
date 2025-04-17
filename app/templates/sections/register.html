@@ -298,22 +298,6 @@
                                 <small class="text-muted">Provide a descriptive name for the container (required)</small>
                             </div>
                             
-                            <div class="form-group mb-3">
-                                <label>Container type <span class="text-danger">*</span></label>
-                                <select class="form-control" id="containerType" required>
-                                    <option value="">Select type</option>
-                                    {% for type in container_types %}
-                                    <option value="{{ type.ContainerTypeID }}" data-capacity="{{ type.DefaultCapacity }}">{{ type.TypeName }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            
-                            <div class="form-group mb-3">
-                                <label>Capacity</label>
-                                <input type="number" class="form-control" id="containerCapacity" min="1" placeholder="Will use type's default capacity if not specified">
-                                <small class="text-muted">Maximum number of units this container can hold</small>
-                            </div>
-                            
                             <div class="form-check mb-3">
                                 <input class="form-check-input" type="checkbox" id="containerIsMixed" name="containerIsMixed">
                                 <label class="form-check-label" for="containerIsMixed">
@@ -323,32 +307,64 @@
                             
                             <div class="form-group mb-3" id="containerLocationSelectSection">
                                 <label>Storage Location <span class="text-danger">*</span></label>
-                                <select class="form-control" id="containerLocation" required>
-                                    <option value="">Select location</option>
-                                    {% for location in locations %}
-                                    <option value="{{ location.LocationID }}">{{ location.LocationName }}</option>
-                                    {% endfor %}
-                                </select>
-                                <small class="text-muted">For single container storage only. For multiple containers, you'll select locations in the grid later.</small>
+                                <input type="text" class="form-control" id="containerLocation" placeholder="Ex. 1.1.1" required>
+                                <small class="text-muted">Enter location in format "x.x.x" (e.g. 1.1.1). For multiple containers, you'll select locations in the grid later.</small>
+                                <div id="locationFormatError" class="invalid-feedback">
+                                    Please enter a valid location in format "x.x.x" (e.g. 1.1.1)
+                                </div>
                             </div>
                             
-                            <div class="form-check mb-3">
-                                <input class="form-check-input" type="checkbox" value="" id="createContainerType" onchange="toggleContainerTypeSection(this)">
-                                <label class="form-check-label" for="createContainerType">
-                                    Create new container type
-                                </label>
+                            <!-- Container Type Selection as Radio Buttons -->
+                            <div class="form-group mb-3">
+                                <label class="d-block mb-2">Container Type Options:</label>
+                                <div class="mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="containerTypeOption" id="useExistingTypeOption" value="existing" checked>
+                                        <label class="form-check-label" for="useExistingTypeOption">
+                                            Select existing container type
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="containerTypeOption" id="createNewTypeOption" value="new">
+                                        <label class="form-check-label" for="createNewTypeOption">
+                                            Create new container type
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
                             
+                            <!-- Existing Container Type Selection (shown by default) -->
+                            <div id="existingContainerTypeSection">
+                                <div class="form-group mb-3">
+                                    <label>Container type <span class="text-danger">*</span></label>
+                                    <select class="form-control" id="containerType" required>
+                                        <option value="">Select type</option>
+                                        {% for type in container_types %}
+                                        <option value="{{ type.ContainerTypeID }}" data-capacity="{{ type.DefaultCapacity }}">{{ type.TypeName }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group mb-3">
+                                    <label>Capacity</label>
+                                    <input type="number" class="form-control" id="containerCapacity" min="1" placeholder="Will use type's default capacity if not specified">
+                                    <small class="text-muted">Maximum number of units this container can hold</small>
+                                </div>
+                            </div>
+                            
+                            <!-- New Container Type Section (hidden by default) -->
                             <div id="newContainerTypeSection" class="d-none border p-3 mb-3 rounded bg-light">
                                 <h6 class="mb-3">New Container Type</h6>
                                 <div class="form-group mb-3">
                                     <label>Type Name <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="newContainerTypeName" placeholder="E.g. 'Box'" required>
+                                    <input type="text" class="form-control" id="newContainerTypeName" placeholder="E.g. 'Box'">
                                 </div>
                                 
                                 <div class="form-group mb-3">
                                     <label>Default Capacity <span class="text-danger">*</span></label>
-                                    <input type="number" class="form-control" id="newContainerTypeCapacity" min="1" placeholder="Default capacity" required>
+                                    <input type="number" class="form-control" id="newContainerTypeCapacity" min="1" placeholder="Default capacity">
                                 </div>
                                 
                                 <div class="form-group mb-3">
@@ -657,13 +673,20 @@
                     formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
                     
                     // Check if creating a new container type
-                    const createContainerType = document.getElementById('createContainerType')?.checked || false;
+                    // First try using the state from registerApp, otherwise check radio buttons
+                    const createContainerType = (window.registerApp && window.registerApp.createNewContainerType !== undefined) 
+                        ? window.registerApp.createNewContainerType 
+                        : (document.getElementById('createNewTypeOption')?.checked || false);
+                        
+                    console.log("Adding container type creation info to form data. Creating new type:", createContainerType);
+                    
                     if (createContainerType) {
                         formData.newContainerType = {
                             typeName: document.getElementById('newContainerTypeName')?.value || '',
                             description: document.getElementById('newContainerTypeDescription')?.value || '',
                             capacity: document.getElementById('newContainerTypeCapacity')?.value || ''
                         };
+                        console.log("New container type data:", formData.newContainerType);
                     }
                     
                     // Get container location
@@ -701,21 +724,34 @@
                     formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
 
                     // Check if creating a new container type
-                    const createContainerType = document.getElementById('createContainerType')?.checked || false;
+                    // First try using the state from registerApp, otherwise check radio buttons
+                    const createContainerType = (window.registerApp && window.registerApp.createNewContainerType !== undefined) 
+                        ? window.registerApp.createNewContainerType 
+                        : (document.getElementById('createNewTypeOption')?.checked || false);
+                        
+                    console.log("Adding container type creation info to form data. Creating new type:", createContainerType);
+                    
                     if (createContainerType) {
                         formData.newContainerType = {
                             typeName: document.getElementById('newContainerTypeName')?.value || '',
                             description: document.getElementById('newContainerTypeDescription')?.value || '',
                             capacity: document.getElementById('newContainerTypeCapacity')?.value || ''
                         };
+                        console.log("New container type data:", formData.newContainerType);
                     }
                     
-                    // Container location
-                    const containerLocationSelect = document.getElementById('containerLocation');
-                    if (containerLocationSelect && containerLocationSelect.value) {
-                        formData.containerLocationId = containerLocationSelect.value;
-                        // Also set the main storage location to the container location
-                        formData.storageLocation = containerLocationSelect.value;
+                    // Container location - get from text input 
+                    const containerLocationInput = document.getElementById('containerLocation');
+                    if (containerLocationInput && containerLocationInput.value.trim()) {
+                        const locationValue = containerLocationInput.value.trim();
+                        // Store the location name exactly as entered
+                        formData.containerLocationName = locationValue;
+                        // For API compatibility
+                        formData.containerLocationId = locationValue;
+                        // Also set the main storage location
+                        formData.storageLocation = locationValue;
+                        
+                        console.log("Using container location from input:", locationValue);
                     }
                 } else if (oneContainerPerPackage && oneContainerPerPackage.checked) {
                     // Creating one container per package
@@ -1393,21 +1429,60 @@
             window.updateContainerLocationVisibility();
         }
         
-        // Container type checkbox toggling
-        const typeCheckbox = document.getElementById('createContainerType');
-        if (typeCheckbox) {
-            typeCheckbox.addEventListener('change', function() {
-                const containerTypeSection = document.getElementById('newContainerTypeSection');
-                if (this.checked) {
-                    containerTypeSection.classList.remove('d-none');
-                    // Focus the first input to prompt the user
+        // Container type radio button toggling
+        const useExistingTypeOption = document.getElementById('useExistingTypeOption');
+        const createNewTypeOption = document.getElementById('createNewTypeOption');
+        
+        if (useExistingTypeOption && createNewTypeOption) {
+            // Function to handle container type option change
+            function handleContainerTypeOptionChange() {
+                const existingTypeSection = document.getElementById('existingContainerTypeSection');
+                const newTypeSection = document.getElementById('newContainerTypeSection');
+                const containerTypeSelect = document.getElementById('containerType');
+                const containerCapacityInput = document.getElementById('containerCapacity');
+                const newTypeNameInput = document.getElementById('newContainerTypeName');
+                const newTypeCapacityInput = document.getElementById('newContainerTypeCapacity');
+                
+                // Check which option is selected
+                const createNew = createNewTypeOption.checked;
+                
+                // Show/hide appropriate sections
+                if (existingTypeSection) existingTypeSection.classList.toggle('d-none', createNew);
+                if (newTypeSection) newTypeSection.classList.toggle('d-none', !createNew);
+                
+                // Manage required fields and focus
+                if (containerTypeSelect) {
+                    containerTypeSelect.required = !createNew;
+                    containerTypeSelect.disabled = createNew;
+                }
+                
+                if (newTypeNameInput) newTypeNameInput.required = createNew;
+                if (newTypeCapacityInput) newTypeCapacityInput.required = createNew;
+                
+                // Focus the appropriate field
+                if (createNew) {
                     setTimeout(() => {
-                        document.getElementById('newContainerTypeName')?.focus();
+                        newTypeNameInput?.focus();
                     }, 100);
                 } else {
-                    containerTypeSection.classList.add('d-none');
+                    setTimeout(() => {
+                        containerTypeSelect?.focus();
+                    }, 100);
                 }
-            });
+                
+                // Store in global state for form submission
+                if (window.registerApp) {
+                    window.registerApp.createNewContainerType = createNew;
+                    console.log("Container type creation state updated in global state:", createNew);
+                }
+            }
+            
+            // Add event listeners to both radio buttons
+            useExistingTypeOption.addEventListener('change', handleContainerTypeOptionChange);
+            createNewTypeOption.addEventListener('change', handleContainerTypeOptionChange);
+            
+            // Initial setup
+            handleContainerTypeOptionChange();
         }
         
         // Define updateContainerLocationVisibility as a local function
@@ -1546,16 +1621,11 @@
                             return false; // Prevent form submission
                         }
                         
-                        // Check container type
-                        const containerTypeId = document.getElementById('containerType')?.value;
-                        if (!containerTypeId && !document.getElementById('createContainerType')?.checked) {
-                            alert('Error: Please select a container type or create a new one.');
-                            document.getElementById('containerType')?.focus();
-                            return false; // Prevent form submission
-                        }
+                        // Check container type based on radio button selection
+                        const isCreatingNewType = document.getElementById('createNewTypeOption')?.checked || false;
                         
-                        // If creating new container type
-                        if (document.getElementById('createContainerType')?.checked) {
+                        if (isCreatingNewType) {
+                            // Validate new container type fields
                             const typeName = document.getElementById('newContainerTypeName')?.value?.trim();
                             const capacity = document.getElementById('newContainerTypeCapacity')?.value?.trim();
                             
@@ -1570,6 +1640,14 @@
                                 document.getElementById('newContainerTypeCapacity')?.focus();
                                 return false;
                             }
+                        } else {
+                            // Validate selected container type
+                            const containerTypeId = document.getElementById('containerType')?.value;
+                            if (!containerTypeId) {
+                                alert('Error: Please select a container type or create a new one.');
+                                document.getElementById('containerType')?.focus();
+                                return false; // Prevent form submission
+                            }
                         }
                         
                         // Check if we're in "one container per package" mode
@@ -1583,7 +1661,15 @@
                             // Only check container location for single container mode
                             const containerLocation = document.getElementById('containerLocation')?.value;
                             if (!containerLocation) {
-                                alert('Error: Please select a storage location for the container.');
+                                alert('Error: Please enter a storage location for the container in format x.x.x (e.g. 1.1.1).');
+                                document.getElementById('containerLocation')?.focus();
+                                return false;
+                            }
+                            
+                            // Check location format
+                            const locationRegex = /^\d+\.\d+\.\d+$/;
+                            if (!locationRegex.test(containerLocation)) {
+                                alert('Error: Please enter a valid location in format x.x.x (e.g. 1.1.1).');
                                 document.getElementById('containerLocation')?.focus();
                                 return false;
                             }

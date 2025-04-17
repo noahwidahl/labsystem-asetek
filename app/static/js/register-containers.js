@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupStorageOptions();
     setupContainerOptions();
     setupContainerTypeCreation();
+    setupLocationValidation();
     
     // Mark this module as loaded in the global state
     if (window.registerApp) {
@@ -19,6 +20,48 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('registerApp not found - containers module cannot register');
     }
 });
+
+// Setup location validation for text input
+function setupLocationValidation() {
+    const locationInput = document.getElementById('containerLocation');
+    if (!locationInput) return;
+    
+    console.log('Setting up location validation');
+    
+    // Function to validate location format (x.x.x)
+    function validateLocationFormat(value) {
+        if (!value) return false;
+        
+        // Check format with regex - allows for 1.1.1, 10.5.3, etc.
+        // Format is x.x.x where x is one or more digits
+        const locationRegex = /^\d+\.\d+\.\d+$/;
+        return locationRegex.test(value);
+    }
+    
+    // Add input event listener to validate on typing
+    locationInput.addEventListener('input', function() {
+        const value = this.value.trim();
+        const isValid = validateLocationFormat(value);
+        
+        // Show/hide error message
+        if (value && !isValid) {
+            this.classList.add('is-invalid');
+            this.setCustomValidity('Please enter a valid location in format "x.x.x" (e.g. 1.1.1)');
+        } else {
+            this.classList.remove('is-invalid');
+            this.setCustomValidity('');
+        }
+    });
+    
+    // Add blur event to validate on focus loss
+    locationInput.addEventListener('blur', function() {
+        const value = this.value.trim();
+        if (value && !validateLocationFormat(value)) {
+            this.classList.add('is-invalid');
+            this.setCustomValidity('Please enter a valid location in format "x.x.x" (e.g. 1.1.1)');
+        }
+    });
+}
 
 // Setup storage options (Direct vs Container)
 function setupStorageOptions() {
@@ -221,25 +264,76 @@ function setupContainerOptions() {
 
 // Setup container type creation
 function setupContainerTypeCreation() {
-    const createContainerTypeCheckbox = document.getElementById('createContainerType');
+    const useExistingTypeOption = document.getElementById('useExistingTypeOption');
+    const createNewTypeOption = document.getElementById('createNewTypeOption');
+    const existingTypeSection = document.getElementById('existingContainerTypeSection');
     const newContainerTypeSection = document.getElementById('newContainerTypeSection');
-    const containerTypeSelect = document.getElementById('containerType');
-    const containerCapacityInput = document.getElementById('containerCapacity');
     
-    if (!createContainerTypeCheckbox || !newContainerTypeSection) return;
+    if (!useExistingTypeOption || !createNewTypeOption) {
+        console.log("Container type radio buttons not found, skipping setup");
+        return;
+    }
     
-    createContainerTypeCheckbox.addEventListener('change', function() {
-        newContainerTypeSection.classList.toggle('d-none', !this.checked);
+    console.log("Setting up container type radio buttons");
+    
+    // Function to handle container type option change
+    function handleContainerTypeOptionChange() {
+        const containerTypeSelect = document.getElementById('containerType');
+        const containerCapacityInput = document.getElementById('containerCapacity');
+        const newTypeNameInput = document.getElementById('newContainerTypeName');
+        const newTypeCapacityInput = document.getElementById('newContainerTypeCapacity');
         
-        // Disable existing type fields when creating new type
-        if (containerTypeSelect) containerTypeSelect.disabled = this.checked;
-        if (containerCapacityInput) containerCapacityInput.disabled = this.checked;
-    });
+        // Check which option is selected
+        const createNew = createNewTypeOption.checked;
+        
+        console.log(`Container type option changed: ${createNew ? 'Create new' : 'Use existing'}`);
+        
+        // Show/hide appropriate sections
+        if (existingTypeSection) existingTypeSection.classList.toggle('d-none', createNew);
+        if (newContainerTypeSection) newContainerTypeSection.classList.toggle('d-none', !createNew);
+        
+        // Manage required fields
+        if (containerTypeSelect) {
+            containerTypeSelect.required = !createNew;
+            containerTypeSelect.disabled = createNew;
+            // Clear the selection when switching to new container type creation
+            if (createNew) {
+                containerTypeSelect.value = '';
+                // Important: Remove validation errors if we're creating a new type
+                containerTypeSelect.setCustomValidity('');
+            }
+        }
+        
+        if (containerCapacityInput) {
+            containerCapacityInput.disabled = createNew;
+            // Clear capacity when switching to new container type creation
+            if (createNew) containerCapacityInput.value = '';
+        }
+        
+        // Handle required fields for new container type
+        if (newTypeNameInput) newTypeNameInput.required = createNew;
+        if (newTypeCapacityInput) newTypeCapacityInput.required = createNew;
+        
+        // Store the container type creation state in the global app state
+        // This ensures it's preserved for all form submissions including multiple containers
+        if (window.registerApp) {
+            window.registerApp.createNewContainerType = createNew;
+            console.log("Container type creation state stored in global state:", createNew);
+        }
+    }
     
-    // Initial state
-    newContainerTypeSection.classList.toggle('d-none', !createContainerTypeCheckbox.checked);
-    if (containerTypeSelect) containerTypeSelect.disabled = createContainerTypeCheckbox.checked;
-    if (containerCapacityInput) containerCapacityInput.disabled = createContainerTypeCheckbox.checked;
+    // Add event listeners to both radio buttons
+    useExistingTypeOption.addEventListener('change', handleContainerTypeOptionChange);
+    createNewTypeOption.addEventListener('change', handleContainerTypeOptionChange);
+    
+    // Call the function initially to set the correct state
+    handleContainerTypeOptionChange();
+    
+    // Initialize global state with the current selection
+    if (window.registerApp) {
+        window.registerApp.createNewContainerType = createNewTypeOption.checked;
+        console.log("Initial container type creation state set in global app:", createNewTypeOption.checked);
+    }
 }
 
 // Function to fetch existing containers
