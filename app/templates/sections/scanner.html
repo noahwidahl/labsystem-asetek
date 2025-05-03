@@ -1,0 +1,335 @@
+{% extends 'base.html' %}
+
+{% block title %}Scanner og Printer{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h2>Scanner & Printer Administration</h2>
+            <div class="alert alert-info" role="alert">
+                <i class="fas fa-info-circle"></i> 
+                Denne side bruges til at administrere scanning og udskrivning af labels.
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Scanner Test Panel -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5><i class="fas fa-barcode"></i> Scanner Test</h5>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label for="manualBarcode">Manuel stregkode indtastning:</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="manualBarcode" 
+                                   placeholder="Indtast eller scan stregkode">
+                            <div class="input-group-append">
+                                <button class="btn btn-primary" id="scanButton">
+                                    <i class="fas fa-search"></i> Søg
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6>Scanner Status:</h6>
+                        <div id="scannerStatus" class="alert alert-secondary">
+                            Klar til scanning...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Scan Results Panel -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5><i class="fas fa-search"></i> Scanningsresultat</h5>
+                </div>
+                <div class="card-body">
+                    <div id="scanResults" class="d-none">
+                        <h6>Fundne prøvedetaljer:</h6>
+                        <table class="table table-sm table-bordered">
+                            <tbody>
+                                <tr>
+                                    <th>ID:</th>
+                                    <td id="sampleId"></td>
+                                </tr>
+                                <tr>
+                                    <th>Beskrivelse:</th>
+                                    <td id="sampleDescription"></td>
+                                </tr>
+                                <tr>
+                                    <th>Stregkode:</th>
+                                    <td id="sampleBarcode"></td>
+                                </tr>
+                                <tr>
+                                    <th>Varenummer:</th>
+                                    <td id="samplePartNumber"></td>
+                                </tr>
+                                <tr>
+                                    <th>Type:</th>
+                                    <td id="sampleType"></td>
+                                </tr>
+                                <tr>
+                                    <th>Status:</th>
+                                    <td id="sampleStatus"></td>
+                                </tr>
+                                <tr>
+                                    <th>Mængde:</th>
+                                    <td><span id="sampleAmount"></span> <span id="sampleUnit"></span></td>
+                                </tr>
+                                <tr>
+                                    <th>Lokation:</th>
+                                    <td id="sampleLocation"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="mt-3">
+                            <button class="btn btn-success" id="printSampleButton">
+                                <i class="fas fa-print"></i> Udskriv Prøve Label
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="noResults" class="alert alert-warning">
+                        Ingen scanningsresultater endnu. Scan en stregkode for at se detaljer.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Printer Test Panel -->
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5><i class="fas fa-print"></i> Printer Test</h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">Test Brother QL-810W labelprinter:</p>
+                    <button class="btn btn-info" id="printTestButton">
+                        <i class="fas fa-print"></i> Udskriv Testlabel
+                    </button>
+                    
+                    <div class="mt-3">
+                        <h6>Printer Status:</h6>
+                        <div id="printerStatus" class="alert alert-secondary">
+                            Klar til udskrivning...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Konfiguration Panel -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5><i class="fas fa-cogs"></i> Konfiguration</h5>
+                </div>
+                <div class="card-body">
+                    <p>Server Information:</p>
+                    <div class="alert alert-secondary">
+                        <strong>IP-adresse:</strong> <span id="serverIp">Indlæser...</span><br>
+                        <strong>Port:</strong> 5000<br>
+                        <strong>Scanner API Endpoint:</strong> <code>/api/scanner/data</code><br>
+                        <strong>Printer API Endpoint:</strong> <code>/api/print/label</code>
+                    </div>
+                    
+                    <p>DataWedge Konfiguration:</p>
+                    <div class="alert alert-secondary">
+                        <p>Konfigurér DataWedge på Zebra-scanneren til at sende til:</p>
+                        <code>http://<span id="serverIpConfig">SERVER_IP</span>:5000/api/scanner/data</code>
+                        <p class="mt-2">Format: <code>{"barcode": "%SCAN"}</code></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Opdater server IP
+    fetch('/api/system/info')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('serverIp').textContent = data.server_ip || 'Konfiguration nødvendig';
+            document.getElementById('serverIpConfig').textContent = data.server_ip || 'SERVER_IP';
+        })
+        .catch(error => {
+            console.error('Fejl ved hentning af serverinfo:', error);
+            document.getElementById('serverIp').textContent = 'Fejl ved hentning';
+        });
+    
+    // Event listener for manuel scanning
+    document.getElementById('scanButton').addEventListener('click', function() {
+        const barcode = document.getElementById('manualBarcode').value.trim();
+        if (barcode) {
+            performScan(barcode);
+        } else {
+            updateScannerStatus('Indtast en stregkode først', 'warning');
+        }
+    });
+    
+    // Event listener for Enter-tasten i stregkodefeltet
+    document.getElementById('manualBarcode').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            const barcode = this.value.trim();
+            if (barcode) {
+                performScan(barcode);
+            } else {
+                updateScannerStatus('Indtast en stregkode først', 'warning');
+            }
+        }
+    });
+    
+    // Event listener for printer test
+    document.getElementById('printTestButton').addEventListener('click', function() {
+        updatePrinterStatus('Sender testudskrivning...', 'info');
+        
+        fetch('/api/print/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                updatePrinterStatus('Testlabel udskrevet succesfuldt!', 'success');
+            } else {
+                updatePrinterStatus(`Fejl: ${data.message}`, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Fejl ved printer test:', error);
+            updatePrinterStatus('Fejl ved kommunikation med serveren', 'danger');
+        });
+    });
+    
+    // Event listener for udskrivning af prøvelabel
+    document.getElementById('printSampleButton').addEventListener('click', function() {
+        const sampleId = document.getElementById('sampleId').textContent;
+        const sampleDesc = document.getElementById('sampleDescription').textContent;
+        const sampleBarcode = document.getElementById('sampleBarcode').textContent;
+        const samplePartNumber = document.getElementById('samplePartNumber').textContent;
+        const sampleType = document.getElementById('sampleType').textContent;
+        const sampleAmount = document.getElementById('sampleAmount').textContent;
+        const sampleUnit = document.getElementById('sampleUnit').textContent;
+        
+        updatePrinterStatus('Sender udskrivningsanmodning...', 'info');
+        
+        fetch('/api/print/label', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                label_type: 'sample',
+                data: {
+                    SampleIDFormatted: sampleId,
+                    Description: sampleDesc,
+                    Barcode: sampleBarcode,
+                    PartNumber: samplePartNumber,
+                    Type: sampleType,
+                    Amount: sampleAmount,
+                    UnitName: sampleUnit
+                }
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                updatePrinterStatus('Prøvelabel udskrevet succesfuldt!', 'success');
+            } else {
+                updatePrinterStatus(`Fejl: ${data.message}`, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Fejl ved udskrivning af prøvelabel:', error);
+            updatePrinterStatus('Fejl ved kommunikation med serveren', 'danger');
+        });
+    });
+    
+    // Funktion til at udføre scanning
+    function performScan(barcode) {
+        updateScannerStatus('Scanner stregkode...', 'info');
+        
+        fetch('/api/scanner/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                barcode: barcode
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                updateScannerStatus('Stregkode fundet!', 'success');
+                displayScanResults(data.sample);
+            } else if (data.status === 'not_found') {
+                updateScannerStatus(`Stregkode ikke fundet: ${barcode}`, 'warning');
+                hideScanResults();
+            } else {
+                updateScannerStatus(`Fejl: ${data.message}`, 'danger');
+                hideScanResults();
+            }
+        })
+        .catch(error => {
+            console.error('Fejl ved scanning:', error);
+            updateScannerStatus('Fejl ved kommunikation med serveren', 'danger');
+            hideScanResults();
+        });
+    }
+    
+    // Funktion til at opdatere scanner status
+    function updateScannerStatus(message, type) {
+        const statusDiv = document.getElementById('scannerStatus');
+        statusDiv.textContent = message;
+        statusDiv.className = `alert alert-${type}`;
+    }
+    
+    // Funktion til at opdatere printer status
+    function updatePrinterStatus(message, type) {
+        const statusDiv = document.getElementById('printerStatus');
+        statusDiv.textContent = message;
+        statusDiv.className = `alert alert-${type}`;
+    }
+    
+    // Funktion til at vise scanningsresultater
+    function displayScanResults(sample) {
+        document.getElementById('sampleId').textContent = sample.SampleIDFormatted || '';
+        document.getElementById('sampleDescription').textContent = sample.Description || '';
+        document.getElementById('sampleBarcode').textContent = sample.Barcode || '';
+        document.getElementById('samplePartNumber').textContent = sample.PartNumber || '';
+        document.getElementById('sampleType').textContent = sample.Type || '';
+        document.getElementById('sampleStatus').textContent = sample.Status || '';
+        document.getElementById('sampleAmount').textContent = sample.Amount || '';
+        document.getElementById('sampleUnit').textContent = sample.UnitName || '';
+        document.getElementById('sampleLocation').textContent = sample.LocationName || '';
+        
+        document.getElementById('scanResults').classList.remove('d-none');
+        document.getElementById('noResults').classList.add('d-none');
+    }
+    
+    // Funktion til at skjule scanningsresultater
+    function hideScanResults() {
+        document.getElementById('scanResults').classList.add('d-none');
+        document.getElementById('noResults').classList.remove('d-none');
+    }
+});
+</script>
+{% endblock %}

@@ -72,6 +72,10 @@
                 <i class="fas fa-trash-alt"></i>
                 <span>Disposal</span>
             </a>
+            <a href="{{ url_for('scanner.scanner_page') }}" class="nav-item {% if request.path == url_for('scanner.scanner_page') %}active{% endif %}">
+                <i class="fas fa-barcode"></i>
+                <span>Scanner</span>
+            </a>
         </div>
     </nav>
 
