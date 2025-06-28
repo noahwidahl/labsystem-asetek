@@ -57,9 +57,9 @@ function validateCurrentStep() {
             }
             
             // Minimal container validation
-            const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
+            const storageOptionStep2 = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
             
-            if (storageOption === 'container') {
+            if (storageOptionStep2 === 'container') {
                 // Check if existing container option is selected
                 const existingContainerOption = document.getElementById('existingContainerOption');
                 
@@ -88,9 +88,9 @@ function validateCurrentStep() {
         case 4:
             // Get sample type and storage options
             const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
-            const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
+            const storageOptionStep4 = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
             const separateStorage = document.getElementById('separateStorage')?.checked || false;
-            const useExistingContainer = storageOption === 'container' && document.getElementById('existingContainerOption')?.checked;
+            const useExistingContainer = storageOptionStep4 === 'container' && document.getElementById('existingContainerOption')?.checked;
             
             // Skip location validation if we're using existing container with a location
             if (registerApp.skipLocationSelection || (useExistingContainer && registerApp.selectedContainerLocation)) {
@@ -275,7 +275,7 @@ function handleFormSubmission() {
         
         // Additional fields
         owner: document.querySelector('[name="owner"]')?.value || '',
-        expiryDate: document.querySelector('[name="expiryDate"]')?.value || '',
+        expireDate: document.querySelector('[name="expireDate"]')?.value || null,
         hasSerialNumbers: document.getElementById('hasSerialNumbers')?.checked || false,
         other: document.querySelector('[name="other"]')?.value || '',
         
@@ -342,7 +342,6 @@ function handleFormSubmission() {
                     console.log("Container location set to:", containerLocationSelect.value);
                 }
             }
-        }
     }
     
     // Handle location for non-container storage or for samples outside containers

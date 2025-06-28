@@ -1,0 +1,42 @@
+/* Register Samples Page Styles */
+
+.supplier-search-results {
+    position: absolute;
+    z-index: 1000;
+    background: white;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    max-height: 250px;
+    overflow-y: auto;
+    width: 100%;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.supplier-search-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.supplier-search-item:hover {
+    background-color: #f8f9fa;
+}
+
+.supplier-search-item.active {
+    background-color: #e9ecef;
+}
+
+.supplier-search-empty {
+    padding: 8px 12px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.selected-supplier {
+    margin-top: 5px;
+}
+
+.selected-supplier .badge {
+    font-size: 14px;
+    padding: 5px 8px;
+}

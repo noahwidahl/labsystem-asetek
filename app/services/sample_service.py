@@ -221,9 +221,10 @@ class SampleService:
             
             # Handle expire date - use provided date or default to 2 months from now
             expire_date = None
-            if sample_data.get('expireDate'):
+            expire_date_input = sample_data.get('expireDate')
+            if expire_date_input and expire_date_input.strip():
                 try:
-                    expire_date = datetime.strptime(sample_data.get('expireDate'), '%Y-%m-%d').date()
+                    expire_date = datetime.strptime(expire_date_input, '%Y-%m-%d').date()
                 except (ValueError, TypeError):
                     pass
             
@@ -289,7 +290,7 @@ class SampleService:
                 sample_id,
                 location_id,
                 total_amount,
-                sample_data.get('expiryDate')
+                expire_date
             ))
             
             storage_id = cursor.lastrowid

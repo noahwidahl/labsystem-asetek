@@ -22,7 +22,8 @@
       "Bash(awk:*)",
       "Bash(mv:*)",
       "Bash(rm:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(node:*)"
     ]
   },
   "enableAllProjectMcpServers": false
