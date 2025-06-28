@@ -20,102 +20,36 @@ class SampleService:
         Returns:
             list: List of Sample objects matching criteria
         """
-        # EMERGENCY FIX: Create a direct connection to MySQL to display all samples
-        # This bypasses any potential issues with the service layer
-        try:
-            cursor = self.mysql.connection.cursor()
-            print("*** EMERGENCY FIX: Direct query to get all samples ***")
-
-            # Super simple query to grab all samples 
-            cursor.execute("""
-                SELECT 
-                    SampleID, Barcode, PartNumber, IsUnique, Type, Description, 
-                    Status, Amount, UnitID, OwnerID, ReceptionID
-                FROM Sample 
-                ORDER BY SampleID DESC
-            """)
-            
-            results = cursor.fetchall()
-            print(f"Found {len(results)} samples via direct query")
-            
-            # Convert to Sample objects
-            samples = []
-            for row in results:
-                sample = Sample(
-                    id=row[0],
-                    barcode=row[1],
-                    part_number=row[2],
-                    is_unique=bool(row[3]) if row[3] is not None else False,
-                    type=row[4] if row[4] is not None else 'Standard',
-                    description=row[5],
-                    status=row[6] if row[6] is not None else "In Storage",
-                    amount=row[7] if row[7] is not None else 0,
-                    unit_id=row[8],
-                    owner_id=row[9],
-                    reception_id=row[10]
-                )
-                samples.append(sample)
-            
-            # Try to get additional information for each sample
-            for sample in samples:
-                try:
-                    # Get reception date
-                    cursor.execute("SELECT ReceivedDate FROM Reception WHERE ReceptionID = %s", (sample.reception_id,))
-                    result = cursor.fetchone()
-                    if result and result[0]:
-                        sample.received_date = result[0]
-                    
-                    # Get unit name
-                    cursor.execute("SELECT UnitName FROM Unit WHERE UnitID = %s", (sample.unit_id,))
-                    result = cursor.fetchone()
-                    if result and result[0]:
-                        sample.unit_name = result[0]
-                    
-                    # Get location name if a SampleStorage entry exists
-                    cursor.execute("""
-                        SELECT sl.LocationName 
-                        FROM SampleStorage ss 
-                        JOIN StorageLocation sl ON ss.LocationID = sl.LocationID 
-                        WHERE ss.SampleID = %s
-                    """, (sample.id,))
-                    result = cursor.fetchone()
-                    if result and result[0]:
-                        sample.location_name = result[0]
-                    else:
-                        # If no location exists, try to get a default location
-                        cursor.execute("SELECT LocationName FROM StorageLocation LIMIT 1")
-                        result = cursor.fetchone()
-                        sample.location_name = result[0] if result and result[0] else "Unknown"
-                except Exception as e:
-                    print(f"Error getting additional info for sample {sample.id}: {e}")
-            
-            cursor.close()
-            return samples
-            
-        except Exception as direct_error:
-            print(f"*** DIRECT QUERY FAILED: {direct_error} ***")
-            print("Falling back to regular query method")
-            
-            # Original query as backup
-            query = """
-                SELECT 
-                    s.SampleID, 
-                    s.Barcode, 
-                    s.PartNumber,
-                    s.IsUnique,
-                    s.Type,
-                    s.Description, 
-                    s.Status,
-                    s.Amount, 
-                    s.UnitID,
-                    s.OwnerID,
-                    s.ReceptionID
-                FROM Sample s
-                ORDER BY s.SampleID DESC
-            """
-            
-            # No WHERE conditions - get all samples
-            conditions = []
+        # Build base query with JOINs for efficient data retrieval
+        query = """
+            SELECT 
+                s.SampleID, 
+                s.Barcode, 
+                s.PartNumber,
+                s.IsUnique,
+                s.Type,
+                s.Description, 
+                s.Status,
+                s.Amount, 
+                s.UnitID,
+                s.OwnerID,
+                s.ReceptionID,
+                r.ReceivedDate,
+                CASE
+                    WHEN u.UnitName IS NULL THEN 'pcs'
+                    WHEN LOWER(u.UnitName) = 'stk' THEN 'pcs'
+                    ELSE u.UnitName
+                END as UnitName,
+                COALESCE(sl.LocationName, 'Unknown') as LocationName
+            FROM Sample s
+            LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
+            LEFT JOIN Unit u ON s.UnitID = u.UnitID
+            LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+            LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+        """
+        
+        # Initialize conditions and parameters
+        conditions = []
         params = []
         
         # Add search condition if search term is provided

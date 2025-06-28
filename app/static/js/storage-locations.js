@@ -90,6 +90,9 @@ function updateStorageOverview(locations) {
             sectionHeader.innerHTML = `
                 <h6 class="mb-0">Section ${sectionNum}</h6>
                 <div class="section-controls">
+                    <button class="btn btn-sm btn-outline-primary me-1" onclick="updateSectionShelves(${rackNum}, ${sectionNum})" title="Change shelf count">
+                        <i class="fas fa-cog"></i>
+                    </button>
                     <button class="btn btn-sm btn-outline-danger" onclick="removeSection(${rackNum}, ${sectionNum})">
                         <i class="fas fa-trash"></i>
                     </button>
@@ -106,16 +109,61 @@ function updateStorageOverview(locations) {
             // Sort locations by shelf number
             const sortedLocations = sections[sectionNum].sort((a, b) => a.shelfNum - b.shelfNum);
             
-            // Create shelf items (always 5 shelves per section)
-            for (let shelf = 1; shelf <= 5; shelf++) {
-                const shelfLocation = sortedLocations.find(loc => loc.shelfNum === shelf);
+            // Special handling for testing rack (999) - only show locations that have samples
+            const isTestingRack = parseInt(rackNum) === 999;
+            let maxShelf;
+            
+            if (isTestingRack) {
+                // For testing rack, only show shelves that actually exist (not create empty ones)
+                maxShelf = sortedLocations.length > 0 ? sortedLocations.length : 0;
+            } else {
+                // For regular racks, get the maximum shelf number or default to 5
+                maxShelf = sortedLocations.length > 0 ? Math.max(...sortedLocations.map(loc => loc.shelfNum)) : 5;
+            }
+            
+            // Create shelf items (dynamic shelf count)
+            const shelfIterationCount = isTestingRack ? sortedLocations.length : maxShelf;
+            for (let shelf = 1; shelf <= shelfIterationCount; shelf++) {
+                let shelfLocation;
+                if (isTestingRack) {
+                    // For testing rack, use the actual locations in order
+                    shelfLocation = sortedLocations[shelf - 1];
+                } else {
+                    // For regular racks, find by shelf number
+                    shelfLocation = sortedLocations.find(loc => loc.shelfNum === shelf);
+                }
                 
                 const shelfItem = document.createElement('li');
-                shelfItem.className = 'list-group-item d-flex justify-content-between align-items-center py-2';
+                shelfItem.className = 'list-group-item py-2';
+                
+                const shelfContent = document.createElement('div');
+                shelfContent.className = 'd-flex justify-content-between align-items-center';
+                
+                const locationInfo = document.createElement('div');
                 
                 const locationName = document.createElement('div');
                 locationName.className = 'fw-bold';
-                locationName.textContent = `${rackNum}.${sectionNum}.${shelf}`;
+                if (isTestingRack && shelfLocation) {
+                    // For testing rack, show the actual location name (e.g., "Testing")
+                    locationName.textContent = shelfLocation.LocationName || `${rackNum}.${sectionNum}.${shelf}`;
+                } else {
+                    locationName.textContent = `${rackNum}.${sectionNum}.${shelf}`;
+                }
+                
+                const locationDescription = document.createElement('div');
+                locationDescription.className = 'text-muted small';
+                if (shelfLocation && shelfLocation.Description) {
+                    locationDescription.textContent = shelfLocation.Description;
+                } else {
+                    locationDescription.textContent = 'No description';
+                    locationDescription.style.fontStyle = 'italic';
+                }
+                
+                locationInfo.appendChild(locationName);
+                locationInfo.appendChild(locationDescription);
+                
+                const rightContent = document.createElement('div');
+                rightContent.className = 'd-flex align-items-center gap-2';
                 
                 const sampleCount = document.createElement('div');
                 
@@ -128,8 +176,21 @@ function updateStorageOverview(locations) {
                     sampleCount.textContent = 'Empty';
                 }
                 
-                shelfItem.appendChild(locationName);
-                shelfItem.appendChild(sampleCount);
+                // Add edit button for admin users
+                if (isUserAdmin && isUserAdmin()) {
+                    const editBtn = document.createElement('button');
+                    editBtn.className = 'btn btn-sm btn-outline-secondary';
+                    editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+                    editBtn.title = 'Edit description';
+                    editBtn.onclick = () => editLocationDescription(shelfLocation ? shelfLocation.LocationID : null, `${rackNum}.${sectionNum}.${shelf}`, shelfLocation ? shelfLocation.Description : '');
+                    rightContent.appendChild(editBtn);
+                }
+                
+                rightContent.appendChild(sampleCount);
+                
+                shelfContent.appendChild(locationInfo);
+                shelfContent.appendChild(rightContent);
+                shelfItem.appendChild(shelfContent);
                 shelvesList.appendChild(shelfItem);
             }
             
@@ -670,6 +731,92 @@ function createDefaultStorageStructure() {
     updateStorageOverview(defaultLocations);
 }
 
+// Function to edit location description
+function editLocationDescription(locationId, locationName, currentDescription) {
+    // Create modal for editing description
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.id = 'editDescriptionModal';
+    modal.setAttribute('tabindex', '-1');
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Description for ${locationName}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editDescriptionForm">
+                        <div class="mb-3">
+                            <label for="locationDescription" class="form-label">Description</label>
+                            <input type="text" class="form-control" id="locationDescription" 
+                                   value="${currentDescription || ''}" placeholder="Enter a description for this shelf">
+                            <div class="form-text">Describe what is typically stored on this shelf</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveLocationDescription(${locationId}, '${locationName}')">Save</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+    
+    // Remove modal when hidden
+    modal.addEventListener('hidden.bs.modal', function() {
+        document.body.removeChild(modal);
+    });
+}
+
+// Function to save location description
+function saveLocationDescription(locationId, locationName) {
+    const description = document.getElementById('locationDescription').value.trim();
+    
+    // If no location ID, need to create the location first
+    if (!locationId) {
+        showErrorMessage('Cannot update description: Location not found in database');
+        return;
+    }
+    
+    showLoadingOverlay();
+    
+    fetch('/api/storage/update-description', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            locationId: locationId,
+            description: description
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoadingOverlay();
+        
+        if (data.success) {
+            showSuccessMessage('Description updated successfully');
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editDescriptionModal'));
+            modal.hide();
+            // Reload storage locations to show updated description
+            loadStorageLocations();
+        } else {
+            showErrorMessage(data.error || 'Failed to update description');
+        }
+    })
+    .catch(error => {
+        hideLoadingOverlay();
+        showErrorMessage('Error updating description: ' + error.message);
+    });
+}
+
 // Toast message functions
 function showSuccessMessage(message) {
     showToast(message, 'success');
@@ -681,7 +828,8 @@ function showErrorMessage(message) {
 
 function showToast(message, type) {
     const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-white bg-${type} border-0 position-fixed top-0 end-0 m-3`;
+    toast.className = `toast align-items-center text-white bg-${type} border-0 position-fixed top-50 start-50 translate-middle`;
+    toast.style.zIndex = '1055';
     toast.setAttribute('role', 'alert');
     toast.setAttribute('aria-live', 'assertive');
     toast.setAttribute('aria-atomic', 'true');

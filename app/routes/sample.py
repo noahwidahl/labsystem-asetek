@@ -458,11 +458,54 @@ def init_sample(blueprint, mysql):
     @blueprint.route('/api/activeSamples')
     def get_active_samples():
         try:
+            # Get pagination parameters
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 50, type=int)
+            search = request.args.get('search', '')
+            
+            # Limit per_page to prevent excessive data
+            per_page = min(per_page, 100)
+            offset = (page - 1) * per_page
+            
             cursor = mysql.connection.cursor()
+            
+            # Base query conditions
+            base_conditions = """
+                WHERE s.Status = 'In Storage'
+                AND (ss.AmountRemaining > 0 OR ss.AmountRemaining IS NULL)
+            """
+            
+            # Add search conditions if provided
+            search_conditions = ""
+            search_params = []
+            if search:
+                search_conditions = """
+                    AND (s.Description LIKE %s 
+                         OR s.Barcode LIKE %s 
+                         OR s.PartNumber LIKE %s
+                         OR CONCAT('SMP-', s.SampleID) LIKE %s)
+                """
+                search_term = f"%{search}%"
+                search_params = [search_term, search_term, search_term, search_term]
+            
+            # Get total count for pagination
+            count_query = f"""
+                SELECT COUNT(DISTINCT s.SampleID)
+                FROM Sample s
+                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                LEFT JOIN User u ON s.OwnerID = u.UserID
+                LEFT JOIN Unit un ON s.UnitID = un.UnitID
+                {base_conditions}
+                {search_conditions}
+            """
+            
+            cursor.execute(count_query, search_params)
+            total_count = cursor.fetchone()[0]
             
             # Get active samples with their storage location and remaining amount
             # Modified query to use LEFT JOIN and handle serial numbers for unique samples
-            cursor.execute("""
+            main_query = f"""
                 SELECT 
                     s.SampleID, 
                     s.Description, 
@@ -482,11 +525,13 @@ def init_sample(blueprint, mysql):
                 LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
                 LEFT JOIN User u ON s.OwnerID = u.UserID
                 LEFT JOIN Unit un ON s.UnitID = un.UnitID
-                WHERE s.Status = 'In Storage'
-                AND (ss.AmountRemaining > 0 OR ss.AmountRemaining IS NULL)
+                {base_conditions}
+                {search_conditions}
                 ORDER BY s.SampleID DESC
-                LIMIT 100
-            """)
+                LIMIT %s OFFSET %s
+            """
+            
+            cursor.execute(main_query, search_params + [per_page, offset])
             
             columns = [col[0] for col in cursor.description]
             samples = []
@@ -524,9 +569,22 @@ def init_sample(blueprint, mysql):
                 
             cursor.close()
             
+            # Calculate pagination metadata
+            total_pages = (total_count + per_page - 1) // per_page
+            has_next = page < total_pages
+            has_prev = page > 1
+            
             return jsonify({
                 'success': True,
-                'samples': samples
+                'samples': samples,
+                'pagination': {
+                    'page': page,
+                    'per_page': per_page,
+                    'total': total_count,
+                    'total_pages': total_pages,
+                    'has_next': has_next,
+                    'has_prev': has_prev
+                }
             })
         except Exception as e:
             print(f"API error getting active samples: {e}")
@@ -884,7 +942,7 @@ def init_sample(blueprint, mysql):
             
             cursor = mysql.connection.cursor()
             
-            # Get sample basic info using only fields that definitely exist in the database
+            # Get sample basic info with complete reception data
             cursor.execute("""
                 SELECT 
                     s.SampleID,
@@ -902,7 +960,11 @@ def init_sample(blueprint, mysql):
                     owner.Name as RegisteredBy,
                     ss.AmountRemaining as Amount,
                     sl.LocationName as Location,
-                    c.ContainerID
+                    c.ContainerID,
+                    r.TrackingNumber,
+                    sp.SupplierName,
+                    r.SourceType,
+                    receiver.Name as ReceivedBy
                 FROM Sample s
                 LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
                 LEFT JOIN User owner ON s.OwnerID = owner.UserID

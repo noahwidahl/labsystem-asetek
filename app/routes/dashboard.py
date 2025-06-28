@@ -9,6 +9,7 @@ def _get_storage_locations(mysql):
         SELECT 
             sl.LocationID,
             sl.LocationName,
+            sl.Description,
             COUNT(ss.StorageID) as count,
             CASE WHEN COUNT(ss.StorageID) > 0 THEN 'occupied' ELSE 'available' END as status,
             IFNULL(l.LabName, 'Unknown') as LabName,
@@ -18,7 +19,7 @@ def _get_storage_locations(mysql):
         FROM StorageLocation sl
         LEFT JOIN Lab l ON sl.LabID = l.LabID
         LEFT JOIN SampleStorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
-        GROUP BY sl.LocationID, sl.LocationName, l.LabName, sl.Rack, sl.Section, sl.Shelf
+        GROUP BY sl.LocationID, sl.LocationName, sl.Description, l.LabName, sl.Rack, sl.Section, sl.Shelf
         ORDER BY 
             COALESCE(sl.Rack, 999),
             COALESCE(sl.Section, 999),
@@ -689,9 +690,9 @@ def init_dashboard(blueprint, mysql):
             
             # Check existing shelves
             cursor.execute("""
-                SELECT LocationID, LocationName, Hylde FROM StorageLocation
+                SELECT LocationID, LocationName, Shelf FROM StorageLocation
                 WHERE LocationName LIKE %s
-                ORDER BY Hylde
+                ORDER BY Shelf
             """, (f"{rack_num}.{section_num}.%",))
             
             existing_shelves = cursor.fetchall()
@@ -827,6 +828,45 @@ def init_dashboard(blueprint, mysql):
             })
         except Exception as e:
             print(f"Error creating rack: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @blueprint.route('/api/storage/update-description', methods=['POST'])
+    def update_storage_description():
+        try:
+            data = request.json
+            
+            # Validate input
+            if not data.get('locationId'):
+                return jsonify({'success': False, 'error': 'Location ID is required'}), 400
+            
+            location_id = data.get('locationId')
+            description = data.get('description', '')
+            
+            cursor = mysql.connection.cursor()
+            
+            # Update the description
+            cursor.execute("""
+                UPDATE StorageLocation 
+                SET Description = %s 
+                WHERE LocationID = %s
+            """, (description, location_id))
+            
+            mysql.connection.commit()
+            
+            if cursor.rowcount == 0:
+                cursor.close()
+                return jsonify({'success': False, 'error': 'Location not found'}), 404
+            
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Description updated successfully'
+            })
+        except Exception as e:
+            print(f"Error updating description: {e}")
             import traceback
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500

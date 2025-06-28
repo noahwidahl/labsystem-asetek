@@ -8,7 +8,7 @@ def get_current_user(mysql=None):
     For now, we try to get the Windows username and check if it's in the database.
     """
     # Default admin user as fallback
-    default_user = {"UserID": 1, "Name": "BWM", "IsAdmin": True}
+    default_user = {"UserID": 1, "Name": "System Admin", "IsAdmin": True}
     
     if not mysql:
         return default_user
@@ -29,8 +29,8 @@ def get_current_user(mysql=None):
                 cursor.close()
                 return {"UserID": user[0], "Name": user[1], "IsAdmin": bool(user[2])}
         
-        # Otherwise, fall back to default user (typically admin)
-        cursor.execute("SELECT UserID, Name, IsAdmin FROM User WHERE Name = 'BWM' LIMIT 1")
+        # Otherwise, fall back to first admin user
+        cursor.execute("SELECT UserID, Name, IsAdmin FROM User WHERE IsAdmin = 1 LIMIT 1")
         user = cursor.fetchone()
         cursor.close()
         

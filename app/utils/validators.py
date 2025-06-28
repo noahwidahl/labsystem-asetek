@@ -71,9 +71,6 @@ def validate_container_data(data):
             'field': 'containerCapacity'
         }
         
-    # If creating a new container type, capacity is not required for the container
-    # as it will use the new type's capacity
-    
     # Validate new container type if provided
     if data.get('newContainerType'):
         new_type = data.get('newContainerType')
@@ -117,6 +114,30 @@ def validate_test_data(data):
             'valid': False,
             'error': 'At least one sample must be selected',
             'field': 'samples'
+        }
+    
+    return {
+        'valid': True
+    }
+
+def validate_storage_location_data(data):
+    """
+    Validates data for creating/updating storage locations.
+    """
+    if not data.get('locationName'):
+        return {
+            'valid': False,
+            'error': 'Location name is required',
+            'field': 'locationName'
+        }
+    
+    # Description is optional but should be reasonable length if provided
+    description = data.get('description', '')
+    if description and len(description) > 255:
+        return {
+            'valid': False,
+            'error': 'Description must be less than 255 characters',
+            'field': 'description'
         }
     
     return {
