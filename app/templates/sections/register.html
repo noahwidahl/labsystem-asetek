@@ -103,6 +103,30 @@
                     <label>Sample name</label>
                     <input type="text" class="form-control" name="description" required>
                 </div>
+                
+                <!-- Amount and Unit Fields -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Amount</label>
+                            <input type="number" class="form-control" name="totalAmount" required min="1" value="1">
+                            <small class="text-muted" id="totalAmountHelper">Number of units received</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Unit</label>
+                            <select class="form-control" name="unit" required>
+                                <option value="">Select unit</option>
+                                {% for unit in units %}
+                                <option value="{{ unit.UnitID }}">{{ unit.UnitName }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted unit-helper">Units depend on sample type (pcs for items, other units for bulk)</small>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="form-group">
                     <label>Expire Date</label>
                     <input type="date" class="form-control" name="expireDate" id="expireDate" lang="en">
@@ -323,28 +347,7 @@
                     </div>
                 </div>
 
-                <!-- Common Fields for All Sample Types -->
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Amount</label>
-                            <input type="number" class="form-control" name="totalAmount" required min="1" value="1">
-                            <small class="text-muted" id="totalAmountHelper">Number of units received</small>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Unit</label>
-                            <select class="form-control" name="unit" required>
-                                <option value="">Select unit</option>
-                                {% for unit in units %}
-                                <option value="{{ unit.UnitID }}">{{ unit.UnitName }}</option>
-                                {% endfor %}
-                            </select>
-                            <small class="text-muted unit-helper">Units depend on sample type (pcs for items, other units for bulk)</small>
-                        </div>
-                    </div>
-                </div>
+                <!-- Common Fields for All Sample Types - Amount and Unit moved up -->
 
                 <div class="form-group">
                     <label>Responsible for sample</label>
