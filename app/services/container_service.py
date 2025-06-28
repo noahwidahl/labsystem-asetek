@@ -544,7 +544,7 @@ class ContainerService:
                 sample_reception_id = sample_data[8]
                 sample_owner_id = sample_data[9]
                 sample_original_amount = sample_data[10] if sample_data[10] is not None else 0
-                sample_type = sample_data[11] or 'multiple'
+                sample_type = sample_data[11] or 'single'
                 sample_is_unique = sample_data[12] or 0
                 
                 # Update container's location to match the sample's location if not set

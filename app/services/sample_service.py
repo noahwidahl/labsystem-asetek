@@ -209,37 +209,8 @@ class SampleService:
             
             reception_id = cursor.lastrowid
             
-            # Determine if it's a multi-package or single sample
-            is_multi_package = sample_data.get('isMultiPackage', False) or sample_data.get('sampleType') == 'multiple'
-            
-            # Check for multi-container flag (one container per package)
-            create_multi_containers = sample_data.get('createMultipleContainers', False)
-            
-            # Use package count from the data
-            if is_multi_package:
-                package_count = int(sample_data.get('packageCount', 1))
-            else:
-                package_count = 1
-                
-            # Save original package count to handle amount calculations correctly
-            original_package_count = package_count
-                
-            # If using existing container, force package count to 1
-            if sample_data.get('useExistingContainer', False):
-                package_count = 1
-            # If creating multiple containers (one per package), keep the package count
-            elif sample_data.get('createMultipleContainers', False):
-                # Keep the package count as is - we need one sample per container
-                print(f"DEBUG: Creating multiple containers (one per package). Package count: {package_count}")
-            # If using one container for all samples, we still need to create all samples
-            # but we'll put them all in the same container
-            elif sample_data.get('createSingleContainer', False) and is_multi_package:
-                print(f"DEBUG: Creating a single container for multiple samples, keeping package_count={package_count}")
-                # Don't modify package_count here, we still want to create all samples
-                # Just set a flag to indicate we're using a single container for all packages
-                sample_data['useSingleContainerForAll'] = True
-                
-            print(f"DEBUG: is_multi_package={is_multi_package}, package_count={package_count}, createMultipleContainers={create_multi_containers}, useExistingContainer={sample_data.get('useExistingContainer', False)}")
+            # This is now a simple single sample or bulk material system
+            package_count = 1
             
             # Generate a unique barcode if not provided
             base_barcode = sample_data.get('barcode', '')
@@ -250,27 +221,15 @@ class SampleService:
             first_sample_id = None
             first_storage_id = None
             
-            # Determine if packages have different locations
-            different_locations = sample_data.get('differentLocations', False)
-            package_locations = sample_data.get('packageLocations', [])
+            # Use single storage location
+            storage_location_id = sample_data.get('storageLocation')
             
-            # Flag for container creation
-            create_containers = sample_data.get('createContainers', False)
-            # Check for alternate naming
-            if not create_containers and sample_data.get('storageOption') == 'container':
-                create_containers = True
-                sample_data['createContainers'] = True
-                print("DEBUG: Setting createContainers=True based on storageOption")
-                
-            container_ids = []  # List to keep track of created containers
+            # Simplified single sample creation
+            create_containers = sample_data.get('createContainers', False) or sample_data.get('storageOption') == 'container'
+            container_ids = []
             
-            print(f"DEBUG: Creating {package_count} packages, create_containers={create_containers}")
-            print(f"DEBUG: Full sample_data for container creation: {sample_data}")
-            
-            # Iterate through the number of packages
-            for i in range(package_count):
-                # Generate barcode for each package
-                barcode = f"{base_barcode}-{i+1}" if package_count > 1 else base_barcode
+            # Generate barcode
+            barcode = base_barcode
                 
                 # Calculate amount per package
                 total_amount = int(sample_data.get('totalAmount', 0))

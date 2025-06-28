@@ -198,7 +198,7 @@ function updateRegistrationSummary() {
     // Helper function to get readable sample type text
     function getSampleTypeText(type) {
         switch (type) {
-            case 'single': return 'Single Sample';
+            case 'single': return 'Standard Sample';
             case 'bulk': return 'Bulk Material';
             default: return 'Unknown';
         }
