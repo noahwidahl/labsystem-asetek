@@ -196,40 +196,15 @@
                         <h5 class="mb-0">Container Options</h5>
                     </div>
                     <div class="card-body">
-                        <!-- For Single Sample or Bulk Material -->
-                        <div id="singleContainerOptions">
-                            <div class="form-group mb-3">
-                                <div class="d-flex align-items-center mb-2">
-                                    <input type="radio" name="containerOption" id="newContainerOption" value="new" checked>
-                                    <label for="newContainerOption" class="ms-2 mb-0">Create new container</label>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <input type="radio" name="containerOption" id="existingContainerOption" value="existing">
-                                    <label for="existingContainerOption" class="ms-2 mb-0">Select existing container</label>
-                                </div>
+                        <!-- Container Options for Single Sample Registration -->
+                        <div class="form-group mb-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <input type="radio" name="containerOption" id="newContainerOption" value="new" checked>
+                                <label for="newContainerOption" class="ms-2 mb-0">Create new container</label>
                             </div>
-                        </div>
-                        
-                        <!-- For Multiple Samples -->
-                        <div id="multipleContainerOptions" class="d-none">
-                            <div class="form-group mb-3">
-                                <div class="d-flex align-items-center mb-2">
-                                    <input type="radio" name="multiContainerOption" id="oneContainerPerPackage" value="multiple" checked>
-                                    <label for="oneContainerPerPackage" class="ms-2 mb-0">One container per package</label>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <input type="radio" name="multiContainerOption" id="oneContainerForAll" value="single">
-                                    <label for="oneContainerForAll" class="ms-2 mb-0">One container for all samples</label>
-                                </div>
-                                <div class="alert alert-info mt-2" id="multiLocationInfo" style="display: none;">
-                                    <i class="fas fa-info-circle"></i>
-                                    <span>Select one location for each package in the grid during Step 4.</span>
-                                </div>
-                                <!-- Error message area for container options -->
-                                <div class="alert alert-danger mt-2 d-none" id="containerOptionsError">
-                                    <i class="fas fa-exclamation-circle"></i>
-                                    <span id="containerOptionsErrorMessage"></span>
-                                </div>
+                            <div class="d-flex align-items-center">
+                                <input type="radio" name="containerOption" id="existingContainerOption" value="existing">
+                                <label for="existingContainerOption" class="ms-2 mb-0">Select existing container</label>
                             </div>
                         </div>
                         
@@ -263,7 +238,7 @@
                             <div class="form-group mb-3" id="containerLocationSelectSection">
                                 <label>Storage Location <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" id="containerLocation" placeholder="Ex. 1.1.1" required>
-                                <small class="text-muted">Enter location in format "x.x.x" (e.g. 1.1.1). For multiple containers, you'll select locations in the grid later.</small>
+                                <small class="text-muted">Enter location in format "x.x.x" (e.g. 1.1.1)</small>
                                 <div id="locationFormatError" class="invalid-feedback">
                                     Please enter a valid location in format "x.x.x" (e.g. 1.1.1)
                                 </div>
