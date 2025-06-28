@@ -198,64 +198,11 @@ function createGridFromLocations(locations, preSelectedLocationId = null) {
                 cell.appendChild(capacity);
                 hyldeContainer.appendChild(cell);
                 
-                // Determine if we need multi-select mode
-                const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
-                const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
-                const separateStorage = document.getElementById('separateStorage')?.checked || false;
-                
-                // Check both possible ways to select "one container per package"
-                let oneContainerPerPackage = storageOption === 'container' && sampleType === 'multiple' && 
-                                          document.getElementById('oneContainerPerPackage')?.checked;
-                
-                // Also check the alternative selector (multiContainerOption)
-                if (!oneContainerPerPackage && storageOption === 'container' && sampleType === 'multiple') {
-                    const multiContainerOption = document.querySelector('input[name="multiContainerOption"]:checked')?.value;
-                    if (multiContainerOption === 'multiple') {
-                        oneContainerPerPackage = true;
-                        console.log("DEBUG: one container per package detected via multiContainerOption");
-                    }
-                }
-                
-                // Check for "One container for all" option - we shouldn't use multi-select in this case
-                const oneContainerForAll = document.getElementById('oneContainerForAll')?.checked || false;
-                if (oneContainerForAll && storageOption === 'container' && sampleType === 'multiple') {
-                    console.log("DEBUG: 'One container for all samples' is selected - NOT using multi-select mode");
-                    oneContainerPerPackage = false;
-                }
-                
-                // Check if separate storage is enabled - important for oneContainerPerPackage mode
-                // Using radio buttons now
-                const separateStorageEnabled = document.getElementById('separateStorageYes')?.checked || false;
-                console.log(`Checking separate storage: ${separateStorageEnabled}`);
-                
-                // Add visual indicator for multi-package selection ONLY when separate storage is checked
-                // OR when oneContainerPerPackage is selected with separate storage
-                if ((sampleType === 'multiple' && separateStorageEnabled && !oneContainerForAll) || 
-                    (oneContainerPerPackage && separateStorageEnabled)) {
-                    cell.setAttribute('data-toggle', 'tooltip');
-                    cell.setAttribute('title', 'Click to select for a package');
-                    cell.classList.add('multi-selectable-cell');
-                }
-                
-                // Use multi-select if either separate storage OR one container per package with separate storage is active
-                // BUT never use it for one container for all option
-                if (((sampleType === 'multiple' && separateStorageEnabled) || 
-                     (oneContainerPerPackage && separateStorageEnabled)) && !oneContainerForAll) {
-                    // In multi-selection mode, mark cells as available for selection
-                    cell.classList.add('multi-package-available');
-                    
-                    // Use the multi-package selection handler
-                    cell.addEventListener('click', () => {
-                        handleMultiPackageSelection(cell);
-                        updateLocationSummary();
-                    });
-                } else {
-                    // For normal selection mode, use standard selection
-                    cell.addEventListener('click', () => {
-                        selectStorageCell(cell);
-                        updateLocationSummary();
-                    });
-                }
+                // Standard single selection mode
+                cell.addEventListener('click', () => {
+                    selectStorageCell(cell);
+                    updateLocationSummary();
+                });
                 
                 // If this is the pre-selected location, save the cell reference
                 if (preSelectedLocationId && location.LocationID == preSelectedLocationId) {
@@ -518,149 +465,7 @@ function selectStorageCell(cell) {
 }
 
 // Function to handle multi-package selection
-function handleMultiPackageSelection(cell) {
-    // Get required count based on selection
-    const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
-    const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
-    // Check separate storage - using radio buttons now
-    const separateStorage = document.getElementById('separateStorageYes')?.checked || false;
-    
-    // CRITICAL FIX: Always check both ways of determining oneContainerPerPackage
-    // This ensures we detect this mode correctly regardless of which UI control was used
-    const oneContainerPerPackage = document.getElementById('oneContainerPerPackage')?.checked || false;
-    const multiContainerOption = document.querySelector('input[name="multiContainerOption"]:checked')?.value;
-    const isMultiContainerMode = oneContainerPerPackage || multiContainerOption === 'multiple';
-    
-    console.log(`MultiPackageSelection: Option check results - separateStorageYes=${separateStorage}, oneContainerPerPackage=${oneContainerPerPackage}, multiContainerOption=${multiContainerOption}, isMultiContainerMode=${isMultiContainerMode}`);
-    
-    let packageCount = 1;
-    
-    // Calculate package count based on configuration
-    if (sampleType === 'multiple') {
-        packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
-    }
-    
-    // Log current configuration
-    console.log(`MultiPackageSelection: sampleType=${sampleType}, storageOption=${storageOption}, ` +
-                `separateStorage=${separateStorage}, packageCount=${packageCount}, ` + 
-                `multiContainerMode=${isMultiContainerMode}`);
-    
-    // Ensure PackageLocations is available
-    if (typeof window.PackageLocations === 'undefined') {
-        console.error("PackageLocations module not available");
-        alert("Error: Package location tracking is not available. Please refresh the page and try again.");
-        return;
-    }
-    
-    // CRITICAL: Debug output for current package locations
-    if (typeof window.PackageLocations.debug === 'function') {
-        window.PackageLocations.debug();
-    }
-    
-    // Check if cell is already selected
-    if (cell.classList.contains('multi-package-selected')) {
-        // Find the package number associated with this cell
-        const packageNumber = getPackageNumberForCell(cell);
-        
-        // Deselect cell
-        cell.classList.remove('multi-package-selected');
-        cell.classList.add('multi-package-available');
-        
-        // Find location and remove it from package-locations list
-        const locationText = cell.querySelector('.location').textContent;
-        
-        // Debug log
-        console.log("Removing location from cell:", locationText, "with package number:", packageNumber);
-        
-        if (packageNumber) {
-            // If we know the package number, use it
-            window.PackageLocations.removeLocation(packageNumber);
-            
-            // CRITICAL: Clear the package number attribute from the cell
-            delete cell.dataset.packageNumber;
-        } else {
-            // Otherwise remove by name
-            window.PackageLocations.removeLocationByName(locationText);
-        }
-        
-        // Always update the summary when removing a location
-        updatePackageSelectionSummary();
-        updateLocationSummary();
-        
-        // Debug: dump state
-        console.log("After removal, package locations:", window.PackageLocations.dumpState());
-    } else {
-        // Get location ID and name from the cell
-        const locationId = cell.dataset.locationId;
-        const locationText = cell.querySelector('.location').textContent;
-        
-        // We want to allow reusing the same location for multiple packages,
-        // so check for package numbers that don't have a location yet
-        const allPackageNumbers = window.PackageLocations.getSelectedLocations()
-            .map(loc => parseInt(loc.packageNumber));
-        
-        // Find packages without locations
-        const missingPackages = [];
-        for (let i = 1; i <= packageCount; i++) {
-            if (!allPackageNumbers.includes(i)) {
-                missingPackages.push(i);
-            }
-        }
-        
-        // Debug - log missing packages
-        console.log("Packages without locations:", missingPackages);
-        
-        // Allow location selection if we haven't assigned all packages
-        if (missingPackages.length > 0) {
-            // Select cell
-            cell.classList.add('multi-package-selected');
-            cell.classList.remove('multi-package-available');
-            
-            // Use the first missing package number as the next one to assign
-            let nextPackageNumber = missingPackages[0];
-            
-            console.log(`Assigning location ${locationText} to package ${nextPackageNumber}`);
-            
-            // CRITICAL: Store the package number on the cell so we can find it again
-            cell.dataset.packageNumber = nextPackageNumber;
-            
-            // Add location with the determined package number
-            window.PackageLocations.addLocation(nextPackageNumber, locationId, locationText);
-            
-            // Always update the summary when adding a location
-            updatePackageSelectionSummary();
-            updateLocationSummary();
-            
-            // CRITICAL: Save in global state
-            window._multipleContainersFormData = {
-                createMultipleContainers: true,
-                multiContainerOption: 'multiple',
-                packageLocations: window.PackageLocations.getSelectedLocations(),
-                containerLocations: window.PackageLocations.getSelectedLocations()
-            };
-            
-            // Debug: dump state
-            console.log("After addition, package locations:", window.PackageLocations.dumpState());
-        } else {
-            // We already selected max count - show error
-            alert(`You can only select ${packageCount} locations. Remove a location before adding a new one.`);
-        }
-    }
-}
 
-// Helper function to get the package number stored on a cell
-function getPackageNumberForCell(cell) {
-    // If we have package number stored directly on the cell, use it
-    if (cell.dataset.packageNumber) {
-        return parseInt(cell.dataset.packageNumber);
-    }
-    
-    // Otherwise try to find it by location name
-    const locationText = cell.querySelector('.location').textContent;
-    const location = window.PackageLocations.getLocationByName(locationText);
-    
-    return location ? location.packageNumber : null;
-}
 
 // Update the location summary based on selected options
 function updateLocationSummary() {
@@ -670,16 +475,8 @@ function updateLocationSummary() {
     if (!locationSummary || !locationSummaryContent) return;
     
     // Get relevant selection data
-    const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
     const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
-    // Check separate storage - using radio buttons now
-    const separateStorage = document.getElementById('separateStorageYes')?.checked || false;
     const useExistingContainer = storageOption === 'container' && document.getElementById('existingContainerOption')?.checked;
-    const oneContainerPerPackage = storageOption === 'container' && sampleType === 'multiple' && document.getElementById('oneContainerPerPackage')?.checked;
-    
-    // Check if we should use multi-select mode
-    const useMultiSelect = (sampleType === 'multiple' && separateStorage) || (oneContainerPerPackage);
-    console.log("DEBUG: Storage selection mode - useMultiSelect:", useMultiSelect, "oneContainerPerPackage:", oneContainerPerPackage, "separateStorageYes:", separateStorage);
     
     let summaryHtml = '';
     
@@ -691,51 +488,6 @@ function updateLocationSummary() {
                 Using container location: <strong>${registerApp.selectedContainerLocation.LocationName}</strong>
             </div>
         `;
-    }
-    // If using multi-select mode for packages or containers
-    else if (useMultiSelect) {
-        // Ensure PackageLocations is available
-        if (typeof window.PackageLocations === 'undefined') {
-            window.PackageLocations = {
-                _locations: [],
-                getSelectedLocations: function() { return this._locations; }
-            };
-        }
-        
-        const selectedLocations = PackageLocations.getSelectedLocations() || [];
-        const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
-        
-        // Determine if this is for containers or multiple packages
-        const oneContainerPerPackage = document.getElementById('oneContainerPerPackage')?.checked || false;
-        
-        // Show progress and remaining count with appropriate message
-        summaryHtml += `
-            <div class="alert ${selectedLocations.length === packageCount ? 'alert-success' : 'alert-warning'} mb-2">
-                <i class="fas fa-${selectedLocations.length === packageCount ? 'check-circle' : 'exclamation-triangle'}"></i>
-                ${oneContainerPerPackage ? 
-                  `Selected ${selectedLocations.length} of ${packageCount} container locations (one per package)` : 
-                  `Selected ${selectedLocations.length} of ${packageCount} required package locations`}
-            </div>
-        `;
-        
-        // If we have selected locations, show them
-        if (selectedLocations.length > 0) {
-            summaryHtml += '<div class="selected-locations-list mt-2">';
-            
-            // Sort by package number
-            const sortedLocations = [...selectedLocations].sort((a, b) => parseInt(a.packageNumber) - parseInt(b.packageNumber));
-            
-            sortedLocations.forEach(loc => {
-                summaryHtml += `
-                    <div class="selected-location-item mb-1">
-                        <span class="badge bg-primary me-2">Package ${loc.packageNumber}</span>
-                        <span class="location-name">${loc.locationName}</span>
-                    </div>
-                `;
-            });
-            
-            summaryHtml += '</div>';
-        }
     }
     // Standard single location selection
     else {
@@ -766,158 +518,6 @@ function updateLocationSummary() {
     locationSummary.classList.remove('d-none');
 }
 
-// Update display of selected packages and locations
-function updatePackageSelectionSummary() {
-    // Get sample type and determine if we need to show package locations
-    const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
-    const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
-    // Check separate storage - using radio buttons now
-    const separateStorage = document.getElementById('separateStorageYes')?.checked || false;
-    const oneContainerPerPackage = storageOption === 'container' && sampleType === 'multiple' && document.getElementById('oneContainerPerPackage')?.checked;
-    
-    // Only show summary for multi-package with separate storage or one container per package
-    const useMultiSelect = (sampleType === 'multiple' && separateStorage) || oneContainerPerPackage;
-    
-    console.log("DEBUG: Package Selection Summary - useMultiSelect:", useMultiSelect, "separateStorageYes:", separateStorage, "oneContainerPerPackage:", oneContainerPerPackage);
-    if (!useMultiSelect) return;
-    
-    const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
-    
-    // Find or create summary container
-    let summaryContainer = document.querySelector('.package-selection-summary');
-    if (!summaryContainer) {
-        summaryContainer = document.createElement('div');
-        summaryContainer.className = 'package-selection-summary mt-4';
-        
-        const storageSelector = document.querySelector('.storage-selector');
-        if (storageSelector) {
-            storageSelector.appendChild(summaryContainer);
-        }
-    }
-    
-    // Get selected package locations
-    if (typeof window.PackageLocations === 'undefined') {
-        console.error("PackageLocations module not available");
-        return;
-    }
-    
-    // Debug - log the current state
-    console.log("DEBUG: Update summary - current package locations:", window.PackageLocations.dumpState());
-    
-    const selectedLocations = window.PackageLocations.getSelectedLocations();
-    
-    // Update summary
-    if (selectedLocations.length === 0) {
-        summaryContainer.innerHTML = '';
-        summaryContainer.classList.add('d-none');
-        return;
-    }
-    
-    summaryContainer.classList.remove('d-none');
-    
-    // Sort by package number
-    const sortedLocations = [...selectedLocations].sort((a, b) => 
-        parseInt(a.packageNumber) - parseInt(b.packageNumber));
-    
-    let html = `
-        <div class="card">
-            <div class="card-header bg-light">
-                <h5 class="mb-0">Selected Package Locations</h5>
-            </div>
-            <div class="card-body">
-                <ul class="list-group list-group-flush">
-    `;
-    
-    sortedLocations.forEach(pkg => {
-        html += `
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                <div>
-                    <span class="badge bg-primary me-2">Package ${pkg.packageNumber}</span>
-                    <span>${pkg.locationName} (ID: ${pkg.locationId})</span>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-danger remove-location" data-package="${pkg.packageNumber}">
-                    <i class="fas fa-times"></i>
-                </button>
-            </li>
-        `;
-    });
-    
-    html += `
-                </ul>
-            </div>
-            <div class="card-footer">
-                <div class="d-flex justify-content-between align-items-center">
-                    <span>${selectedLocations.length} of ${packageCount} locations selected</span>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="clearAllLocations">
-                        Clear all
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    summaryContainer.innerHTML = html;
-    
-    // Add event listeners to remove buttons
-    summaryContainer.querySelectorAll('.remove-location').forEach(button => {
-        button.addEventListener('click', function() {
-            const packageNumber = this.getAttribute('data-package');
-            const locationData = window.PackageLocations.getLocationByPackage(packageNumber);
-            
-            if (locationData) {
-                // Find and update the corresponding grid cell
-                const gridCells = document.querySelectorAll('.storage-cell');
-                gridCells.forEach(cell => {
-                    const locationText = cell.querySelector('.location')?.textContent;
-                    if (locationText === locationData.locationName) {
-                        cell.classList.remove('multi-package-selected');
-                        cell.classList.add('multi-package-available');
-                        // Also remove package number from cell
-                        delete cell.dataset.packageNumber;
-                    }
-                });
-                
-                // Remove from package locations
-                window.PackageLocations.removeLocation(packageNumber);
-                
-                // Debug - log after removal
-                console.log(`DEBUG: Removed package ${packageNumber}, remaining locations:`, window.PackageLocations.dumpState());
-                
-                // Update summary
-                updatePackageSelectionSummary();
-                updateLocationSummary();
-            }
-        });
-    });
-    
-    // Add event listener to "clear all" button
-    const clearAllBtn = document.getElementById('clearAllLocations');
-    if (clearAllBtn) {
-        clearAllBtn.addEventListener('click', function() {
-            // Remove all selected locations
-            window.PackageLocations.reset();
-            
-            // Reset grid cells
-            const gridCells = document.querySelectorAll('.storage-cell.multi-package-selected');
-            gridCells.forEach(cell => {
-                cell.classList.remove('multi-package-selected');
-                cell.classList.add('multi-package-available');
-                // Also remove package number from cell
-                delete cell.dataset.packageNumber;
-            });
-            
-            // Debug - log after reset
-            console.log("DEBUG: Reset all locations:", window.PackageLocations.dumpState());
-            
-            // Update summary
-            updatePackageSelectionSummary();
-            updateLocationSummary();
-        });
-    }
-    
-    // Update location summary to show status
-    updateLocationSummary();
-}
 
 // Update storage instructions based on selected options
 function updateStorageInstructions() {
@@ -926,24 +526,12 @@ function updateStorageInstructions() {
     
     if (!storageInstructions || !storageInstructionsText) return;
     
-    const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
     const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
-    // Check separate storage - using radio buttons now
-    const separateStorage = document.getElementById('separateStorageYes')?.checked || false;
-    const multiContainerOption = document.querySelector('input[name="multiContainerOption"]:checked')?.value || 'single';
-    
-    console.log("DEBUG: updateStorageInstructions - separateStorageYes:", separateStorage);
     
     let instructionText = '';
     
     // Generate appropriate instructions based on selections
-    if (sampleType === 'multiple' && separateStorage) {
-        instructionText = 'Select multiple locations by clicking on available spaces in the grid. You need to select one location for each package.';
-    } else if (sampleType === 'multiple' && storageOption === 'container' && multiContainerOption === 'multiple') {
-        instructionText = 'MULTIPLE CONTAINER MODE: Select one location for each container. You need to select exactly ' + 
-                         (document.querySelector('[name="packageCount"]')?.value || '1') + 
-                         ' locations (one for each package). Each container will be created at its own location.';
-    } else if (storageOption === 'container' && document.getElementById('existingContainerOption')?.checked) {
+    if (storageOption === 'container' && document.getElementById('existingContainerOption')?.checked) {
         instructionText = 'Using the location of the selected existing container. You can still choose a different location if needed.';
     } else {
         instructionText = 'Select a storage location by clicking on an available space in the grid below.';

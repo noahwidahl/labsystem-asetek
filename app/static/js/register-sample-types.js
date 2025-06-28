@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Set up sample type handling
     setupSampleTypeOptions();
-    setupMultiSampleOptions();
     
     // Mark this module as loaded in the global state
     if (window.registerApp) {
@@ -22,13 +21,10 @@ document.addEventListener('DOMContentLoaded', function() {
 // Variables for sample handling
 let scannedItems = [];
 
-// Setup sample type options (Single, Multiple, Bulk)
+// Setup sample type options (Single, Bulk)
 function setupSampleTypeOptions() {
     const singleSampleOption = document.getElementById('singleSampleOption');
-    const multiSampleOption = document.getElementById('multiSampleOption');
     const bulkSampleOption = document.getElementById('bulkSampleOption');
-    const multiSampleOptions = document.getElementById('multiSampleOptions');
-    const multipleContainerOptions = document.getElementById('multipleContainerOptions');
     const singleContainerOptions = document.getElementById('singleContainerOptions');
     const totalAmountInput = document.querySelector('[name="totalAmount"]');
     const unitSelect = document.querySelector('[name="unit"]');
@@ -57,60 +53,13 @@ function setupSampleTypeOptions() {
     function updateSampleTypeUI(sampleType) {
         console.log('Updating sample type UI for:', sampleType);
         
-        // Show/hide multiple sample options
-        if (multiSampleOptions) {
-            multiSampleOptions.classList.toggle('d-none', sampleType !== 'multiple');
-        }
-        
-        // Update container options based on sample type
-        const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value;
-        if (storageOption === 'container' && containerOptions && !containerOptions.classList.contains('d-none')) {
-            if (multipleContainerOptions && singleContainerOptions) {
-                const isMultiple = sampleType === 'multiple';
-                multipleContainerOptions.classList.toggle('d-none', !isMultiple);
-                singleContainerOptions.classList.toggle('d-none', isMultiple);
-                
-                // When switching to multiple samples with container storage
-                if (isMultiple) {
-                    // Update the container location visibility
-                    if (typeof updateContainerLocationVisibility === 'function') {
-                        console.log("Triggering container location visibility update");
-                        updateContainerLocationVisibility();
-                    }
-                    
-                    // Ensure package count and amount per package fields are properly initialized
-                    const packageCountInput = document.querySelector('[name="packageCount"]');
-                    const amountPerPackageInput = document.querySelector('[name="amountPerPackage"]');
-                    
-                    if (packageCountInput && amountPerPackageInput) {
-                        if (!packageCountInput.value || packageCountInput.value < 1) {
-                            packageCountInput.value = 1;
-                        }
-                        
-                        if (!amountPerPackageInput.value || amountPerPackageInput.value < 1) {
-                            amountPerPackageInput.value = 1;
-                        }
-                        
-                        // Refresh total calculation
-                        setTimeout(updateTotalAmount, 0);
-                    }
-                }
-            }
-        }
-        
         // Update unit options based on sample type
         updateUnitOptions(sampleType === 'bulk');
         
         // Update total amount input based on sample type
         if (totalAmountInput) {
-            if (sampleType === 'multiple') {
-                // For multiple samples, total is calculated
-                totalAmountInput.readOnly = true;
-                updateTotalAmount();
-            } else {
-                // For single or bulk, total is manually entered
-                totalAmountInput.readOnly = false;
-            }
+            // For single or bulk, total is manually entered
+            totalAmountInput.readOnly = false;
         }
     }
     
@@ -185,78 +134,4 @@ function setupSampleTypeOptions() {
         singleSampleOption.checked = true;
         updateSampleTypeUI('single');
     }
-}
-
-// Setup multi-sample options
-function setupMultiSampleOptions() {
-    const packageCountInput = document.querySelector('[name="packageCount"]');
-    const amountPerPackageInput = document.querySelector('[name="amountPerPackage"]');
-    const totalAmountInput = document.querySelector('[name="totalAmount"]');
-    const calculatedTotal = document.getElementById('calculatedTotal');
-    const totalCounter = document.getElementById('totalCount');
-    const separateStorageCheckbox = document.getElementById('separateStorage');
-    
-    if (!packageCountInput || !amountPerPackageInput || !totalAmountInput) return;
-    
-    // Listen for changes in package fields
-    packageCountInput.addEventListener('input', updateTotalAmount);
-    amountPerPackageInput.addEventListener('input', updateTotalAmount);
-    
-    // Also listen for changes in totalAmount
-    totalAmountInput.addEventListener('input', function() {
-        if (totalCounter) {
-            totalCounter.textContent = this.value || 0;
-        }
-    });
-    
-    // Handle separate storage checkbox
-    if (separateStorageCheckbox) {
-        separateStorageCheckbox.addEventListener('change', function() {
-            // We'll handle this in step 4 when showing the grid
-            updateStorageInstructions();
-        });
-    }
-    
-    // Initial update
-    updateTotalAmount();
-}
-
-// Calculate total based on package count and amount per package
-function updateTotalAmount() {
-    const packageCountInput = document.querySelector('[name="packageCount"]');
-    const amountPerPackageInput = document.querySelector('[name="amountPerPackage"]');
-    const totalAmountInput = document.querySelector('[name="totalAmount"]');
-    const calculatedTotal = document.getElementById('calculatedTotal');
-    const totalCounter = document.getElementById('totalCount');
-    
-    if (!packageCountInput || !amountPerPackageInput || !totalAmountInput) return;
-    
-    // Get values with fallback to 0 if invalid
-    const packageCount = parseInt(packageCountInput.value) || 0;
-    const amountPerPackage = parseInt(amountPerPackageInput.value) || 0;
-    
-    // Calculate total amount
-    const total = packageCount * amountPerPackage;
-    
-    // Always update the total amount input
-    totalAmountInput.value = total;
-    
-    // Update UI elements if they exist
-    if (calculatedTotal) {
-        calculatedTotal.textContent = total;
-    }
-    
-    // Also update totalCounter for scanning
-    if (totalCounter) {
-        totalCounter.textContent = total;
-    }
-    
-    // Check the sample type and storage option for container-related logic
-    const isSampleTypeMultiple = document.querySelector('input[name="sampleTypeOption"]:checked')?.value === 'multiple';
-    const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value;
-    const oneContainerPerPackage = document.getElementById('oneContainerPerPackage')?.checked;
-    
-    // Log for debugging
-    console.log(`Total calculation: ${packageCount} packages × ${amountPerPackage} per package = ${total}`);
-    console.log(`Sample type: ${isSampleTypeMultiple ? 'multiple' : 'single'}, Storage: ${storageOption}, One container per package: ${oneContainerPerPackage}`);
 }

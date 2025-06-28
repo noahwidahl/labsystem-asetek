@@ -20,7 +20,8 @@
       "Bash(touch:*)",
       "Bash(rg:*)",
       "Bash(awk:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(rm:*)"
     ]
   },
   "enableAllProjectMcpServers": false

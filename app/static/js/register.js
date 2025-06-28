@@ -402,10 +402,6 @@ window.addEventListener('beforeunload', function() {
     sessionStorage.removeItem('currentFormStep');
     sessionStorage.removeItem('hasVisitedStep2');
     
-    // Reset package locations if available
-    if (typeof window.PackageLocations !== 'undefined' && typeof window.PackageLocations.reset === 'function') {
-        window.PackageLocations.reset();
-    }
     
     // If we're in the register page, reset the form
     if (window.location.pathname.includes('/register')) {

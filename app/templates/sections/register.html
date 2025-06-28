@@ -166,13 +166,6 @@
                                     </label>
                                     <small class="text-muted d-block ms-4">A single item or component</small>
                                 </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="radio" name="sampleTypeOption" id="multiSampleOption" value="multiple">
-                                    <label class="form-check-label" for="multiSampleOption">
-                                        <strong>Multiple Identical Samples</strong>
-                                    </label>
-                                    <small class="text-muted d-block ms-4">Multiple identical items received together</small>
-                                </div>
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="sampleTypeOption" id="bulkSampleOption" value="bulk">
                                     <label class="form-check-label" for="bulkSampleOption">
@@ -213,96 +206,6 @@
                     </div>
                 </div>
 
-                <!-- Multiple Sample Options - Shows only for Multiple Samples -->
-                <div id="multiSampleOptions" class="d-none card mb-4">
-                    <div class="card-header bg-light">
-                        <h5 class="mb-0">Multiple Samples Details</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Number of Packages</label>
-                                    <input type="number" class="form-control" name="packageCount" min="1" value="1">
-                                    <small class="text-muted">How many separate packages/boxes have you received?</small>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Samples per Package</label>
-                                    <input type="number" class="form-control" name="amountPerPackage" min="1" value="1">
-                                    <small class="text-muted">How many units are in each package?</small>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="total-calculation p-2 bg-light rounded mb-3">
-                            <div class="d-flex justify-content-between">
-                                <span>Total amount (automatically calculated):</span>
-                                <span id="calculatedTotal" class="fw-bold">1</span>
-                            </div>
-                        </div>
-                        
-                        <!-- Separate Storage Option as Radio Buttons -->
-                        <div class="mb-3">
-                            <label class="mb-2"><strong>Use separate storage for each package?</strong></label>
-                            <div class="ms-3">
-                                <div class="form-check mb-1">
-                                    <input class="form-check-input" type="radio" name="separateStorage" id="separateStorageYes" value="true" checked>
-                                    <label class="form-check-label" for="separateStorageYes">
-                                        Yes - Place each package at a different location
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="separateStorage" id="separateStorageNo" value="false">
-                                    <label class="form-check-label" for="separateStorageNo">
-                                        No - Use the same location for all packages
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <script>
-                                // Set up event handlers for separate storage and container options
-                                document.addEventListener('DOMContentLoaded', function() {
-                                    const separateStorageYes = document.getElementById('separateStorageYes');
-                                    const separateStorageNo = document.getElementById('separateStorageNo');
-                                    const oneContainerForAll = document.getElementById('oneContainerForAll');
-                                    
-                                    // When "One container for all" is selected, automatically select "No" for separate storage
-                                    if (oneContainerForAll) {
-                                        oneContainerForAll.addEventListener('change', function() {
-                                            if (this.checked && separateStorageNo) {
-                                                separateStorageNo.checked = true;
-                                                // No error message or red text needed
-                                            }
-                                        });
-                                    }
-                                    
-                                    // Just for compatibility with other code that checks separateStorage.checked
-                                    // Create a virtual property that other code can check
-                                    Object.defineProperty(window, 'separateStorage', {
-                                        get: function() {
-                                            return {
-                                                checked: document.getElementById('separateStorageYes')?.checked || false
-                                            };
-                                        }
-                                    });
-                                });
-                            </script>
-                        </div>
-
-                        <!-- Amounts Explanation -->
-                        <div class="alert alert-info mt-3">
-                            <i class="fas fa-info-circle me-2"></i>
-                            <strong>Amount information:</strong>
-                            <ul class="mb-0 mt-1">
-                                <li>Each package will contain the number of samples specified in "Samples per Package"</li>
-                                <li>When using "One container per package", each container will hold the amount from its package</li>
-                            </ul>
-                        </div>
-
-                    </div>
-                </div>
 
                 <!-- Container Options - Shows only for Container Storage -->
                 <div id="containerOptions" class="d-none card mb-4">
@@ -615,7 +518,6 @@ window.suppliers = {{ suppliers|tojson }};
 </script>
 
 <!-- Load critical dependencies first -->
-<script src="{{ url_for('static', filename='js/package-locations.js') }}"></script>
 <script src="{{ url_for('static', filename='js/container.js') }}"></script>
 
 <!-- Supplier and Copy Registration functions -->

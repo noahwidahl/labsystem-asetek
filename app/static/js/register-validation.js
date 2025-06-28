@@ -15,41 +15,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Check if PackageLocations module is available
-function checkPackageLocations() {
-    if (typeof window.PackageLocations === 'undefined') {
-        // Create a simple implementation if missing
-        window.PackageLocations = {
-            _locations: [],
-            
-            addLocation: function(packageNumber, locationId, locationName) {
-                this._locations.push({packageNumber, locationId, locationName});
-            },
-            
-            removeLocation: function(packageNumber) {
-                this._locations = this._locations.filter(loc => loc.packageNumber != packageNumber);
-            },
-            
-            removeLocationByName: function(locationName) {
-                this._locations = this._locations.filter(loc => loc.locationName !== locationName);
-            },
-            
-            getSelectedLocations: function() {
-                return this._locations;
-            },
-            
-            getLocationByPackage: function(packageNumber) {
-                return this._locations.find(loc => loc.packageNumber == packageNumber);
-            },
-            
-            reset: function() {
-                this._locations = [];
-            }
-        };
-        
-        console.warn("Created fallback PackageLocations module");
-    }
-}
 
 // Function to validate the current step
 // Make it globally accessible with proper exporting
@@ -61,8 +26,6 @@ function validateCurrentStep() {
         window.validateCurrentStep = validateCurrentStep;
     }
     
-    // Ensure PackageLocations is available
-    checkPackageLocations();
     
     clearValidationErrors();
     
@@ -142,71 +105,12 @@ function validateCurrentStep() {
                 return true;
             }
             
-            // For multiple samples with separate storage
-            if (sampleType === 'multiple' && separateStorage) {
-                const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
-                
-                // Ensure PackageLocations is available
-                checkPackageLocations();
-                
-                const selectedLocations = PackageLocations.getSelectedLocations();
-                if (selectedLocations.length < packageCount) {
-                    showErrorMessage(`You need to select ${packageCount} locations. You have selected ${selectedLocations.length}.`);
-                    return false;
-                }
-                return true;
-            }
-            // For multiple samples with container storage - one container per package
-            else if (sampleType === 'multiple' && storageOption === 'container') {
-                const oneContainerPerPackage = document.getElementById('oneContainerPerPackage')?.checked || false;
-                
-                // Also check the alternative selector (multiContainerOption)
-                const multiContainerOption = document.querySelector('input[name="multiContainerOption"]:checked')?.value;
-                const usingMultipleContainers = oneContainerPerPackage || multiContainerOption === 'multiple';
-                
-                if (usingMultipleContainers) {
-                    const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
-                    const separateStorage = document.getElementById('separateStorage')?.checked || false;
-                    
-                    console.log(`Multiple container validation: packageCount=${packageCount}, separateStorage=${separateStorage}`);
-                    
-                    // Ensure PackageLocations is available
-                    checkPackageLocations();
-                    
-                    const selectedLocations = PackageLocations.getSelectedLocations();
-                    console.log("Validating locations:", selectedLocations);
-                    
-                    // Only require separate locations if separate storage is checked
-                    if (separateStorage && selectedLocations.length < packageCount) {
-                        showErrorMessage(`You need to select ${packageCount} locations for containers. You have selected ${selectedLocations.length}.`);
-                        return false;
-                    }
-                    
-                    // If we have a saved multi-containers form data, attach it to the formData
-                    if (window._multipleContainersFormData) {
-                        console.log("Found saved multi-containers form data:", window._multipleContainersFormData);
-                        registerApp.multipleContainersFormData = window._multipleContainersFormData;
-                    }
-                    
-                    return true;
-                }
-                // For one container for all - need just one location
-                else {
-                    if (!registerApp.selectedLocation) {
-                        showErrorMessage('Please select a location by clicking on an available space in the grid.');
-                        return false;
-                    }
-                    return true;
-                }
-            }
             // Standard single location validation
-            else {
-                if (!registerApp.selectedLocation) {
-                    showErrorMessage('Please select a location by clicking on an available space in the grid.');
-                    return false;
-                }
-                return true;
+            if (!registerApp.selectedLocation) {
+                showErrorMessage('Please select a location by clicking on an available space in the grid.');
+                return false;
             }
+            return true;
         default:
             return true;
     }
@@ -241,22 +145,6 @@ function updateRegistrationSummary() {
         </div>
     `;
     
-    // Add multiple sample info if applicable
-    if (sampleType === 'multiple') {
-        const packageCount = document.querySelector('[name="packageCount"]')?.value || '1';
-        const amountPerPackage = document.querySelector('[name="amountPerPackage"]')?.value || '0';
-        const separateStorage = document.getElementById('separateStorage')?.checked;
-        
-        summaryHtml += `
-            <div class="summary-item mb-3">
-                <div class="summary-title">Multiple Sample Details</div>
-                <div class="summary-content">
-                    <p>${packageCount} packages with ${amountPerPackage} samples per package</p>
-                    <p>Storage: ${separateStorage ? 'Separate location for each package' : 'Same location for all packages'}</p>
-                </div>
-            </div>
-        `;
-    }
     
     // Add storage info
     summaryHtml += `
@@ -273,8 +161,6 @@ function updateRegistrationSummary() {
             const containerText = containerSelect?.options[containerSelect.selectedIndex]?.textContent || 'Unknown container';
             
             summaryHtml += `<p>Using existing container: ${containerText}</p>`;
-        } else if (sampleType === 'multiple' && document.getElementById('oneContainerPerPackage')?.checked) {
-            summaryHtml += `<p>Creating one container for each package</p>`;
         } else {
             const containerDescription = document.getElementById('containerDescription')?.value || 'New container';
             const containerTypeSelect = document.getElementById('containerType');
@@ -288,10 +174,6 @@ function updateRegistrationSummary() {
     const locationName = getSelectedLocationName();
     if (locationName) {
         summaryHtml += `<p>Location: ${locationName}</p>`;
-    } else if (sampleType === 'multiple' && (document.getElementById('separateStorage')?.checked || 
-               (storageOption === 'container' && document.getElementById('oneContainerPerPackage')?.checked))) {
-        const locationCount = PackageLocations?.getSelectedLocations().length || 0;
-        summaryHtml += `<p>Multiple locations selected: ${locationCount}</p>`;
     }
     
     summaryHtml += `
@@ -317,7 +199,6 @@ function updateRegistrationSummary() {
     function getSampleTypeText(type) {
         switch (type) {
             case 'single': return 'Single Sample';
-            case 'multiple': return 'Multiple Identical Samples';
             case 'bulk': return 'Bulk Material';
             default: return 'Unknown';
         }
@@ -354,19 +235,7 @@ function handleFormSubmission() {
         const storageOption = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
         const separateStorage = document.getElementById('separateStorage')?.checked || false;
         
-        if (sampleType === 'multiple' && separateStorage) {
-            // Multiple samples with separate storage - check if we have enough locations
-            const packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
-            
-            // Ensure PackageLocations is available
-            checkPackageLocations();
-            
-            const selectedLocations = PackageLocations.getSelectedLocations();
-            if (selectedLocations.length < packageCount) {
-                showErrorMessage(`You need to select ${packageCount} locations. You have selected ${selectedLocations.length}.`);
-                return false;
-            }
-        } else if (!registerApp.selectedLocation && !registerApp.skipLocationSelection) {
+        if (!registerApp.selectedLocation && !registerApp.skipLocationSelection) {
             // Standard location check if not using container location
             showErrorMessage('Please select a location by clicking on an available space in the grid.');
             return false;
@@ -414,12 +283,6 @@ function handleFormSubmission() {
         serialNumbers: registerApp.scannedItems || [],
     };
     
-    // Add multiple sample specific data
-    if (formData.sampleType === 'multiple') {
-        formData.packageCount = parseInt(document.querySelector('[name="packageCount"]')?.value) || 1;
-        formData.amountPerPackage = parseInt(document.querySelector('[name="amountPerPackage"]')?.value) || 0;
-        formData.separateStorage = document.getElementById('separateStorage')?.checked || false;
-    }
     
     // Add bulk sample specific data
     if (formData.sampleType === 'bulk') {
@@ -431,7 +294,6 @@ function handleFormSubmission() {
         formData.useContainers = true;
         
         // For single sample or bulk material
-        if (formData.sampleType !== 'multiple') {
             // Check if using existing or creating new container
             const existingContainerOption = document.getElementById('existingContainerOption');
             
@@ -481,111 +343,14 @@ function handleFormSubmission() {
                 }
             }
         }
-        // For multiple samples
-        else {
-            const oneContainerForAll = document.getElementById('oneContainerForAll');
-            const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
-            
-            // Option 1: One container for all samples
-            if (oneContainerForAll && oneContainerForAll.checked) {
-                formData.createSingleContainer = true;
-                formData.containerDescription = document.getElementById('containerDescription')?.value || '';
-                formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
-                
-                // Check if we're creating a new container type
-                const createContainerType = document.getElementById('createContainerType')?.checked || false;
-                
-                if (createContainerType) {
-                    // Creating a new container type
-                    formData.newContainerType = {
-                        typeName: document.getElementById('newContainerTypeName')?.value || '',
-                        description: document.getElementById('newContainerTypeDescription')?.value || '',
-                        capacity: document.getElementById('newContainerTypeCapacity')?.value || ''
-                    };
-                } else {
-                    // Using existing container type
-                    formData.containerTypeId = document.getElementById('containerType')?.value || '';
-                    formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
-                }
-                
-                // Save container location
-                const containerLocationSelect = document.getElementById('containerLocation');
-                if (containerLocationSelect && containerLocationSelect.value) {
-                    formData.containerLocationId = containerLocationSelect.value;
-                }
-            }
-            // Option 2: One container per package
-            else if (oneContainerPerPackage && oneContainerPerPackage.checked) {
-                formData.createMultipleContainers = true;
-                formData.containerDescription = document.getElementById('containerDescription')?.value || '';
-                formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
-                
-                // Check if we're creating a new container type
-                const createContainerType = document.getElementById('createContainerType')?.checked || false;
-                
-                if (createContainerType) {
-                    // Creating a new container type for all containers
-                    formData.newContainerType = {
-                        typeName: document.getElementById('newContainerTypeName')?.value || '',
-                        description: document.getElementById('newContainerTypeDescription')?.value || '',
-                        capacity: document.getElementById('newContainerTypeCapacity')?.value || ''
-                    };
-                } else {
-                    // Using existing container type for all containers
-                    formData.containerTypeId = document.getElementById('containerType')?.value || '';
-                    formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
-                }
-                
-                // For multiple containers, each container will use its own location
-                // First check if we have saved multi-container form data
-                if (registerApp.multipleContainersFormData) {
-                    console.log("Using saved multi-container form data");
-                    
-                    // Copy saved form data
-                    formData.containerLocations = registerApp.multipleContainersFormData.containerLocations || [];
-                    formData.packageLocations = registerApp.multipleContainersFormData.packageLocations || [];
-                    
-                    // Ensure we have the right flags
-                    formData.createMultipleContainers = true;
-                    formData.multiContainerOption = 'multiple';
-                    
-                    console.log("Using saved container locations:", formData.containerLocations);
-                } else {
-                    // If no saved data, get it from PackageLocations
-                    // Ensure PackageLocations is available
-                    checkPackageLocations();
-                    
-                    const packageLocations = PackageLocations.getSelectedLocations();
-                    formData.containerLocations = packageLocations.map(loc => ({
-                        packageNumber: loc.packageNumber,
-                        locationId: loc.locationId
-                    }));
-                    formData.packageLocations = formData.containerLocations;
-                    console.log("Using multiple container locations from PackageLocations:", formData.containerLocations);
-                }
-            }
-        }
     }
     
     // Handle location for non-container storage or for samples outside containers
     if (formData.storageOption === 'direct' || 
         (formData.storageOption === 'container' && !formData.useExistingContainer)) {
         
-        // For multiple samples with separate storage
-        if (formData.sampleType === 'multiple' && formData.separateStorage) {
-            // Ensure PackageLocations is available
-            checkPackageLocations();
-            
-            const packageLocations = PackageLocations.getSelectedLocations();
-            formData.packageLocations = packageLocations.map(loc => ({
-                packageNumber: loc.packageNumber,
-                locationId: loc.locationId
-            }));
-            console.log("Using separate locations for packages:", formData.packageLocations);
-        } else {
-            // Standard location selection
-            formData.storageLocation = document.getElementById('selectedLocationInput')?.value || registerApp.selectedLocation || '';
-        }
+        // Standard location selection
+        formData.storageLocation = document.getElementById('selectedLocationInput')?.value || registerApp.selectedLocation || '';
     }
     
     console.log("Sending form data:", formData);

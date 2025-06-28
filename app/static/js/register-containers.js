@@ -68,8 +68,6 @@ function setupStorageOptions() {
     const directStorageOption = document.getElementById('directStorageOption');
     const containerStorageOption = document.getElementById('containerStorageOption');
     const containerOptions = document.getElementById('containerOptions');
-    const multipleContainerOptions = document.getElementById('multipleContainerOptions');
-    const singleContainerOptions = document.getElementById('singleContainerOptions');
     
     if (!directStorageOption || !containerStorageOption || !containerOptions) return;
     
@@ -78,45 +76,26 @@ function setupStorageOptions() {
         // First check if container option is selected
         const useContainer = containerStorageOption && containerStorageOption.checked;
         
-        // Then check sample type
-        const sampleType = document.querySelector('input[name="sampleTypeOption"]:checked')?.value || 'single';
-        const isMultiple = sampleType === 'multiple';
-        
         // Show container options if container storage is selected
         containerOptions.classList.toggle('d-none', !useContainer);
         
-        // Update multiple/single container options based on sample type
-        if (useContainer && multipleContainerOptions && singleContainerOptions) {
-            multipleContainerOptions.classList.toggle('d-none', !isMultiple);
-            singleContainerOptions.classList.toggle('d-none', isMultiple);
-            
-            // Make sure the right option is selected
-            if (isMultiple) {
-                // Select "One container per package" by default
-                const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
-                if (oneContainerPerPackage) oneContainerPerPackage.checked = true;
-                
-                // Make sure "one container for all" is NOT selected
-                const oneContainerForAll = document.getElementById('oneContainerForAll');
-                if (oneContainerForAll) oneContainerForAll.checked = false;
-            } else {
-                // Select "New container" by default
-                const newContainerOption = document.getElementById('newContainerOption');
-                if (newContainerOption) newContainerOption.checked = true;
-            }
-            
-            // Hide or show container details based on selection
-            const existingContainerOption = document.getElementById('existingContainerOption');
-            const existingContainerSelectArea = document.getElementById('existingContainerSelectArea');
-            const containerDetailsSection = document.getElementById('containerDetailsSection');
-            
-            if (existingContainerOption && existingContainerOption.checked) {
-                if (existingContainerSelectArea) existingContainerSelectArea.classList.remove('d-none');
-                if (containerDetailsSection) containerDetailsSection.classList.add('d-none');
-            } else {
-                if (existingContainerSelectArea) existingContainerSelectArea.classList.add('d-none');
-                if (containerDetailsSection) containerDetailsSection.classList.remove('d-none');
-            }
+        // Select "New container" by default
+        if (useContainer) {
+            const newContainerOption = document.getElementById('newContainerOption');
+            if (newContainerOption) newContainerOption.checked = true;
+        }
+        
+        // Hide or show container details based on selection
+        const existingContainerOption = document.getElementById('existingContainerOption');
+        const existingContainerSelectArea = document.getElementById('existingContainerSelectArea');
+        const containerDetailsSection = document.getElementById('containerDetailsSection');
+        
+        if (existingContainerOption && existingContainerOption.checked) {
+            if (existingContainerSelectArea) existingContainerSelectArea.classList.remove('d-none');
+            if (containerDetailsSection) containerDetailsSection.classList.add('d-none');
+        } else {
+            if (existingContainerSelectArea) existingContainerSelectArea.classList.add('d-none');
+            if (containerDetailsSection) containerDetailsSection.classList.remove('d-none');
         }
         
         // Update storage instructions
@@ -129,11 +108,6 @@ function setupStorageOptions() {
         option.addEventListener('change', updateContainerOptions);
     });
     
-    // Also listen for sample type changes to update container options
-    const sampleTypeOptions = document.querySelectorAll('input[name="sampleTypeOption"]');
-    sampleTypeOptions.forEach(option => {
-        option.addEventListener('change', updateContainerOptions);
-    });
     
     // Initial update
     updateContainerOptions();
@@ -147,9 +121,6 @@ function setupContainerOptions() {
     const existingContainerSelectArea = document.getElementById('existingContainerSelectArea');
     const containerDetailsSection = document.getElementById('containerDetailsSection');
     
-    // Multiple container options
-    const oneContainerForAll = document.getElementById('oneContainerForAll');
-    const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
     
     // Handle single container options
     if (newContainerOption && existingContainerOption) {
@@ -167,78 +138,6 @@ function setupContainerOptions() {
                 
                 fetchExistingContainers();
             }
-        });
-    }
-    
-    // Handle multiple container options
-    if (oneContainerForAll && oneContainerPerPackage) {
-        oneContainerForAll.addEventListener('change', function() {
-            // When "one container for all" is selected, auto-select "No" for separate storage
-            if (this.checked) {
-                // With radio buttons, we just need to select the "No" option
-                const separateStorageNo = document.getElementById('separateStorageNo');
-                if (separateStorageNo) {
-                    separateStorageNo.checked = true;
-                    
-                    // Trigger change event to ensure UI updates
-                    const event = new Event('change');
-                    separateStorageNo.dispatchEvent(event);
-                }
-            }
-            
-            // Update container location visibility if function is available
-            if (typeof updateContainerLocationVisibility === 'function') {
-                updateContainerLocationVisibility();
-            }
-            
-            // Always update storage instructions
-            updateStorageInstructions();
-        });
-        
-        oneContainerPerPackage.addEventListener('change', function() {
-            // Update container location visibility if function is available
-            if (typeof updateContainerLocationVisibility === 'function') {
-                updateContainerLocationVisibility();
-            }
-            
-            // Ensure package count and amount per package are properly filled in
-            const packageCountInput = document.querySelector('[name="packageCount"]');
-            const amountPerPackageInput = document.querySelector('[name="amountPerPackage"]');
-            
-            if (packageCountInput && amountPerPackageInput) {
-                // Ensure we have valid values
-                if (!packageCountInput.value || parseInt(packageCountInput.value) < 1) {
-                    packageCountInput.value = 1;
-                }
-                
-                if (!amountPerPackageInput.value || parseInt(amountPerPackageInput.value) < 1) {
-                    amountPerPackageInput.value = 1;
-                }
-                
-                // Update the total amount calculation
-                if (typeof updateTotalAmount === 'function') {
-                    updateTotalAmount();
-                }
-            }
-            
-            // Check if we need to auto-enable separate storage
-            if (this.checked) {
-                const separateStorage = document.getElementById('separateStorage');
-                if (separateStorage) {
-                    // Enable separate storage by default for better UX, but don't force it
-                    // Separage storage is now optional for one container per package
-                    console.log("One container per package selected - enabling separate storage checkbox");
-                }
-            }
-            
-            // Clear any existing PackageLocations when changing container options
-            if (window.PackageLocations && typeof window.PackageLocations.reset === 'function') {
-                window.PackageLocations.reset();
-                console.log("Reset package locations due to container option change");
-            }
-            
-            // Always update storage instructions
-            updateStorageInstructions();
         });
     }
     
@@ -473,61 +372,3 @@ function fetchContainerLocation(containerId) {
         .catch(error => console.error("ERROR: Failed to fetch container location:", error));
 }
 
-// Define a new globally-accessible function that will override any existing implementations
-window.updateContainerLocationVisibility = function() {
-    console.log("FIXED implementation of updateContainerLocationVisibility called");
-    const oneContainerPerPackage = document.getElementById('oneContainerPerPackage');
-    const containerLocationSection = document.getElementById('containerLocationSelectSection');
-    const multiLocationInfo = document.getElementById('multiLocationInfo');
-    
-    if (oneContainerPerPackage && containerLocationSection) {
-        // Hide location dropdown when "one container per package" is selected
-        if (oneContainerPerPackage.checked) {
-            // Hide location dropdown
-            containerLocationSection.classList.add('d-none');
-            // Remove required attribute when hidden
-            const containerLocationSelect = document.getElementById('containerLocation');
-            if (containerLocationSelect) {
-                containerLocationSelect.removeAttribute('required');
-                // Clear any selected value to prevent it from being submitted
-                containerLocationSelect.value = '';
-            }
-            
-            // Show the multi-location info alert
-            if (multiLocationInfo) {
-                multiLocationInfo.style.display = 'block';
-            }
-            
-            // CRITICAL FIX: Do *not* automatically check or disable "separate storage" checkbox
-            // Let users explicitly decide if they want separate storage or not
-            const separateStorage = document.getElementById('separateStorage');
-            if (separateStorage) {
-                // Do nothing with the checked state - leave it as the user set it
-                // Make sure it's enabled so user can change it
-                separateStorage.disabled = false;
-                
-                // Just trigger associated events to update the UI
-                separateStorage.dispatchEvent(new Event('change'));
-            }
-        } else {
-            // Show location dropdown
-            containerLocationSection.classList.remove('d-none');
-            // Add required attribute when visible
-            const containerLocationSelect = document.getElementById('containerLocation');
-            if (containerLocationSelect) {
-                containerLocationSelect.setAttribute('required', 'required');
-            }
-            
-            // Hide the multi-location info alert
-            if (multiLocationInfo) {
-                multiLocationInfo.style.display = 'none';
-            }
-            
-            // Re-enable the separate storage checkbox
-            const separateStorage = document.getElementById('separateStorage');
-            if (separateStorage) {
-                separateStorage.disabled = false;
-            }
-        }
-    }
-};
