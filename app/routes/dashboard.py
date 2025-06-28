@@ -156,13 +156,17 @@ def init_dashboard(blueprint, mysql):
                     DATE_FORMAT(h.Timestamp, '%d %b %Y %H:%i') as FormattedDate,
                     h.ActionType,
                     u.Name as UserName,
-                    COALESCE(s.SampleID, ts.GeneratedIdentifier, 'N/A') as ItemID,
+                    CASE 
+                        WHEN h.SampleID IS NOT NULL THEN s.SampleID
+                        WHEN h.TestID IS NOT NULL THEN t.TestNo
+                        ELSE 'N/A'
+                    END as ItemID,
                     h.Notes,
                     r.ReceptionID
                 FROM History h
                 LEFT JOIN User u ON h.UserID = u.UserID
                 LEFT JOIN Sample s ON h.SampleID = s.SampleID
-                LEFT JOIN TestSample ts ON h.TestID = ts.TestID
+                LEFT JOIN Test t ON h.TestID = t.TestID
                 LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
                 ORDER BY h.Timestamp DESC
                 LIMIT 20
@@ -172,7 +176,16 @@ def init_dashboard(blueprint, mysql):
             
             history_items = []
             for item in history_data:
-                sample_desc = f"SMP-{item[4]}" if item[4] and item[4] != 'N/A' else 'N/A'
+                # Format ItemID based on type
+                item_id = item[4]
+                if item_id and item_id != 'N/A':
+                    if item_id.startswith('T'):  # Test number
+                        sample_desc = item_id
+                    else:  # Sample ID
+                        sample_desc = f"SMP-{item_id}"
+                else:
+                    sample_desc = 'N/A'
+                    
                 history_items.append({
                     "LogID": item[0],
                     "Timestamp": item[1],
@@ -209,13 +222,17 @@ def init_dashboard(blueprint, mysql):
                     DATE_FORMAT(h.Timestamp, '%d %b %Y %H:%i') as FormattedDate,
                     h.ActionType,
                     u.Name as UserName,
-                    COALESCE(s.SampleID, ts.GeneratedIdentifier, 'N/A') as ItemID,
+                    CASE 
+                        WHEN h.SampleID IS NOT NULL THEN s.SampleID
+                        WHEN h.TestID IS NOT NULL THEN t.TestNo
+                        ELSE 'N/A'
+                    END as ItemID,
                     h.Notes,
                     r.ReceptionID
                 FROM History h
                 LEFT JOIN User u ON h.UserID = u.UserID
                 LEFT JOIN Sample s ON h.SampleID = s.SampleID
-                LEFT JOIN TestSample ts ON h.TestID = ts.TestID
+                LEFT JOIN Test t ON h.TestID = t.TestID
                 LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
                 WHERE 1=1
             """
@@ -223,8 +240,8 @@ def init_dashboard(blueprint, mysql):
             
             # Add filters to the query
             if search:
-                query += " AND (COALESCE(s.SampleID, ts.GeneratedIdentifier, '') LIKE %s)"
-                params.append(f"%{search}%")
+                query += " AND (COALESCE(s.SampleID, t.TestNo, '') LIKE %s OR h.Notes LIKE %s)"
+                params.extend([f"%{search}%", f"%{search}%"])
             
             if action_type:
                 query += " AND h.ActionType = %s"
@@ -260,7 +277,16 @@ def init_dashboard(blueprint, mysql):
             # Format the results
             history_items = []
             for item in history_data:
-                sample_desc = f"SMP-{item[4]}" if item[4] and item[4] != 'N/A' else 'N/A'
+                # Format ItemID based on type
+                item_id = item[4]
+                if item_id and item_id != 'N/A':
+                    if item_id.startswith('T'):  # Test number
+                        sample_desc = item_id
+                    else:  # Sample ID
+                        sample_desc = f"SMP-{item_id}"
+                else:
+                    sample_desc = 'N/A'
+                    
                 history_items.append({
                     "LogID": item[0],
                     "Timestamp": item[1],
@@ -435,14 +461,18 @@ def init_dashboard(blueprint, mysql):
                     DATE_FORMAT(h.Timestamp, '%Y-%m-%d %H:%i:%s') as FormattedDate,
                     h.ActionType,
                     u.Name as UserName,
-                    COALESCE(s.SampleID, ts.GeneratedIdentifier, 'N/A') as ItemID,
+                    CASE 
+                        WHEN h.SampleID IS NOT NULL THEN s.SampleID
+                        WHEN h.TestID IS NOT NULL THEN t.TestNo
+                        ELSE 'N/A'
+                    END as ItemID,
                     COALESCE(s.Description, 'N/A') as SampleDescription,
                     h.Notes,
                     COALESCE(sl.LocationName, 'N/A') as Location
                 FROM History h
                 LEFT JOIN User u ON h.UserID = u.UserID
                 LEFT JOIN Sample s ON h.SampleID = s.SampleID
-                LEFT JOIN TestSample ts ON h.TestID = ts.TestID
+                LEFT JOIN Test t ON h.TestID = t.TestID
                 LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID AND ss.AmountRemaining > 0
                 LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
                 WHERE 1=1
@@ -451,8 +481,8 @@ def init_dashboard(blueprint, mysql):
             
             # Add filters to the query (same as in api_get_history)
             if search:
-                query += " AND (COALESCE(s.SampleID, ts.GeneratedIdentifier, '') LIKE %s)"
-                params.append(f"%{search}%")
+                query += " AND (COALESCE(s.SampleID, t.TestNo, '') LIKE %s OR h.Notes LIKE %s)"
+                params.extend([f"%{search}%", f"%{search}%"])
             
             if action_type:
                 query += " AND h.ActionType = %s"

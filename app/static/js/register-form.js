@@ -81,10 +81,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Set default expiry date
 function setDefaultExpiryDate() {
-    const expiryInput = document.querySelector('input[name="expiryDate"]');
+    const expiryInput = document.querySelector('input[name="expireDate"]');
     if (expiryInput) {
         const defaultDate = new Date();
-        defaultDate.setMonth(defaultDate.getMonth() + registerApp.REGISTRATION_EXPIRY_MONTHS);
+        defaultDate.setMonth(defaultDate.getMonth() + 2); // Default 2 months ahead
         const dateString = defaultDate.toISOString().split('T')[0];
         expiryInput.value = dateString;
     }

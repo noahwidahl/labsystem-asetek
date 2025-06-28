@@ -1,6 +1,20 @@
-# Scanner & Printer Integration Guide
+# Enhanced Scanner & Printer Integration Guide
 
-Dette dokument beskriver, hvordan du opsætter og konfigurerer Zebra MC330M scanneren og Brother QL-810W labelprinter til brug med LabSystem.
+Dette dokument beskriver den forbedrede opsætning og konfiguration af Zebra MC330M scanneren og Brother QL-810W labelprinter til brug med LabSystem.
+
+## Systemudviklinger
+
+### Udvidet Label System
+- **Multiple printer support**: Forskellige printere til sample, container og location labels
+- **Automatisk barcode generering**: Systemet genererer automatisk unikke barcodes
+- **Forbedrede label formater**: Optimerede layouts for forskellige label typer
+- **Audit trail**: Alle print og scan handlinger logges automatisk
+
+### Forbedret Scanner Funktionalitet
+- **Multi-type scanning**: Support for sample barcodes, serial numre, container barcodes og test identifikatorer
+- **Serial nummer registration**: Automatisk linking af serial numre til unikke samples
+- **Test sample scanning**: Direkte scanning af test identifikatorer (T1234.5_1 format)
+- **Omfattende database lookup**: 4-lags søgning for maksimal fleksibilitet
 
 ## Forudsætninger
 
@@ -8,18 +22,28 @@ Dette dokument beskriver, hvordan du opsætter og konfigurerer Zebra MC330M scan
 - Computeren og scanneren er på samme netværk
 - Brother QL-810W printeren er korrekt installeret på computeren
 
-## Opsætning af Flask-applikationen
+## Forbedret Printer Konfiguration
 
-1. **Miljøvariable**
+1. **Multiple Printer Support**
 
-   Tilføj følgende miljøvariable til din `.env` fil:
+   Tilføj følgende miljøvariable til `.env` fil for separate printere:
 
    ```
-   # Printerapp konfiguration
-   BROTHER_APP_PATH=/sti/til/din/brother/printer/app
+   # Sample labels (små, kompakte labels)
+   BROTHER_SAMPLE_PRINTER_PATH=/sti/til/sample/printer/app
+   
+   # Container/Package labels (store labels)
+   BROTHER_CONTAINER_PRINTER_PATH=/sti/til/container/printer/app
+   BROTHER_PACKAGE_PRINTER_PATH=/sti/til/package/printer/app
+   
+   # Location labels (mellem størrelse)
+   BROTHER_LOCATION_PRINTER_PATH=/sti/til/location/printer/app
+   
+   # Fallback printer (bruges hvis specifikke printere ikke er konfigureret)
+   BROTHER_APP_PATH=/sti/til/standard/brother/printer/app
    ```
 
-   Erstat `/sti/til/din/brother/printer/app` med den faktiske sti til den lokale Brother-printerapplikation.
+   **Note**: Hvis du kun har én printer, skal du kun sætte `BROTHER_APP_PATH` - systemet vil automatisk bruge denne til alle label typer.
 
 2. **Firewall-konfiguration**
 

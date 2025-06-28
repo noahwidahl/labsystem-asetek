@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}Test Administration - Laboratory Sample System{% endblock %}
+
+{% block content %}
+<section id="testing" class="content-section">
+    <div class="section-header mb-4">
+        <h2>Test Administration</h2>
+        <div class="section-actions">
+            <button class="btn btn-primary" onclick="showCreateTestModal()">
+                <i class="fas fa-plus"></i> Start New Test
+            </button>
+        </div>
+    </div>
+
+    <!-- Active Tests -->
+    <div class="active-tests">
+        <div class="welcome-message mb-4">
+            <h4>Welcome to Test Administration</h4>
+            <p>You have <strong class="active-tests-count">{{ active_tests|length }}</strong> active tests in the system!</p>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center" id="formatInfoHeader" style="cursor: pointer;" onclick="toggleFormatInfo()">
+                <h5 class="mb-0 fs-6"><i class="fas fa-info-circle me-2"></i>Test ID Format</h5>
+                <span><i class="fas fa-chevron-down" id="formatInfoChevron"></i></span>
+            </div>
+            <div class="card-body" id="formatInfoBody" style="display: none;">
+                <p>Test IDs follow the format <code>T1234.5</code> where:</p>
+                <ul>
+                    <li><code>T</code> is the test type identifier</li>
+                    <li><code>1234</code> is the sequential test number</li>
+                    <li><code>.5</code> is the iteration number of this test</li>
+                </ul>
+                <p>Sample IDs within a test have the format <code>T1234.5_1</code>, <code>T1234.5_2</code>, etc.</p>
+            </div>
+        </div>
+        
+        <script>
+            function toggleFormatInfo() {
+                const body = document.getElementById('formatInfoBody');
+                const chevron = document.getElementById('formatInfoChevron');
+                if (body.style.display === 'none') {
+                    body.style.display = 'block';
+                    chevron.classList.replace('fa-chevron-down', 'fa-chevron-up');
+                } else {
+                    body.style.display = 'none';
+                    chevron.classList.replace('fa-chevron-up', 'fa-chevron-down');
+                }
+            }
+        </script>
+        
+        <h3 class="mb-3">Active Tests</h3>
+        
+        {% if active_tests %}
+            <div class="row">
+                {% for test in active_tests %}
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card test-card h-100 shadow-sm">
+                        <div class="card-header d-flex justify-content-between align-items-center bg-light py-2">
+                            <span class="badge rounded-pill bg-success">Active</span>
+                            <span class="badge rounded-pill bg-primary">{{ test.TestNo }}</span>
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">
+                                {% if 'PRESSURE' in test.TestName %}
+                                <i class="fas fa-tachometer-alt me-2 text-primary"></i>
+                                {% elif 'THERMAL' in test.TestName %}
+                                <i class="fas fa-temperature-high me-2 text-danger"></i>
+                                {% else %}
+                                <i class="fas fa-flask me-2 text-info"></i>
+                                {% endif %}
+                                {{ test.TestName }}
+                            </h5>
+                            
+                            <ul class="list-unstyled mb-3">
+                                <li class="mb-2">
+                                    <span class="text-muted">Number of Samples:</span> 
+                                    <strong>{{ test.sample_count }}</strong>
+                                </li>
+                                <li class="mb-2">
+                                    <span class="text-muted">Start Date:</span> 
+                                    <strong>{{ test.CreatedDate }}</strong>
+                                </li>
+                                <li class="mb-2">
+                                    <span class="text-muted">Owner:</span> 
+                                    <strong>{{ test.UserName }}</strong>
+                                </li>
+                            </ul>
+                            
+                            <div class="sample-list mb-3 bg-light p-2 rounded">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="text-muted small">Test No:</span>
+                                    <strong>{{ test.TestNo }}</strong>
+                                </div>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <div class="sample-item px-2 py-1 bg-white rounded border">{{ test.TestNo }}_1</div>
+                                    {% if test.sample_count > 1 %}
+                                    <div class="sample-item px-2 py-1 bg-white rounded border">{{ test.TestNo }}_2</div>
+                                    {% endif %}
+                                    {% if test.sample_count > 2 %}
+                                    <div class="sample-more px-2 py-1 bg-white rounded border">+{{ test.sample_count - 2 }} more</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white pt-0 border-top-0">
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <button class="btn btn-outline-primary" onclick="showCreateTestIterationModal('{{ test.TestID }}', '{{ test.TestNo }}', '{{ test.TestName }}')">
+                                    <i class="fas fa-plus-circle me-1"></i> Add Iteration
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="showTestDetails('{{ test.TestID }}')">
+                                    <i class="fas fa-info-circle me-1"></i> View Details
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="completeTest('{{ test.TestID }}', '{{ test.TestNo }}')">
+                                    <i class="fas fa-check-circle me-1"></i> Complete Test
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                No active tests found. Create a new test to get started.
+            </div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- Include modals -->
+{% include "modals/test_details_modal.html" %}
+{% include "modals/create_test_modal.html" %}
+{% include "modals/create_test_iteration_modal.html" %}
+
+<script>
+    // Variables to store current test information
+    let currentTestId = null;
+    let currentTestNo = null;
+    
+    // Update showTestDetails function to set currentTestId and currentTestNo
+    function showTestDetails(testId) {
+        currentTestId = testId;
+        // Fetch test details from server
+        fetch(`/api/testDetails/${testId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.test) {
+                    // Store the test number for use with other functions
+                    currentTestNo = data.test.TestNo;
+                    console.log(`Set currentTestNo: ${currentTestNo}`);
+                    
+                    populateTestDetailsModal(data.test);
+                    const modal = new bootstrap.Modal(document.getElementById('testDetailsModal'));
+                    modal.show();
+                } else {
+                    throw new Error("No test data returned");
+                }
+            })
+            .catch(error => {
+                showErrorMessage(`Could not fetch test details: ${error}`);
+            });
+    }
+</script>
+{% endblock %}

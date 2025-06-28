@@ -326,6 +326,19 @@ class SampleService:
                 
                 print(f"DEBUG: Sample {i+1} of {package_count} with amount={amount_value}")
                 
+                # Handle expire date - use provided date or default to 2 months from now
+                expire_date = None
+                if sample_data.get('expireDate'):
+                    try:
+                        expire_date = datetime.strptime(sample_data.get('expireDate'), '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        pass
+                
+                if not expire_date:
+                    # Default to 2 months from now
+                    from datetime import timedelta
+                    expire_date = (datetime.now() + timedelta(days=60)).date()
+                
                 # Insert the sample in Sample table
                 cursor.execute("""
                     INSERT INTO Sample (
@@ -338,9 +351,10 @@ class SampleService:
                         Amount, 
                         UnitID, 
                         OwnerID, 
-                        ReceptionID
+                        ReceptionID,
+                        ExpireDate
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     barcode,
                     sample_data.get('partNumber', ''),
@@ -351,7 +365,8 @@ class SampleService:
                     amount_value,
                     sample_data.get('unit'),
                     sample_data.get('owner'),
-                    reception_id
+                    reception_id,
+                    expire_date
                 ))
                 
                 sample_id = cursor.lastrowid

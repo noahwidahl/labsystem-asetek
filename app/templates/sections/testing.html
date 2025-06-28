@@ -8,160 +8,783 @@
         <h2>Test Administration</h2>
         <div class="section-actions">
             <button class="btn btn-primary" onclick="showCreateTestModal()">
-                <i class="fas fa-plus"></i> Start New Test
+                <i class="fas fa-plus"></i> Create New Test
             </button>
         </div>
     </div>
 
+    <!-- Test Format Info -->
+    <div class="card mb-4">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center" 
+             style="cursor: pointer;" onclick="toggleFormatInfo()">
+            <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Test ID Format</h6>
+            <i class="fas fa-chevron-down" id="formatInfoChevron"></i>
+        </div>
+        <div class="card-body d-none" id="formatInfoBody">
+            <p>Test IDs follow the format <code>T1234.1</code> where:</p>
+            <ul class="mb-0">
+                <li><code>T1234</code> is the sequential test number</li>
+                <li><code>.1</code> is the iteration number (T1234.1 → T1234.2 → T1234.3)</li>
+                <li>Samples get identifiers like <code>T1234.1_1</code>, <code>T1234.1_2</code>, etc.</li>
+            </ul>
+        </div>
+    </div>
+
     <!-- Active Tests -->
-    <div class="active-tests">
-        <div class="welcome-message mb-4">
-            <h4>Welcome to Test Administration</h4>
-            <p>You have <strong class="active-tests-count">{{ active_tests|length }}</strong> active tests in the system!</p>
-        </div>
-        
-        <div class="card mb-4">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center" id="formatInfoHeader" style="cursor: pointer;" onclick="toggleFormatInfo()">
-                <h5 class="mb-0 fs-6"><i class="fas fa-info-circle me-2"></i>Test ID Format</h5>
-                <span><i class="fas fa-chevron-down" id="formatInfoChevron"></i></span>
-            </div>
-            <div class="card-body" id="formatInfoBody" style="display: none;">
-                <p>Test IDs follow the format <code>T1234.5</code> where:</p>
-                <ul>
-                    <li><code>T</code> is the test type identifier</li>
-                    <li><code>1234</code> is the sequential test number</li>
-                    <li><code>.5</code> is the iteration number of this test</li>
-                </ul>
-                <p>Sample IDs within a test have the format <code>T1234.5_1</code>, <code>T1234.5_2</code>, etc.</p>
-            </div>
-        </div>
-        
-        <script>
-            function toggleFormatInfo() {
-                const body = document.getElementById('formatInfoBody');
-                const chevron = document.getElementById('formatInfoChevron');
-                if (body.style.display === 'none') {
-                    body.style.display = 'block';
-                    chevron.classList.replace('fa-chevron-down', 'fa-chevron-up');
-                } else {
-                    body.style.display = 'none';
-                    chevron.classList.replace('fa-chevron-up', 'fa-chevron-down');
-                }
-            }
-        </script>
-        
-        <h3 class="mb-3">Active Tests</h3>
-        
-        {% if active_tests %}
-            <div class="row">
-                {% for test in active_tests %}
-                <div class="col-md-6 col-lg-4 mb-4">
-                    <div class="card test-card h-100 shadow-sm">
-                        <div class="card-header d-flex justify-content-between align-items-center bg-light py-2">
-                            <span class="badge rounded-pill bg-success">Active</span>
-                            <span class="badge rounded-pill bg-primary">{{ test.TestNo }}</span>
-                        </div>
-                        <div class="card-body">
-                            <h5 class="card-title mb-3">
-                                {% if 'PRESSURE' in test.TestName %}
-                                <i class="fas fa-tachometer-alt me-2 text-primary"></i>
-                                {% elif 'THERMAL' in test.TestName %}
-                                <i class="fas fa-temperature-high me-2 text-danger"></i>
-                                {% else %}
-                                <i class="fas fa-flask me-2 text-info"></i>
-                                {% endif %}
-                                {{ test.TestName }}
-                            </h5>
-                            
-                            <ul class="list-unstyled mb-3">
-                                <li class="mb-2">
-                                    <span class="text-muted">Number of Samples:</span> 
-                                    <strong>{{ test.sample_count }}</strong>
-                                </li>
-                                <li class="mb-2">
-                                    <span class="text-muted">Start Date:</span> 
-                                    <strong>{{ test.CreatedDate }}</strong>
-                                </li>
-                                <li class="mb-2">
-                                    <span class="text-muted">Owner:</span> 
-                                    <strong>{{ test.UserName }}</strong>
-                                </li>
-                            </ul>
-                            
-                            <div class="sample-list mb-3 bg-light p-2 rounded">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <span class="text-muted small">Test No:</span>
-                                    <strong>{{ test.TestNo }}</strong>
+    <div class="row mb-4">
+        <div class="col-12">
+            <h3>Active Tests</h3>
+            <div id="activeTestsList">
+                {% if active_tests %}
+                    <div class="row">
+                        {% for test in active_tests %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card test-card h-100">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <span class="badge bg-{{ 'primary' if test.status == 'Created' else 'warning' if test.status == 'In Progress' else 'success' }}">
+                                        {{ test.status }}
+                                    </span>
+                                    <strong>{{ test.test_no }}</strong>
                                 </div>
-                                <div class="d-flex flex-wrap gap-1">
-                                    <div class="sample-item px-2 py-1 bg-white rounded border">{{ test.TestNo }}_1</div>
-                                    {% if test.sample_count > 1 %}
-                                    <div class="sample-item px-2 py-1 bg-white rounded border">{{ test.TestNo }}_2</div>
-                                    {% endif %}
-                                    {% if test.sample_count > 2 %}
-                                    <div class="sample-more px-2 py-1 bg-white rounded border">+{{ test.sample_count - 2 }} more</div>
-                                    {% endif %}
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ test.test_name }}</h5>
+                                    <p class="card-text">{{ test.description }}</p>
+                                    
+                                    <div class="test-info mb-3">
+                                        <small class="text-muted">
+                                            <i class="fas fa-user"></i> {{ test.user_name }}<br>
+                                            <i class="fas fa-calendar"></i> {{ test.created_date }}<br>
+                                            <i class="fas fa-vials"></i> {{ test.sample_count }} samples ({{ test.active_sample_count }} active)
+                                        </small>
+                                    </div>
+                                    
+                                    <div class="btn-group-vertical w-100" role="group">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="viewTestDetails({{ test.id }})">
+                                            <i class="fas fa-eye"></i> View Details
+                                        </button>
+                                        {% if test.status == 'Created' %}
+                                        <button class="btn btn-outline-success btn-sm" onclick="startTest({{ test.id }})">
+                                            <i class="fas fa-play"></i> Start Test
+                                        </button>
+                                        {% endif %}
+                                        {% if test.status == 'In Progress' %}
+                                        <button class="btn btn-outline-warning btn-sm" onclick="completeTest({{ test.id }})">
+                                            <i class="fas fa-check"></i> Complete Test
+                                        </button>
+                                        {% endif %}
+                                        <button class="btn btn-outline-secondary btn-sm" onclick="createIteration('{{ test.test_no }}')">
+                                            <i class="fas fa-copy"></i> Create Iteration
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="card-footer bg-white pt-0 border-top-0">
-                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                                <button class="btn btn-outline-primary" onclick="showCreateTestIterationModal('{{ test.TestID }}', '{{ test.TestNo }}', '{{ test.TestName }}')">
-                                    <i class="fas fa-plus-circle me-1"></i> Add Iteration
-                                </button>
-                                <button class="btn btn-outline-secondary" onclick="showTestDetails('{{ test.TestID }}')">
-                                    <i class="fas fa-info-circle me-1"></i> View Details
-                                </button>
-                                <button class="btn btn-outline-danger" onclick="completeTest('{{ test.TestID }}', '{{ test.TestNo }}')">
-                                    <i class="fas fa-check-circle me-1"></i> Complete Test
-                                </button>
-                            </div>
-                        </div>
+                        {% endfor %}
                     </div>
-                </div>
-                {% endfor %}
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> No active tests. Create a new test to get started.
+                    </div>
+                {% endif %}
             </div>
-        {% else %}
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                No active tests found. Create a new test to get started.
-            </div>
-        {% endif %}
+        </div>
     </div>
 </section>
 
-<!-- Include modals -->
-{% include "modals/test_details_modal.html" %}
-{% include "modals/create_test_modal.html" %}
-{% include "modals/create_test_iteration_modal.html" %}
-
-<script>
-    // Variables to store current test information
-    let currentTestId = null;
-    let currentTestNo = null;
-    
-    // Update showTestDetails function to set currentTestId and currentTestNo
-    function showTestDetails(testId) {
-        currentTestId = testId;
-        // Fetch test details from server
-        fetch(`/api/testDetails/${testId}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.test) {
-                    // Store the test number for use with other functions
-                    currentTestNo = data.test.TestNo;
-                    console.log(`Set currentTestNo: ${currentTestNo}`);
+<!-- Create Test Modal -->
+<div class="modal fade" id="createTestModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create New Test</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createTestForm">
+                    <div class="mb-3">
+                        <label for="testName" class="form-label">Test Name *</label>
+                        <input type="text" class="form-control" id="testName" required>
+                    </div>
                     
-                    populateTestDetailsModal(data.test);
-                    const modal = new bootstrap.Modal(document.getElementById('testDetailsModal'));
-                    modal.show();
-                } else {
-                    throw new Error("No test data returned");
-                }
-            })
-            .catch(error => {
-                showErrorMessage(`Could not fetch test details: ${error}`);
-            });
+                    <div class="mb-3">
+                        <label for="testDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="testDescription" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="addSamplesNow">
+                            <label class="form-check-label" for="addSamplesNow">
+                                Add samples to test now
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Sample Selection (initially hidden) -->
+                    <div id="sampleSelectionSection" class="d-none">
+                        <h6>Select Samples</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Select</th>
+                                        <th>Sample ID</th>
+                                        <th>Description</th>
+                                        <th>Available</th>
+                                        <th>Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sampleSelectionTable">
+                                    {% for sample in samples %}
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" class="form-check-input sample-checkbox" 
+                                                   value="{{ sample.SampleID }}" onchange="toggleSampleRow(this)">
+                                        </td>
+                                        <td>{{ sample.SampleIDFormatted }}</td>
+                                        <td>{{ sample.Description }}</td>
+                                        <td>{{ sample.AmountAvailable }}</td>
+                                        <td>
+                                            <input type="number" class="form-control form-control-sm sample-amount" 
+                                                   min="1" max="{{ sample.AmountAvailable }}" value="1" disabled>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitCreateTest()">Create Test</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Details Modal -->
+<div class="modal fade" id="testDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="testDetailsTitle">Test Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="testDetailsBody">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Complete Test Modal -->
+<div class="modal fade" id="completeTestModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Complete Test</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="completeTestBody">
+                <!-- Will be populated dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="submitCompleteTest()">Complete Test</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentTestId = null;
+
+// Toggle format info
+function toggleFormatInfo() {
+    const body = document.getElementById('formatInfoBody');
+    const chevron = document.getElementById('formatInfoChevron');
+    
+    if (body.classList.contains('d-none')) {
+        body.classList.remove('d-none');
+        chevron.classList.replace('fa-chevron-down', 'fa-chevron-up');
+    } else {
+        body.classList.add('d-none');
+        chevron.classList.replace('fa-chevron-up', 'fa-chevron-down');
     }
+}
+
+// Show create test modal
+function showCreateTestModal() {
+    const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
+    document.getElementById('createTestForm').reset();
+    document.getElementById('sampleSelectionSection').classList.add('d-none');
+    modal.show();
+}
+
+// Toggle sample selection section
+document.getElementById('addSamplesNow').addEventListener('change', function() {
+    const section = document.getElementById('sampleSelectionSection');
+    if (this.checked) {
+        section.classList.remove('d-none');
+    } else {
+        section.classList.add('d-none');
+    }
+});
+
+// Toggle sample row
+function toggleSampleRow(checkbox) {
+    const row = checkbox.closest('tr');
+    const amountInput = row.querySelector('.sample-amount');
+    
+    if (checkbox.checked) {
+        amountInput.disabled = false;
+        row.classList.add('table-active');
+    } else {
+        amountInput.disabled = true;
+        row.classList.remove('table-active');
+    }
+}
+
+// Submit create test
+function submitCreateTest() {
+    const testName = document.getElementById('testName').value;
+    const testDescription = document.getElementById('testDescription').value;
+    const addSamples = document.getElementById('addSamplesNow').checked;
+    
+    if (!testName.trim()) {
+        showError('Test name is required');
+        return;
+    }
+    
+    const testData = {
+        testName: testName,
+        description: testDescription
+    };
+    
+    // Create test first
+    fetch('/api/tests/create', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(testData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (addSamples) {
+                // Add selected samples
+                const selectedSamples = [];
+                document.querySelectorAll('.sample-checkbox:checked').forEach(checkbox => {
+                    const row = checkbox.closest('tr');
+                    const amount = parseInt(row.querySelector('.sample-amount').value);
+                    
+                    selectedSamples.push({
+                        sample_id: parseInt(checkbox.value),
+                        amount: amount
+                    });
+                });
+                
+                if (selectedSamples.length > 0) {
+                    fetch(`/api/tests/${data.test_id}/add-samples`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({samples: selectedSamples})
+                    })
+                    .then(response => response.json())
+                    .then(sampleData => {
+                        if (sampleData.success) {
+                            showSuccess(data.message + ' Samples added successfully.');
+                        } else {
+                            showError('Test created but failed to add samples: ' + sampleData.error);
+                        }
+                        location.reload();
+                    });
+                } else {
+                    showSuccess(data.message);
+                    location.reload();
+                }
+            } else {
+                showSuccess(data.message);
+                location.reload();
+            }
+            
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createTestModal'));
+            modal.hide();
+        } else {
+            showError(data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('Failed to create test');
+    });
+}
+
+// View test details
+function viewTestDetails(testId) {
+    currentTestId = testId;
+    const modal = new bootstrap.Modal(document.getElementById('testDetailsModal'));
+    
+    // Reset modal content
+    document.getElementById('testDetailsBody').innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `;
+    
+    modal.show();
+    
+    // Load test details
+    fetch(`/api/tests/${testId}/details`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            renderTestDetails(data.test, data.samples);
+        } else {
+            document.getElementById('testDetailsBody').innerHTML = 
+                `<div class="alert alert-danger">Error loading test details: ${data.error}</div>`;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('testDetailsBody').innerHTML = 
+            '<div class="alert alert-danger">Failed to load test details</div>';
+    });
+}
+
+// Render test details
+function renderTestDetails(test, samples) {
+    document.getElementById('testDetailsTitle').textContent = `Test ${test.test_no} - ${test.test_name}`;
+    
+    let html = `
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h6>Test Information</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Test No:</strong></td><td>${test.test_no}</td></tr>
+                    <tr><td><strong>Name:</strong></td><td>${test.test_name}</td></tr>
+                    <tr><td><strong>Status:</strong></td><td><span class="badge bg-primary">${test.status}</span></td></tr>
+                    <tr><td><strong>Created:</strong></td><td>${formatDateTime(test.created_date)}</td></tr>
+                    <tr><td><strong>Owner:</strong></td><td>${test.user_name}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Actions</h6>
+                <div class="d-grid gap-2">
+    `;
+    
+    if (test.status === 'Created') {
+        html += `<button class="btn btn-success" onclick="startTest(${test.test_id})">Start Test</button>`;
+    }
+    
+    if (test.status === 'In Progress') {
+        html += `<button class="btn btn-warning" onclick="completeTest(${test.test_id})">Complete Test</button>`;
+    }
+    
+    html += `
+                    <button class="btn btn-outline-primary" onclick="addSamplesToTest(${test.test_id})">Add Samples</button>
+                    <button class="btn btn-outline-secondary" onclick="createIteration('${test.test_no}')">Create Iteration</button>
+                </div>
+            </div>
+        </div>
+        
+        <h6>Test Samples</h6>
+    `;
+    
+    if (samples.length > 0) {
+        html += `
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Identifier</th>
+                            <th>Sample</th>
+                            <th>Part Number</th>
+                            <th>Allocated</th>
+                            <th>Used</th>
+                            <th>Returned</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        samples.forEach(sample => {
+            const canModify = sample.status === 'Allocated' || sample.status === 'Active';
+            html += `
+                <tr>
+                    <td><strong>${sample.identifier}</strong></td>
+                    <td>${sample.description}</td>
+                    <td>${sample.part_number || '-'}</td>
+                    <td>${sample.amount_allocated}</td>
+                    <td>${sample.amount_used}</td>
+                    <td>${sample.amount_returned}</td>
+                    <td><span class="badge bg-secondary">${sample.status}</span></td>
+                    <td>
+                        ${canModify ? `
+                            <button class="btn btn-sm btn-outline-primary" onclick="returnSampleFromTest(${sample.usage_id}, ${sample.amount_allocated - sample.amount_used})">
+                                Return
+                            </button>
+                        ` : ''}
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } else {
+        html += '<div class="alert alert-info">No samples assigned to this test yet.</div>';
+    }
+    
+    document.getElementById('testDetailsBody').innerHTML = html;
+}
+
+// Start test
+function startTest(testId) {
+    if (confirm('Start this test? This will change the status to "In Progress".')) {
+        fetch(`/api/tests/${testId}/status`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({status: 'In Progress'})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSuccess(data.message);
+                location.reload();
+            } else {
+                showError(data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Failed to start test');
+        });
+    }
+}
+
+// Complete test
+function completeTest(testId) {
+    // Load test samples and show completion modal
+    fetch(`/api/tests/${testId}/samples`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showCompleteTestModal(testId, data.samples);
+        } else {
+            showError(data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('Failed to load test samples');
+    });
+}
+
+// Show complete test modal
+function showCompleteTestModal(testId, samples) {
+    currentTestId = testId;
+    
+    let html = `
+        <div class="mb-3">
+            <h6>Complete Test - Specify Sample Outcomes</h6>
+            <p class="text-muted">For each sample, specify how much was used and how much should be returned to storage.</p>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Sample</th>
+                        <th>Allocated</th>
+                        <th>Amount Used</th>
+                        <th>Amount Returned</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    samples.forEach(sample => {
+        // Calculate available amount (allocated - already used - already returned)
+        const available = sample.amount_allocated - sample.amount_used - sample.amount_returned;
+        html += `
+            <tr data-usage-id="${sample.usage_id}">
+                <td>
+                    <strong>${sample.identifier}</strong><br>
+                    <small class="text-muted">${sample.description}</small>
+                </td>
+                <td>
+                    ${sample.amount_allocated}
+                    ${sample.amount_returned > 0 ? `<br><small class="text-info">(${sample.amount_returned} already returned)</small>` : ''}
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm amount-used" 
+                           min="0" max="${available}" value="0" onchange="updateReturned(this)"
+                           data-available="${available}">
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm amount-returned" 
+                           min="0" max="${available}" value="${available}" readonly>
+                </td>
+                <td>
+                    <input type="text" class="form-control form-control-sm completion-notes" 
+                           placeholder="Optional notes">
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    document.getElementById('completeTestBody').innerHTML = html;
+    
+    const modal = new bootstrap.Modal(document.getElementById('completeTestModal'));
+    modal.show();
+}
+
+// Update returned amount when used amount changes
+function updateReturned(usedInput) {
+    const row = usedInput.closest('tr');
+    const returnedInput = row.querySelector('.amount-returned');
+    const available = parseInt(usedInput.dataset.available);
+    const used = parseInt(usedInput.value) || 0;
+    
+    returnedInput.value = Math.max(0, available - used);
+}
+
+// Submit complete test
+function submitCompleteTest() {
+    const completions = [];
+    
+    document.querySelectorAll('#completeTestBody tr[data-usage-id]').forEach(row => {
+        const usageId = parseInt(row.dataset.usageId);
+        const amountUsed = parseInt(row.querySelector('.amount-used').value) || 0;
+        const amountReturned = parseInt(row.querySelector('.amount-returned').value) || 0;
+        const notes = row.querySelector('.completion-notes').value.trim();
+        
+        completions.push({
+            usage_id: usageId,
+            amount_used: amountUsed,
+            amount_returned: amountReturned,
+            notes: notes
+        });
+    });
+    
+    fetch(`/api/tests/${currentTestId}/complete`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({sample_completions: completions})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccess(data.message);
+            const modal = bootstrap.Modal.getInstance(document.getElementById('completeTestModal'));
+            modal.hide();
+            location.reload();
+        } else {
+            showError(data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('Failed to complete test');
+    });
+}
+
+// Add samples to existing test
+function addSamplesToTest(testId) {
+    // Close test details modal if open
+    const testDetailsModal = bootstrap.Modal.getInstance(document.getElementById('testDetailsModal'));
+    if (testDetailsModal) {
+        testDetailsModal.hide();
+    }
+    
+    // Show modal to select samples
+    const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
+    
+    // Reset form but change title and behavior
+    document.getElementById('createTestForm').reset();
+    document.querySelector('#createTestModal .modal-title').textContent = 'Add Samples to Test';
+    document.getElementById('testName').closest('.mb-3').style.display = 'none';
+    document.getElementById('testDescription').closest('.mb-3').style.display = 'none';
+    document.getElementById('addSamplesNow').checked = true;
+    document.getElementById('sampleSelectionSection').classList.remove('d-none');
+    
+    // Change submit button
+    const submitBtn = document.querySelector('#createTestModal .btn-primary');
+    submitBtn.textContent = 'Add Samples';
+    submitBtn.onclick = function() { submitAddSamples(testId); };
+    
+    modal.show();
+}
+
+// Submit add samples to existing test
+function submitAddSamples(testId) {
+    const selectedSamples = [];
+    document.querySelectorAll('.sample-checkbox:checked').forEach(checkbox => {
+        const row = checkbox.closest('tr');
+        const amount = parseInt(row.querySelector('.sample-amount').value);
+        
+        selectedSamples.push({
+            sample_id: parseInt(checkbox.value),
+            amount: amount
+        });
+    });
+    
+    if (selectedSamples.length === 0) {
+        showError('Please select at least one sample');
+        return;
+    }
+    
+    fetch(`/api/tests/${testId}/add-samples`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({samples: selectedSamples})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccess(data.message);
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createTestModal'));
+            modal.hide();
+            
+            // Reset modal to original state
+            document.querySelector('#createTestModal .modal-title').textContent = 'Create New Test';
+            document.getElementById('testName').closest('.mb-3').style.display = 'block';
+            document.getElementById('testDescription').closest('.mb-3').style.display = 'block';
+            const submitBtn = document.querySelector('#createTestModal .btn-primary');
+            submitBtn.textContent = 'Create Test';
+            submitBtn.onclick = submitCreateTest;
+            
+            // Refresh test details if modal is open
+            if (currentTestId === testId) {
+                viewTestDetails(testId);
+            }
+        } else {
+            showError(data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('Failed to add samples to test');
+    });
+}
+
+// Create iteration
+function createIteration(baseTestNo) {
+    const testName = prompt('Enter test name for new iteration:');
+    if (!testName) return;
+    
+    const testData = {
+        base_test_no: baseTestNo,
+        testName: testName,
+        description: `Iteration of ${baseTestNo}`
+    };
+    
+    fetch('/api/tests/create-iteration', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(testData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccess(data.message);
+            location.reload();
+        } else {
+            showError(data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('Failed to create iteration');
+    });
+}
+
+// Return sample from test
+function returnSampleFromTest(usageId, availableAmount) {
+    const amount = prompt(`How much should be returned to storage? (Available: ${availableAmount})`);
+    if (!amount || isNaN(amount) || amount <= 0) return;
+    
+    if (parseInt(amount) > availableAmount) {
+        showError(`Cannot return ${amount}. Only ${availableAmount} available.`);
+        return;
+    }
+    
+    fetch(`/api/tests/samples/${usageId}/remove`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            action: 'return',
+            amount: parseInt(amount)
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccess(data.message);
+            viewTestDetails(currentTestId); // Refresh details
+        } else {
+            showError(data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('Failed to return sample');
+    });
+}
+
+// Utility functions
+function formatDateTime(dateString) {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleString();
+}
+
+function showSuccess(message) {
+    // Implement toast notification
+    console.log('Success:', message);
+    alert(message); // Temporary - replace with proper toast
+}
+
+function showError(message) {
+    // Implement toast notification
+    console.error('Error:', message);
+    alert('Error: ' + message); // Temporary - replace with proper toast
+}
 </script>
 {% endblock %}

@@ -6,6 +6,7 @@ def register_blueprints(app, mysql):
     from app.routes.scanner import scanner_bp, init_scanner
     from app.routes.printer import printer_bp, init_printer
     from app.routes.system import system_bp, init_system
+    from app.routes.expiration import expiration_bp, init_expiration
     
     # Initialization of blueprints with mysql
     init_dashboard(dashboard_bp, mysql)
@@ -15,6 +16,7 @@ def register_blueprints(app, mysql):
     init_scanner(scanner_bp, mysql)
     init_printer(printer_bp, mysql)
     init_system(system_bp, mysql)
+    init_expiration(expiration_bp, mysql)
     
     # Registration of blueprints
     app.register_blueprint(dashboard_bp)
@@ -24,3 +26,4 @@ def register_blueprints(app, mysql):
     app.register_blueprint(scanner_bp)
     app.register_blueprint(printer_bp)
     app.register_blueprint(system_bp)
+    app.register_blueprint(expiration_bp)

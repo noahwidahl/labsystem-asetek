@@ -1,0 +1,593 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications - Laboratory Sample System{% endblock %}
+
+{% block content %}
+<section id="notifications" class="content-section">
+    <div class="section-header mb-4">
+        <h2>Sample Expiration Notifications</h2>
+        <div class="section-actions">
+            <button class="btn btn-outline-secondary" onclick="refreshNotifications()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <button class="btn btn-outline-primary" onclick="markAllAsRead()">
+                <i class="fas fa-check-double"></i> Mark All Read
+            </button>
+        </div>
+    </div>
+
+    <!-- Notification Summary Cards -->
+    <div class="row mb-4" id="notificationSummary">
+        <div class="col-md-4 mb-3">
+            <div class="card border-danger">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-exclamation-triangle text-danger fa-2x me-3"></i>
+                        <div>
+                            <h5 class="card-title text-danger mb-0">Expired Samples</h5>
+                            <h3 class="mb-0" id="expiredCount">-</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card border-warning">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-clock text-warning fa-2x me-3"></i>
+                        <div>
+                            <h5 class="card-title text-warning mb-0">Expiring Soon</h5>
+                            <h3 class="mb-0" id="expiringSoonCount">-</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card border-info">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-bell text-info fa-2x me-3"></i>
+                        <div>
+                            <h5 class="card-title text-info mb-0">Total Unread</h5>
+                            <h3 class="mb-0" id="totalUnreadCount">-</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Controls -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label for="notificationFilter" class="form-label">Filter by Type:</label>
+                    <select class="form-select" id="notificationFilter" onchange="filterNotifications()">
+                        <option value="all">All Notifications</option>
+                        <option value="EXPIRED">Expired Only</option>
+                        <option value="EXPIRING_SOON">Expiring Soon Only</option>
+                        <option value="unread">Unread Only</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="searchInput" class="form-label">Search:</label>
+                    <input type="text" class="form-control" id="searchInput" placeholder="Search descriptions, part numbers..." onkeyup="filterNotifications()">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button class="btn btn-outline-primary" onclick="showExpiredSamples()">
+                        <i class="fas fa-list"></i> View All Expired Samples
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notifications List -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Recent Notifications</h5>
+        </div>
+        <div class="card-body">
+            <div id="notificationsList">
+                <div class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading notifications...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Extend Expiry Modal -->
+<div class="modal fade" id="extendExpiryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Extend Sample Expiry</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="extendExpiryForm">
+                    <input type="hidden" id="extendSampleId">
+                    
+                    <div class="mb-3">
+                        <label for="sampleInfo" class="form-label">Sample:</label>
+                        <div id="sampleInfo" class="form-control-plaintext"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="currentExpireDate" class="form-label">Current Expire Date:</label>
+                        <div id="currentExpireDate" class="form-control-plaintext text-danger"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="newExpireDate" class="form-label">New Expire Date:</label>
+                        <input type="date" class="form-control" id="newExpireDate" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="extendNote" class="form-label">Note (optional):</label>
+                        <textarea class="form-control" id="extendNote" rows="3" placeholder="Reason for extending expiry date..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitExtendExpiry()">Extend Expiry</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Expired Samples Modal -->
+<div class="modal fade" id="expiredSamplesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">All Expired Samples</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="expiredSamplesList">
+                    <div class="text-center py-4">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allNotifications = [];
+let notificationSummary = {};
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadNotificationSummary();
+    loadNotifications();
+    
+    // Set default date for extend expiry modal
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    document.getElementById('newExpireDate').min = tomorrow.toISOString().split('T')[0];
+});
+
+function loadNotificationSummary() {
+    fetch('/api/notifications/expiration/summary')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                notificationSummary = data.summary;
+                updateSummaryCards();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading notification summary:', error);
+        });
+}
+
+function updateSummaryCards() {
+    document.getElementById('expiredCount').textContent = notificationSummary.EXPIRED || 0;
+    document.getElementById('expiringSoonCount').textContent = notificationSummary.EXPIRING_SOON || 0;
+    document.getElementById('totalUnreadCount').textContent = notificationSummary.total || 0;
+}
+
+function loadNotifications() {
+    const includeRead = document.getElementById('notificationFilter').value !== 'unread';
+    
+    fetch(`/api/notifications/expiration?include_read=${includeRead}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                allNotifications = data.notifications;
+                renderNotifications();
+            } else {
+                showError('Failed to load notifications: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading notifications:', error);
+            showError('Error loading notifications');
+        });
+}
+
+function renderNotifications() {
+    const container = document.getElementById('notificationsList');
+    
+    if (allNotifications.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                <p class="text-muted">No notifications found</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    allNotifications.forEach(notification => {
+        const isExpired = notification.type === 'EXPIRED';
+        const badgeClass = isExpired ? 'bg-danger' : 'bg-warning';
+        const iconClass = isExpired ? 'fas fa-exclamation-triangle' : 'fas fa-clock';
+        const readClass = notification.is_read ? 'opacity-75' : '';
+        
+        html += `
+            <div class="notification-item border-bottom py-3 ${readClass}" data-notification-id="${notification.notification_id}" data-type="${notification.type}" data-read="${notification.is_read}">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="badge ${badgeClass} me-2">
+                                <i class="${iconClass}"></i> ${isExpired ? 'EXPIRED' : 'EXPIRING SOON'}
+                            </span>
+                            ${!notification.is_read ? '<span class="badge bg-primary">NEW</span>' : ''}
+                        </div>
+                        
+                        <h6 class="mb-1">${notification.sample_description}</h6>
+                        <p class="text-muted mb-1">
+                            Part Number: ${notification.part_number || 'N/A'} | 
+                            Location: ${notification.location || 'Unknown'}
+                        </p>
+                        
+                        <small class="text-muted">
+                            Expire Date: ${formatDate(notification.expire_date)} 
+                            ${isExpired ? `(${notification.days_difference} days overdue)` : `(${notification.days_difference} days remaining)`}
+                        </small>
+                        
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                Notification: ${formatDateTime(notification.date)}
+                                ${notification.is_read ? ` | Read: ${formatDateTime(notification.read_date)}` : ''}
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="notification-actions">
+                        ${!notification.is_read ? `
+                            <button class="btn btn-sm btn-outline-primary me-1" onclick="markAsRead(${notification.notification_id})">
+                                <i class="fas fa-check"></i> Mark Read
+                            </button>
+                        ` : ''}
+                        
+                        <button class="btn btn-sm btn-outline-success" onclick="extendExpiry(${notification.sample_id}, '${notification.sample_description}', '${notification.expire_date}')">
+                            <i class="fas fa-calendar-plus"></i> Extend
+                        </button>
+                        
+                        <button class="btn btn-sm btn-outline-info" onclick="viewSampleDetails(${notification.sample_id})">
+                            <i class="fas fa-eye"></i> Details
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+function filterNotifications() {
+    const filterType = document.getElementById('notificationFilter').value;
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    
+    const items = document.querySelectorAll('.notification-item');
+    items.forEach(item => {
+        const type = item.dataset.type;
+        const isRead = item.dataset.read === 'true';
+        const text = item.textContent.toLowerCase();
+        
+        let showItem = true;
+        
+        // Filter by type
+        if (filterType === 'EXPIRED' && type !== 'EXPIRED') showItem = false;
+        if (filterType === 'EXPIRING_SOON' && type !== 'EXPIRING_SOON') showItem = false;
+        if (filterType === 'unread' && isRead) showItem = false;
+        
+        // Filter by search term
+        if (searchTerm && !text.includes(searchTerm)) showItem = false;
+        
+        item.style.display = showItem ? 'block' : 'none';
+    });
+}
+
+function markAsRead(notificationId) {
+    fetch(`/api/notifications/expiration/${notificationId}/read`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            refreshNotifications();
+        } else {
+            showError('Failed to mark notification as read');
+        }
+    })
+    .catch(error => {
+        console.error('Error marking notification as read:', error);
+        showError('Error marking notification as read');
+    });
+}
+
+function markAllAsRead() {
+    if (!confirm('Mark all notifications as read?')) return;
+    
+    fetch('/api/notifications/expiration/read-all', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            refreshNotifications();
+            showSuccess('All notifications marked as read');
+        } else {
+            showError('Failed to mark all notifications as read');
+        }
+    })
+    .catch(error => {
+        console.error('Error marking all notifications as read:', error);
+        showError('Error marking all notifications as read');
+    });
+}
+
+function extendExpiry(sampleId, description, currentExpireDate) {
+    document.getElementById('extendSampleId').value = sampleId;
+    document.getElementById('sampleInfo').textContent = description;
+    document.getElementById('currentExpireDate').textContent = formatDate(currentExpireDate);
+    
+    // Set minimum date to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    document.getElementById('newExpireDate').min = tomorrow.toISOString().split('T')[0];
+    
+    // Set default to 2 months from now
+    const twoMonthsFromNow = new Date();
+    twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+    document.getElementById('newExpireDate').value = twoMonthsFromNow.toISOString().split('T')[0];
+    
+    const modal = new bootstrap.Modal(document.getElementById('extendExpiryModal'));
+    modal.show();
+}
+
+function submitExtendExpiry() {
+    const sampleId = document.getElementById('extendSampleId').value;
+    const newExpireDate = document.getElementById('newExpireDate').value;
+    const note = document.getElementById('extendNote').value;
+    
+    if (!newExpireDate) {
+        showError('Please select a new expire date');
+        return;
+    }
+    
+    fetch(`/api/samples/${sampleId}/extend-expiry`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            new_expire_date: newExpireDate,
+            note: note
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showSuccess(data.message);
+            const modal = bootstrap.Modal.getInstance(document.getElementById('extendExpiryModal'));
+            modal.hide();
+            refreshNotifications();
+        } else {
+            showError('Failed to extend expiry: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error extending expiry:', error);
+        showError('Error extending expiry');
+    });
+}
+
+function showExpiredSamples() {
+    const modal = new bootstrap.Modal(document.getElementById('expiredSamplesModal'));
+    modal.show();
+    
+    fetch('/api/samples/expired')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                renderExpiredSamples(data.expired_samples);
+            } else {
+                document.getElementById('expiredSamplesList').innerHTML = 
+                    '<div class="alert alert-danger">Failed to load expired samples</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading expired samples:', error);
+            document.getElementById('expiredSamplesList').innerHTML = 
+                '<div class="alert alert-danger">Error loading expired samples</div>';
+        });
+}
+
+function renderExpiredSamples(samples) {
+    const container = document.getElementById('expiredSamplesList');
+    
+    if (samples.length === 0) {
+        container.innerHTML = '<div class="alert alert-success">No expired samples found!</div>';
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Sample</th>
+                        <th>Part Number</th>
+                        <th>Location</th>
+                        <th>Expire Date</th>
+                        <th>Days Overdue</th>
+                        <th>Registered By</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    samples.forEach(sample => {
+        html += `
+            <tr>
+                <td>${sample.description}</td>
+                <td>${sample.part_number || 'N/A'}</td>
+                <td>${sample.location || 'Unknown'}</td>
+                <td class="text-danger">${formatDate(sample.expire_date)}</td>
+                <td class="text-danger">${sample.days_overdue} days</td>
+                <td>${sample.registered_by || 'Unknown'}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-success" onclick="extendExpiry(${sample.sample_id}, '${sample.description}', '${sample.expire_date}')">
+                        <i class="fas fa-calendar-plus"></i> Extend
+                    </button>
+                    <button class="btn btn-sm btn-outline-info" onclick="viewSampleDetails(${sample.sample_id})">
+                        <i class="fas fa-eye"></i> Details
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function viewSampleDetails(sampleId) {
+    // This should integrate with existing sample details functionality
+    if (typeof loadSampleDetails === 'function') {
+        loadSampleDetails(sampleId);
+        const modal = new bootstrap.Modal(document.getElementById('sampleDetailsModal'));
+        modal.show();
+    } else {
+        alert(`View sample details for Sample ID: ${sampleId}\n\nThis would open the sample details modal.`);
+    }
+}
+
+function refreshNotifications() {
+    loadNotificationSummary();
+    loadNotifications();
+}
+
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString();
+}
+
+function formatDateTime(dateString) {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleString();
+}
+
+function showSuccess(message) {
+    // Create and show success toast
+    const toast = document.createElement('div');
+    toast.className = 'toast align-items-center text-white bg-success border-0 position-fixed top-0 end-0 m-3';
+    toast.style.zIndex = '1055';
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    document.body.appendChild(toast);
+    
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    setTimeout(() => {
+        if (document.body.contains(toast)) {
+            document.body.removeChild(toast);
+        }
+    }, 5000);
+}
+
+function showError(message) {
+    // Create and show error toast
+    const toast = document.createElement('div');
+    toast.className = 'toast align-items-center text-white bg-danger border-0 position-fixed top-0 end-0 m-3';
+    toast.style.zIndex = '1055';
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    document.body.appendChild(toast);
+    
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    setTimeout(() => {
+        if (document.body.contains(toast)) {
+            document.body.removeChild(toast);
+        }
+    }, 5000);
+}
+</script>
+
+<style>
+.notification-item {
+    transition: opacity 0.3s ease;
+}
+
+.notification-item.opacity-75 {
+    opacity: 0.75;
+}
+
+.notification-actions {
+    white-space: nowrap;
+}
+
+.notification-actions .btn {
+    margin-left: 0.25rem;
+}
+
+@media (max-width: 768px) {
+    .notification-actions {
+        margin-top: 0.5rem;
+        white-space: normal;
+    }
+    
+    .notification-actions .btn {
+        margin-bottom: 0.25rem;
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}
