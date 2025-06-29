@@ -108,16 +108,102 @@ def init_sample(blueprint, mysql):
             cursor = mysql.connection.cursor()
             
             # Get dropdown options for filters
-            cursor.execute("SELECT LocationID, LocationName FROM StorageLocation ORDER BY LocationName")
+            cursor.execute("SELECT LocationID, LocationName FROM storagelocation ORDER BY LocationName")
             locations = [dict(LocationID=row[0], LocationName=row[1]) for row in cursor.fetchall()]
             
-            cursor.execute("SELECT DISTINCT Status FROM Sample")
+            cursor.execute("SELECT DISTINCT Status FROM sample")
             statuses = [row[0] for row in cursor.fetchall()]
             
-            # First we try to fetch data from the database
+            # Build WHERE conditions for filtering
+            where_conditions = []
+            query_params = []
+            
+            # Add search filter
+            if search:
+                # Search in description, part number, and SampleID (both formats)
+                where_conditions.append("""
+                    (s.Description LIKE %s 
+                     OR s.PartNumber LIKE %s 
+                     OR CONCAT('SMP-', s.SampleID) LIKE %s
+                     OR s.SampleID LIKE %s)
+                """)
+                search_term = f"%{search}%"
+                query_params.extend([search_term, search_term, search_term, search_term])
+            
+            # Add location filter
+            if location:
+                where_conditions.append("ss.LocationID = %s")
+                query_params.append(location)
+            
+            # Add status filter
+            if status:
+                where_conditions.append("s.Status = %s")
+                query_params.append(status)
+            
+            # Add date range filters
+            if date_from:
+                where_conditions.append("DATE(r.ReceivedDate) >= %s")
+                query_params.append(date_from)
+            
+            if date_to:
+                where_conditions.append("DATE(r.ReceivedDate) <= %s")
+                query_params.append(date_to)
+            
+            # Build WHERE clause
+            where_clause = ""
+            if where_conditions:
+                where_clause = "WHERE " + " AND ".join(where_conditions)
+            
+            # First we try to fetch data from the database with filtering
             try:
-                # Get all samples including disposed samples
-                query = """
+                # Test basic query first
+                test_query = "SELECT COUNT(*) FROM sample"
+                cursor.execute(test_query)
+                total_samples_in_db = cursor.fetchone()[0]
+                print(f"Total samples in database: {total_samples_in_db}")
+                # Count total filtered samples
+                count_query = f"""
+                SELECT COUNT(*) 
+                FROM sample s
+                JOIN reception r ON s.ReceptionID = r.ReceptionID
+                LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+                LEFT JOIN unit u ON s.UnitID = u.UnitID
+                {where_clause}
+                """
+                
+                print(f"Count query: {count_query}")
+                print(f"Query params: {query_params}")
+                cursor.execute(count_query, query_params)
+                total_filtered_samples = cursor.fetchone()[0]
+                print(f"Total filtered samples: {total_filtered_samples}")
+                
+                # Get pagination parameters (only apply to filtered results)
+                page = int(request.args.get('page', 1))
+                per_page = 20  # Show 20 samples per page
+                offset = (page - 1) * per_page
+                
+                # Build ORDER BY clause
+                order_by_clause = "ORDER BY "
+                if sort_by == 'sample_id':
+                    order_by_clause += f"s.SampleID {sort_order}"
+                elif sort_by == 'part_number':
+                    order_by_clause += f"s.PartNumber {sort_order}"
+                elif sort_by == 'description':
+                    order_by_clause += f"s.Description {sort_order}"
+                elif sort_by in ['registered_date', 'reception_date']:
+                    order_by_clause += f"r.ReceivedDate {sort_order}"
+                elif sort_by == 'amount':
+                    order_by_clause += f"AmountRemaining {sort_order}"
+                elif sort_by == 'location':
+                    order_by_clause += f"sl.LocationName {sort_order}"
+                elif sort_by == 'status':
+                    order_by_clause += f"s.Status {sort_order}"
+                else:
+                    order_by_clause += f"s.SampleID {sort_order}"  # Default sort
+                
+                # Get filtered and paginated samples
+                query = f"""
                 SELECT 
                     s.SampleID, 
                     s.PartNumber, 
@@ -132,122 +218,54 @@ def init_sample(blueprint, mysql):
                         ELSE u.UnitName
                     END as Unit,
                     IFNULL(sl.LocationName, 'Disposed') as LocationName, 
-                    DATE_FORMAT(r.ReceivedDate, '%d-%m-%Y %H:%i') AS Registered,
+                    DATE_FORMAT(r.ReceivedDate, '%%d-%%m-%%Y %%H:%%i') AS Registered,
                     s.Status 
-                FROM Sample s
-                JOIN Reception r ON s.ReceptionID = r.ReceptionID
-                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
-                LEFT JOIN Unit u ON s.UnitID = u.UnitID
+                FROM sample s
+                JOIN reception r ON s.ReceptionID = r.ReceptionID
+                LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+                LEFT JOIN unit u ON s.UnitID = u.UnitID
+                {where_clause}
+                {order_by_clause}
+                LIMIT {int(per_page)} OFFSET {int(offset)}
                 """
                 
-                cursor.execute(query)
+                print(f"Main query: {query}")
+                print(f"Query params: {query_params}")
+                cursor.execute(query, query_params)
                 db_results = cursor.fetchall()
-                print(f"Found {len(db_results)} samples from database")
-                
-                # Debug: Print sample details
+                print(f"Found {len(db_results)} filtered samples from database")
                 if db_results:
-                    print(f"Sample data: {db_results[:3]}")  # Show first 3 samples
+                    print(f"First sample: {db_results[0]}")
                 
-                # If there are results, replace our hardcoded data
-                if db_results and len(db_results) > 0:
-                    # Replace our hardcoded data with database data
-                    samples_for_template = []
-                    
-                    for row in db_results:
-                        sample = {
-                            "ID": f"SMP-{row[0]}",
-                            "PartNumber": row[1] or "",
-                            "Description": row[2] or "",
-                            "Amount": f"{row[3]} {row[4]}",
-                            "Location": row[5] or "",
-                            "Registered": row[6] or "",
-                            "Status": row[7] or ""
-                        }
-                        samples_for_template.append(sample)
-                    
-                    print("Using real database data")
-                else:
-                    print("No samples found in database")
-                    # No hardcoded data anymore, just empty array
+                # Convert database results to template format
+                samples_for_template = []
+                
+                for row in db_results:
+                    sample = {
+                        "ID": f"SMP-{row[0]}",
+                        "PartNumber": row[1] or "",
+                        "Description": row[2] or "",
+                        "Amount": f"{row[3]} {row[4]}",
+                        "Location": row[5] or "",
+                        "Registered": row[6] or "",
+                        "Status": row[7] or ""
+                    }
+                    samples_for_template.append(sample)
+                
+                print(f"Using filtered database data - {total_filtered_samples} total matches")
+                
             except Exception as e:
                 print(f"Error fetching database data: {e}")
                 import traceback
                 traceback.print_exc()
-                
-            # Apply search filter
-            if search:
-                filtered_samples = []
-                for sample in samples_for_template:
-                    if (search.lower() in sample['Description'].lower() or
-                        search.lower() in sample['PartNumber'].lower() or
-                        search.lower() in sample['Location'].lower()):
-                        filtered_samples.append(sample)
-                samples_for_template = filtered_samples
-                
-            # Apply location filter
-            if location:
-                filtered_samples = []
-                for sample in samples_for_template:
-                    for loc in locations:
-                        if loc['LocationID'] == int(location) and loc['LocationName'] == sample['Location']:
-                            filtered_samples.append(sample)
-                samples_for_template = filtered_samples
-                
-            # Apply status filter
-            if status:
-                filtered_samples = []
-                for sample in samples_for_template:
-                    if sample['Status'] == status:
-                        filtered_samples.append(sample)
-                samples_for_template = filtered_samples
+                total_filtered_samples = 0
+                samples_for_template = []
             
-            # Apply date range filter
-            if date_from or date_to:
-                filtered_samples = []
-                for sample in samples_for_template:
-                    # Get registered date (first 10 chars for date only)
-                    sample_date = sample.get('Registered', '')[:10] if sample.get('Registered') else ''
-                    
-                    if date_from and date_to:
-                        if date_from <= sample_date <= date_to:
-                            filtered_samples.append(sample)
-                    elif date_from:
-                        if sample_date >= date_from:
-                            filtered_samples.append(sample)
-                    elif date_to:
-                        if sample_date <= date_to:
-                            filtered_samples.append(sample)
-                            
-                samples_for_template = filtered_samples
-            
-            # Apply sorting
-            if sort_by == 'sample_id':
-                samples_for_template.sort(key=lambda x: int(x['ID'].replace('SMP-', '')), 
-                                         reverse=(sort_order == 'DESC'))
-            elif sort_by == 'part_number':
-                samples_for_template.sort(key=lambda x: x['PartNumber'].lower(),
-                                         reverse=(sort_order == 'DESC'))
-            elif sort_by == 'description':
-                samples_for_template.sort(key=lambda x: x['Description'].lower(),
-                                         reverse=(sort_order == 'DESC'))
-            elif sort_by == 'registered_date':
-                samples_for_template.sort(key=lambda x: x['Registered'],
-                                         reverse=(sort_order == 'DESC'))
-            # Keep backward compatibility with reception_date sorting
-            elif sort_by == 'reception_date':
-                samples_for_template.sort(key=lambda x: x['Registered'],
-                                         reverse=(sort_order == 'DESC'))
-            elif sort_by == 'amount':
-                # Extract the number from "X pcs"
-                samples_for_template.sort(key=lambda x: float(x['Amount'].split()[0]),
-                                         reverse=(sort_order == 'DESC'))
-            elif sort_by == 'location':
-                samples_for_template.sort(key=lambda x: x['Location'].lower(),
-                                         reverse=(sort_order == 'DESC'))
-            elif sort_by == 'status':
-                samples_for_template.sort(key=lambda x: x['Status'].lower(),
-                                         reverse=(sort_order == 'DESC'))
+            # Calculate pagination info based on filtered results
+            total_pages = (total_filtered_samples + per_page - 1) // per_page if total_filtered_samples > 0 else 1
+            has_prev = page > 1
+            has_next = page < total_pages
             
             cursor.close()
             
@@ -258,128 +276,32 @@ def init_sample(blueprint, mysql):
                                  current_search=search,
                                  current_sort_by=sort_by,
                                  current_sort_order=sort_order,
-                                 filter_criteria=filter_criteria)
-            
-            # Get dropdown options
-            cursor = mysql.connection.cursor()
-            cursor.execute("SELECT LocationID, LocationName FROM StorageLocation ORDER BY LocationName")
-            locations = [dict(LocationID=row[0], LocationName=row[1]) for row in cursor.fetchall()]
-            
-            cursor.execute("SELECT DISTINCT Status FROM Sample")
-            statuses = [row[0] for row in cursor.fetchall()]
-            cursor.close()
-            
-            # Get filter parameters
-            filter_criteria = {}
-            search = request.args.get('search', '')
-            location = request.args.get('location', '')
-            status = request.args.get('status', '')
-            date_from = request.args.get('date_from', '')
-            date_to = request.args.get('date_to', '')
-            
-            # Tracking which filters are active
-            if search:
-                filter_criteria['search'] = search
-            if location:
-                filter_criteria['location'] = location
-            if status:
-                filter_criteria['status'] = status
-            if date_from:
-                filter_criteria['date_from'] = date_from
-            if date_to:
-                filter_criteria['date_to'] = date_to
-            
-            # Get sort parameters
-            sort_by = request.args.get('sort_by', 'sample_id')
-            sort_order = request.args.get('sort_order', 'DESC')
-            
-            # Apply search filter
-            if search:
-                filtered_samples = []
-                for sample in samples_for_template:
-                    if (search.lower() in sample['Description'].lower() or
-                        search.lower() in sample['PartNumber'].lower() or
-                        search.lower() in sample['Location'].lower()):
-                        filtered_samples.append(sample)
-                samples_for_template = filtered_samples
-                
-            # Apply location filter
-            if location:
-                filtered_samples = []
-                for sample in samples_for_template:
-                    for loc in locations:
-                        if loc['LocationID'] == int(location) and loc['LocationName'] == sample['Location']:
-                            filtered_samples.append(sample)
-                samples_for_template = filtered_samples
-                
-            # Apply status filter
-            if status:
-                filtered_samples = []
-                for sample in samples_for_template:
-                    if sample['Status'] == status:
-                        filtered_samples.append(sample)
-                samples_for_template = filtered_samples
-            
-            # Apply date range filter
-            if date_from or date_to:
-                filtered_samples = []
-                for sample in samples_for_template:
-                    # Get registered date (first 10 chars for date only)
-                    sample_date = sample.get('Registered', '')[:10] if sample.get('Registered') else ''
-                    
-                    if date_from and date_to:
-                        if date_from <= sample_date <= date_to:
-                            filtered_samples.append(sample)
-                    elif date_from:
-                        if sample_date >= date_from:
-                            filtered_samples.append(sample)
-                    elif date_to:
-                        if sample_date <= date_to:
-                            filtered_samples.append(sample)
-                            
-                samples_for_template = filtered_samples
-            
-            # Apply sorting
-            if sort_by == 'sample_id':
-                samples_for_template.sort(key=lambda x: int(x['ID'].replace('SMP-', '')), 
-                                         reverse=(sort_order == 'DESC'))
-            elif sort_by == 'part_number':
-                samples_for_template.sort(key=lambda x: x['PartNumber'].lower(),
-                                         reverse=(sort_order == 'DESC'))
-            elif sort_by == 'description':
-                samples_for_template.sort(key=lambda x: x['Description'].lower(),
-                                         reverse=(sort_order == 'DESC'))
-            elif sort_by == 'registered_date':
-                samples_for_template.sort(key=lambda x: x['Registered'],
-                                         reverse=(sort_order == 'DESC'))
-            # Keep backward compatibility with reception_date sorting
-            elif sort_by == 'reception_date':
-                samples_for_template.sort(key=lambda x: x['Registered'],
-                                         reverse=(sort_order == 'DESC'))
-            elif sort_by == 'amount':
-                # Extract the number from "X pcs"
-                samples_for_template.sort(key=lambda x: float(x['Amount'].split()[0]),
-                                         reverse=(sort_order == 'DESC'))
-            elif sort_by == 'location':
-                samples_for_template.sort(key=lambda x: x['Location'].lower(),
-                                         reverse=(sort_order == 'DESC'))
-            elif sort_by == 'status':
-                samples_for_template.sort(key=lambda x: x['Status'].lower(),
-                                         reverse=(sort_order == 'DESC'))
-                
-            return render_template('sections/storage.html',
-                                 samples=samples_for_template,
-                                 locations=locations,
-                                 statuses=statuses,
-                                 current_search=search,
-                                 current_sort_by=sort_by,
-                                 current_sort_order=sort_order,
-                                 filter_criteria=filter_criteria)
+                                 filter_criteria=filter_criteria,
+                                 page=page,
+                                 total_pages=total_pages,
+                                 total_samples=total_filtered_samples,
+                                 has_prev=has_prev,
+                                 has_next=has_next,
+                                 per_page=per_page)
         except Exception as e:
             print(f"Error loading storage: {e}")
             import traceback
             traceback.print_exc()
-            return render_template('sections/storage.html', error=f"Error loading storage: {e}")
+            return render_template('sections/storage.html', 
+                                 error=f"Error loading storage: {e}",
+                                 samples=[],
+                                 locations=[],
+                                 statuses=[],
+                                 current_search="",
+                                 current_sort_by="sample_id",
+                                 current_sort_order="DESC",
+                                 filter_criteria={},
+                                 page=1,
+                                 total_pages=1,
+                                 total_samples=0,
+                                 has_prev=False,
+                                 has_next=False,
+                                 per_page=20)
     
     @blueprint.route('/api/samples', methods=['POST'])
     def create_sample():
@@ -1894,7 +1816,7 @@ def init_sample(blueprint, mysql):
             cursor = mysql.connection.cursor()
             
             # Get users for disposal selector
-            cursor.execute("SELECT UserID, Name FROM User")
+            cursor.execute("SELECT UserID, Name FROM user")
             users = [dict(UserID=row[0], Name=row[1]) for row in cursor.fetchall()]
             
             # Get recent disposals for display
@@ -1905,8 +1827,8 @@ def init_sample(blueprint, mysql):
                     CONCAT('SMP-', h.SampleID) as SampleID,
                     h.Notes as DisposalNotes,
                     u.Name as DisposedBy
-                FROM History h
-                JOIN User u ON h.UserID = u.UserID
+                FROM history h
+                JOIN user u ON h.UserID = u.UserID
                 WHERE h.ActionType = 'Disposed'
                 ORDER BY h.Timestamp DESC
                 LIMIT 10

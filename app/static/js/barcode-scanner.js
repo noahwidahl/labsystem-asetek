@@ -678,7 +678,10 @@ class BarcodeScanner {
             return;
         }
         
-        historyTable.innerHTML = filteredHistory.map(item => {
+        // Limit to last 5 scans
+        const limitedHistory = filteredHistory.slice(0, 5);
+        
+        historyTable.innerHTML = limitedHistory.map(item => {
             const time = new Date(item.timestamp).toLocaleTimeString();
             const statusBadge = item.success ? 
                 '<span class="badge bg-success">Found</span>' : 

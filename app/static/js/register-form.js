@@ -114,6 +114,32 @@ function showStep(step) {
     // Ensure step is a valid integer
     step = parseInt(step) || 1;
     
+    // AGGRESSIVELY hide navigation on step 5
+    if (step === 5) {
+        // Hide entire navigation section on step 5
+        const formNavigation = document.querySelector('.form-navigation');
+        if (formNavigation) {
+            formNavigation.style.display = 'none';
+            console.log('FORCIBLY hiding entire form navigation on step 5');
+        }
+        
+        // Also hide any buttons by ID
+        ['nextButton', 'prevButton', 'fixedNextButton', 'fixedPrevButton'].forEach(buttonId => {
+            const button = document.getElementById(buttonId);
+            if (button) {
+                button.style.display = 'none';
+                button.style.visibility = 'hidden';
+                console.log(`FORCIBLY hiding button: ${buttonId}`);
+            }
+        });
+    } else {
+        // Show navigation on other steps
+        const formNavigation = document.querySelector('.form-navigation');
+        if (formNavigation) {
+            formNavigation.style.display = 'block';
+        }
+    }
+    
     // STRONGEST PROTECTION: If user has already visited step 2 and page tries to go back to step 1,
     // force the flow to step 2 instead
     if (step === 1 && sessionStorage.getItem('hasVisitedStep2') && registerApp.currentStep !== 1) {
