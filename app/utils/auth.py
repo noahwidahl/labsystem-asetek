@@ -1,45 +1,100 @@
 import os
+import subprocess
+import platform
+
+def get_windows_username():
+    """
+    Get the full Windows username including domain.
+    Returns format like DOMAIN\\username or username@domain.com
+    """
+    try:
+        if platform.system() == 'Windows':
+            # Try to get domain\username format
+            userdomain = os.environ.get('USERDOMAIN', '')
+            username = os.environ.get('USERNAME', '')
+            
+            if userdomain and username:
+                # Return in DOMAIN\username format
+                windows_login = f"{userdomain}\\{username}"
+                print(f"DEBUG: Windows login detected: {windows_login}")
+                return windows_login
+            elif username:
+                return username
+        else:
+            # For non-Windows systems, just get the username
+            return os.environ.get('USER', '')
+    except Exception as e:
+        print(f"Error getting Windows username: {e}")
+        return os.environ.get('USERNAME', os.environ.get('USER', ''))
 
 def get_current_user(mysql=None):
     """
-    Gets the current user from the database.
-    In a real application, this would get the user from the session.
-    
-    For now, we try to get the Windows username and check if it's in the database.
+    Gets the current user from the database based on Windows authentication.
+    Automatically creates users if they don't exist.
     """
     # Default admin user as fallback
-    default_user = {"UserID": 1, "Name": "System Admin", "IsAdmin": True}
+    default_user = {"UserID": 1, "Name": "System Admin", "WindowsLogin": "SYSTEM", "Role": "Admin"}
     
     if not mysql:
         return default_user
     
     try:
-        # Try to get Windows username (or other environment username)
-        username = os.environ.get('USERNAME') or os.environ.get('USER')
+        # Get Windows username with domain
+        windows_login = get_windows_username()
+        
+        if not windows_login:
+            print("DEBUG: No Windows login found, using default admin")
+            return default_user
         
         cursor = mysql.connection.cursor()
         
-        if username:
-            # First try to find the actual username in database (using lowercase table name)
-            cursor.execute("SELECT UserID, Name FROM user WHERE Name = %s LIMIT 1", (username,))
-            user = cursor.fetchone()
-            
-            # If found, return that user (assume admin for now since IsAdmin column doesn't exist)
-            if user:
-                cursor.close()
-                return {"UserID": user[0], "Name": user[1], "IsAdmin": True}
-        
-        # Otherwise, fall back to first user (assume admin)
-        cursor.execute("SELECT UserID, Name FROM user LIMIT 1")
+        # First try to find user by WindowsLogin
+        cursor.execute("SELECT UserID, Name, WindowsLogin, Role FROM user WHERE WindowsLogin = %s LIMIT 1", (windows_login,))
         user = cursor.fetchone()
-        cursor.close()
         
         if user:
-            return {"UserID": user[0], "Name": user[1], "IsAdmin": True}
-        else:
-            return default_user
+            # User exists, return their info
+            cursor.close()
+            print(f"DEBUG: Found existing user: {user[1]} ({user[2]})")
+            return {
+                "UserID": user[0], 
+                "Name": user[1], 
+                "WindowsLogin": user[2],
+                "Role": user[3] or "Admin",
+                "IsAdmin": True  # All users are admin for now
+            }
+        
+        # User doesn't exist, let's create them
+        print(f"DEBUG: Creating new user for Windows login: {windows_login}")
+        
+        # Extract just the username part for display name
+        display_name = windows_login.split('\\')[-1].split('@')[0]
+        
+        # Insert new user (all users are admin by default)
+        cursor.execute("""
+            INSERT INTO user (Name, WindowsLogin, Role) 
+            VALUES (%s, %s, %s)
+        """, (display_name, windows_login, 'Admin'))
+        
+        user_id = cursor.lastrowid
+        mysql.connection.commit()
+        
+        print(f"DEBUG: Created new user with ID: {user_id}")
+        
+        cursor.close()
+        
+        return {
+            "UserID": user_id,
+            "Name": display_name,
+            "WindowsLogin": windows_login,
+            "Role": "Admin",
+            "IsAdmin": True
+        }
+        
     except Exception as e:
         print(f"Error in get_current_user: {e}")
+        import traceback
+        traceback.print_exc()
         return default_user
 
 def check_domain_access(domain=None):
