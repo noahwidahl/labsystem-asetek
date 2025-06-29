@@ -488,6 +488,148 @@ function skipSampleLocationPrint() {
 }
 
 // =============================================================================
+// TEST SAMPLE PRINT FUNCTIONS
+// =============================================================================
+
+/**
+ * Show print prompt for test sample labels (when samples are moved to tests)
+ */
+function showTestSamplePrintPrompt(testSampleData) {
+    console.log('🖨️ Test sample print prompt called with:', testSampleData);
+    
+    // Store test sample info for printing
+    globalCurrentPrintSample = {
+        id: testSampleData.SampleID,
+        data: testSampleData,
+        type: 'test_sample'
+    };
+    
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('testSamplePrintModal');
+    if (!modal) {
+        modal = createTestSamplePrintModal();
+        document.body.appendChild(modal);
+    }
+    
+    // Update modal content
+    document.getElementById('printTestSampleId').textContent = testSampleData.SampleIDFormatted || `SMP-${testSampleData.SampleID}`;
+    document.getElementById('printTestBarcode').textContent = testSampleData.TestBarcode;
+    document.getElementById('printTestName').textContent = testSampleData.TestName || 'Unknown Test';
+    document.getElementById('printTestIdentifier').textContent = testSampleData.SampleIdentifier;
+    
+    // Show modal
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+}
+
+function createTestSamplePrintModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.id = 'testSamplePrintModal';
+    modal.tabIndex = -1;
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Test Sample - Print Label?</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Sample has been added to test. Would you like to print a test sample label?</p>
+                    <div class="alert alert-info">
+                        <strong>Sample:</strong> <span id="printTestSampleId"></span><br>
+                        <strong>Test Barcode:</strong> <span id="printTestBarcode"></span><br>
+                        <strong>Test:</strong> <span id="printTestName"></span><br>
+                        <strong>Test ID:</strong> <span id="printTestIdentifier"></span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="skipTestSamplePrint()">
+                        <i class="fas fa-times me-1"></i>Skip
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="printTestSampleNow()">
+                        <i class="fas fa-print me-1"></i>Print Test Label
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    return modal;
+}
+
+async function printTestSampleNow() {
+    if (!globalCurrentPrintSample) return;
+    
+    try {
+        const testSampleData = globalCurrentPrintSample.data;
+        
+        const response = await fetch('/api/print/test-sample', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                SampleID: testSampleData.SampleID,
+                TestID: testSampleData.TestID,
+                TestBarcode: testSampleData.TestBarcode,
+                SampleIdentifier: testSampleData.SampleIdentifier,
+                PartNumber: testSampleData.PartNumber,
+                Description: testSampleData.Description,
+                TestName: testSampleData.TestName,
+                auto_print: true
+            })
+        });
+        
+        const result = await response.json();
+        
+        let status = 'failed';
+        if (result && result.status === 'success') {
+            status = 'printed';
+            showGlobalSuccessMessage('Test sample label printed successfully!');
+        } else if (result && result.status === 'warning') {
+            status = 'queued'; // Printer not available, but can retry later
+            showGlobalSuccessMessage('Test sample label queued for printing.');
+        } else {
+            status = 'queued'; // Failed but can retry
+            showGlobalSuccessMessage('Test sample label added to print queue.');
+        }
+        
+        // Add to print job queue
+        addTestSamplePrintJob(testSampleData, status);
+        
+        // Hide modal and close without reload (we're in scanner context)
+        bootstrap.Modal.getInstance(document.getElementById('testSamplePrintModal')).hide();
+        globalCurrentPrintSample = null;
+        
+    } catch (error) {
+        console.error('Test sample print error:', error);
+        
+        // Add to print job queue as failed/queued
+        const testSampleData = globalCurrentPrintSample.data;
+        addTestSamplePrintJob(testSampleData, 'queued');
+        
+        showGlobalSuccessMessage('Test sample label added to print queue due to printer issues.');
+        
+        // Hide modal
+        bootstrap.Modal.getInstance(document.getElementById('testSamplePrintModal')).hide();
+        globalCurrentPrintSample = null;
+    }
+}
+
+function skipTestSamplePrint() {
+    // Add to print job queue when skipping
+    if (globalCurrentPrintSample) {
+        const testSampleData = globalCurrentPrintSample.data;
+        addTestSamplePrintJob(testSampleData, 'queued');
+        showGlobalSuccessMessage('Test sample label added to print queue.');
+    }
+    
+    // Hide modal
+    bootstrap.Modal.getInstance(document.getElementById('testSamplePrintModal')).hide();
+    globalCurrentPrintSample = null;
+}
+
+// =============================================================================
 // PRINT QUEUE FUNCTIONS
 // =============================================================================
 
@@ -560,6 +702,41 @@ function addSamplePrintJob(sampleData, status) {
     }
 }
 
+/**
+ * Add test sample print job to queue
+ */
+function addTestSamplePrintJob(testSampleData, status) {
+    try {
+        let printJobs = JSON.parse(localStorage.getItem('printJobs') || '[]');
+        
+        const printJob = {
+            id: Date.now(),
+            timestamp: new Date().toISOString(),
+            sampleId: testSampleData.SampleID,
+            sampleIdFormatted: testSampleData.SampleIDFormatted || `SMP-${testSampleData.SampleID}`,
+            barcode: testSampleData.TestBarcode || `TST${testSampleData.SampleID}`,
+            description: `Test Sample: ${testSampleData.Description || ''} (${testSampleData.TestName || 'Test'})`,
+            type: 'test_sample',
+            testId: testSampleData.TestID,
+            testIdentifier: testSampleData.SampleIdentifier,
+            status: status // 'queued', 'printed', 'failed'
+        };
+        
+        printJobs.unshift(printJob); // Add to beginning
+        
+        // Keep only last 50 jobs
+        if (printJobs.length > 50) {
+            printJobs = printJobs.slice(0, 50);
+        }
+        
+        localStorage.setItem('printJobs', JSON.stringify(printJobs));
+        console.log('✅ Test sample print job added to queue:', printJob);
+        
+    } catch (error) {
+        console.error('❌ Error adding test sample print job to queue:', error);
+    }
+}
+
 // =============================================================================
 // UTILITY FUNCTIONS
 // =============================================================================
@@ -600,8 +777,10 @@ function showGlobalSuccessMessage(message) {
 window.showContainerPrintPrompt = showContainerPrintPrompt;
 window.showContainerUpdatePrintPrompt = showContainerUpdatePrintPrompt;
 window.showSampleLocationPrintPrompt = showSampleLocationPrintPrompt;
+window.showTestSamplePrintPrompt = showTestSamplePrintPrompt;
 window.addContainerPrintJob = addContainerPrintJob;
 window.addSamplePrintJob = addSamplePrintJob;
+window.addTestSamplePrintJob = addTestSamplePrintJob;
 window.showGlobalSuccessMessage = showGlobalSuccessMessage;
 
 // Print modal functions
@@ -611,5 +790,7 @@ window.skipContainerPrint = skipContainerPrint;
 window.skipContainerUpdatePrint = skipContainerUpdatePrint;
 window.printSampleLocationNow = printSampleLocationNow;
 window.skipSampleLocationPrint = skipSampleLocationPrint;
+window.printTestSampleNow = printTestSampleNow;
+window.skipTestSamplePrint = skipTestSamplePrint;
 
 console.log('🖨️ Global print functions loaded successfully!');

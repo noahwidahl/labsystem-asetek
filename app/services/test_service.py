@@ -196,9 +196,51 @@ class TestService:
                     available = cursor.fetchone()[0] or 0
                     
                     if available < amount:
+                        # Enhanced error message with debugging info
+                        cursor.execute("""
+                            SELECT 
+                                s.Status,
+                                s.Amount as OriginalAmount,
+                                COUNT(ss.StorageID) as StorageRecords,
+                                COALESCE(SUM(ss.AmountRemaining), 0) as TotalRemaining,
+                                COALESCE(SUM(CASE 
+                                    WHEN tsu.Status IN ('Allocated', 'Active') 
+                                    THEN tsu.AmountAllocated 
+                                    ELSE 0 
+                                END), 0) as AllocatedToTests
+                            FROM sample s
+                            LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+                            LEFT JOIN testsampleusage tsu ON s.SampleID = tsu.SampleID
+                            WHERE s.SampleID = %s
+                            GROUP BY s.SampleID, s.Status, s.Amount
+                        """, (sample_id,))
+                        
+                        debug_info = cursor.fetchone()
+                        
+                        detailed_error = f'Insufficient amount for sample {sample_id}. '
+                        detailed_error += f'Available: {available}, Requested: {amount}. '
+                        
+                        if debug_info:
+                            status, original_amount, storage_records, total_remaining, allocated_to_tests = debug_info
+                            detailed_error += f'Debug info - Status: {status}, '
+                            detailed_error += f'Original Amount: {original_amount}, '
+                            detailed_error += f'Storage Records: {storage_records}, '
+                            detailed_error += f'Total Remaining: {total_remaining}, '
+                            detailed_error += f'Allocated to Tests: {allocated_to_tests}'
+                            
+                            # Suggest specific solutions based on the debug info
+                            if status != 'In Storage':
+                                detailed_error += f'. ISSUE: Sample status is "{status}" instead of "In Storage"'
+                            if storage_records == 0:
+                                detailed_error += '. ISSUE: No storage records found for this sample'
+                            if total_remaining == 0 and original_amount > 0:
+                                detailed_error += '. ISSUE: Sample has 0 remaining amount but original amount was > 0'
+                            if allocated_to_tests > 0:
+                                detailed_error += f'. ISSUE: Sample has {allocated_to_tests} units allocated to other active tests'
+                        
                         return {
                             'success': False,
-                            'error': f'Insufficient amount for sample {sample_id}. Available: {available}, Requested: {amount}'
+                            'error': detailed_error
                         }
                     
                     # Add to test

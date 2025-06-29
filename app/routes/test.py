@@ -452,11 +452,69 @@ def init_test(blueprint, mysql):
             result = test_service.add_samples_to_test(test_id, sample_assignments, user_id)
             
             if result['success']:
-                return jsonify({
+                # Get additional data for test sample printing
+                added_sample = result.get('added_samples', [])[0] if result.get('added_samples') else None
+                
+                response_data = {
                     'success': True,
                     'message': f'Sample moved to test successfully',
                     'added_samples': result.get('added_samples', [])
-                })
+                }
+                
+                # Add test sample print data if sample was added
+                if added_sample:
+                    # Get sample and test details for printing
+                    cursor = mysql.connection.cursor()
+                    try:
+                        # Get sample details
+                        cursor.execute("""
+                            SELECT SampleID, Barcode, Description, PartNumber, Amount, UnitID
+                            FROM sample 
+                            WHERE SampleID = %s
+                        """, (sample_id,))
+                        sample_data = cursor.fetchone()
+                        
+                        # Get test details
+                        cursor.execute("""
+                            SELECT TestID, TestNo, TestName
+                            FROM test 
+                            WHERE TestID = %s
+                        """, (test_id,))
+                        test_data = cursor.fetchone()
+                        
+                        # Get unit name
+                        unit_name = 'pcs'
+                        if sample_data and sample_data[5]:
+                            cursor.execute("SELECT UnitName FROM unit WHERE UnitID = %s", (sample_data[5],))
+                            unit_result = cursor.fetchone()
+                            if unit_result:
+                                unit_name = unit_result[0]
+                        
+                        if sample_data and test_data:
+                            # Generate test sample barcode for printing
+                            from datetime import datetime
+                            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+                            test_barcode = f"TST{sample_data[0]}{test_data[0]}{timestamp[-4:]}"
+                            
+                            response_data['test_sample_data'] = {
+                                'SampleID': sample_data[0],
+                                'SampleIDFormatted': f'SMP-{sample_data[0]}',
+                                'Barcode': sample_data[1],
+                                'Description': sample_data[2],
+                                'PartNumber': sample_data[3],
+                                'Amount': amount,
+                                'UnitName': unit_name,
+                                'TestID': test_data[0],
+                                'TestNo': test_data[1],
+                                'TestName': test_data[2],
+                                'TestBarcode': test_barcode,
+                                'SampleIdentifier': added_sample['identifier'],
+                                'show_test_print_confirmation': True
+                            }
+                    finally:
+                        cursor.close()
+                
+                return jsonify(response_data)
             else:
                 return jsonify({
                     'success': False,
