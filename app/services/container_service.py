@@ -379,21 +379,31 @@ class ContainerService:
                         capacity = 100
                         print(f"DEBUG: Non-numeric capacity value, using standard default 100")
                     
+                    # Generate container ID first to create barcode
+                    cursor.execute(f"SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{table_name}'")
+                    auto_increment_result = cursor.fetchone()
+                    next_container_id = auto_increment_result[0] if auto_increment_result else 1
+                    
+                    # Generate CNT- barcode
+                    container_barcode = f"CNT-{next_container_id}"
+                    
                     query = f"""
                         INSERT INTO {table_name} (
+                            Barcode,
                             Description, 
                             ContainerTypeID,
                             IsMixed,
                             ContainerCapacity,
                             LocationID
                         )
-                        VALUES (%s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                     """
                     
                     # Handle isMixed parameter from container_data
                     is_mixed = container_data.get('isMixed', container.is_mixed)
                     
                     cursor.execute(query, (
+                        container_barcode,
                         container.description,
                         container.container_type_id,
                         1 if is_mixed else 0,
@@ -419,20 +429,30 @@ class ContainerService:
                         capacity = 100
                         print(f"DEBUG: Non-numeric capacity value, using standard default 100")
                     
+                    # Generate container ID first to create barcode
+                    cursor.execute(f"SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{table_name}'")
+                    auto_increment_result = cursor.fetchone()
+                    next_container_id = auto_increment_result[0] if auto_increment_result else 1
+                    
+                    # Generate CNT- barcode
+                    container_barcode = f"CNT-{next_container_id}"
+                    
                     query = f"""
                         INSERT INTO {table_name} (
+                            Barcode,
                             Description,
                             IsMixed,
                             ContainerCapacity,
                             LocationID
                         )
-                        VALUES (%s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s)
                     """
                     
                     # Handle isMixed parameter from container_data
                     is_mixed = container_data.get('isMixed', container.is_mixed)
                     
                     cursor.execute(query, (
+                        container_barcode,
                         container.description,
                         1 if is_mixed else 0,
                         capacity,

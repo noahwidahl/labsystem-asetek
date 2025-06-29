@@ -407,3 +407,54 @@ def init_test(blueprint, mysql):
                 'success': False,
                 'error': str(e)
             }), 500
+    
+    @blueprint.route('/api/samples/<int:sample_id>/move-to-test', methods=['POST'])
+    def move_sample_to_test(sample_id):
+        """
+        Move a sample from storage to a test.
+        Used by the barcode scanner functionality.
+        """
+        try:
+            data = request.json
+            test_id = data.get('test_id')
+            amount = data.get('amount', 1)
+            notes = data.get('notes', '')
+            
+            if not test_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'Test ID is required'
+                }), 400
+            
+            # Get current user
+            current_user = get_current_user()
+            user_id = current_user['UserID']
+            
+            # Prepare sample assignment
+            sample_assignments = [{
+                'sample_id': sample_id,
+                'amount': amount,
+                'notes': f'Moved via scanner. {notes}'.strip()
+            }]
+            
+            # Use the existing add_samples_to_test functionality
+            result = test_service.add_samples_to_test(test_id, sample_assignments, user_id)
+            
+            if result['success']:
+                return jsonify({
+                    'success': True,
+                    'message': f'Sample moved to test successfully',
+                    'added_samples': result.get('added_samples', [])
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result.get('error', 'Failed to move sample to test')
+                }), 500
+            
+        except Exception as e:
+            print(f"Error moving sample to test: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to move sample to test: {str(e)}'
+            }), 500

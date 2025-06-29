@@ -1,146 +1,118 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
-{% block title %}Scanner og Label Printing{% endblock %}
+{% block title %}Barcode Scanner - Laboratory System{% endblock %}
 
 {% block content %}
-<!--
-SCANNER CONFIGURATION REFERENCE:
-=================================
-
-Hardware: Zebra MC330M Scanner
-DataWedge Configuration:
-- Endpoint: http://SERVER_IP:5000/api/scanner/data  
-- Method: POST
-- Format: {"barcode": "%SCAN"}
-- Headers: Content-Type: application/json
-
-Printer: Brother QL-810W
-- API Endpoint: /api/print/label
-- Test Endpoint: /api/print/test
-- Supported formats: Sample labels, Container labels
-
-System API Endpoints:
-- Scanner data: POST /api/scanner/data
-- Scanner test: POST /api/scanner/test  
-- Print test: POST /api/print/test
-- Print label: POST /api/print/label
-- System info: GET /api/system/info
--->
-
-<div class="container-fluid mt-4">
+<div class="container-fluid px-4">
     <div class="row">
         <div class="col-12">
-            <h2>Scanner & Label Printing</h2>
-            <div class="alert alert-info" role="alert">
-                <i class="fas fa-info-circle"></i> 
-                Scan prøve stregkoder og udskriv labels. Systemet understøtter både manuel indtastning og direkte scanning.
-            </div>
-        </div>
-    </div>
-
-    <div class="row">
-        <!-- Scanner Panel -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-primary text-white">
-                    <h5><i class="fas fa-barcode"></i> Prøve Scanner</h5>
+            <div class="page-header d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">Barcode Scanner</h1>
+                    <p class="text-muted">Scan containers, samples, and test samples</p>
                 </div>
-                <div class="card-body">
-                    <div class="form-group mb-4">
-                        <label for="manualBarcode" class="form-label">Stregkode:</label>
-                        <div class="input-group">
-                            <input type="text" class="form-control form-control-lg" id="manualBarcode" 
-                                   placeholder="Scan eller indtast stregkode" autofocus>
-                            <button class="btn btn-primary" id="scanButton">
-                                <i class="fas fa-search"></i> Søg
-                            </button>
-                        </div>
-                        <div class="form-text">Tryk Enter eller klik Søg for at finde prøven</div>
-                    </div>
-                    
-                    <div id="scannerStatus" class="alert alert-secondary">
-                        <i class="fas fa-info-circle"></i> Klar til scanning...
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Results and Label Printing Panel -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-success text-white">
-                    <h5><i class="fas fa-vial"></i> Prøve Information</h5>
-                </div>
-                <div class="card-body">
-                    <div id="scanResults" class="d-none">
-                        <div class="table-responsive">
-                            <table class="table table-sm table-striped">
-                                <tbody>
-                                    <tr>
-                                        <td><strong>ID:</strong></td>
-                                        <td id="sampleId"></td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Beskrivelse:</strong></td>
-                                        <td id="sampleDescription"></td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Stregkode:</strong></td>
-                                        <td id="sampleBarcode" class="font-monospace"></td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Varenummer:</strong></td>
-                                        <td id="samplePartNumber"></td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Type:</strong></td>
-                                        <td id="sampleType"></td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Status:</strong></td>
-                                        <td id="sampleStatus"></td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Mængde:</strong></td>
-                                        <td><span id="sampleAmount"></span> <span id="sampleUnit"></span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Lokation:</strong></td>
-                                        <td id="sampleLocation"></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        
-                        <div class="d-grid gap-2 mt-3">
-                            <button class="btn btn-success btn-lg" id="printSampleButton">
-                                <i class="fas fa-print"></i> Udskriv Prøve Label
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div id="noResults" class="alert alert-light text-center">
-                        <i class="fas fa-search text-muted mb-2" style="font-size: 2rem;"></i>
-                        <p class="mb-0">Scan en stregkode for at se prøve information</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Printer Status Panel -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="fas fa-print"></i> Label Printer Status</h5>
-                    <button class="btn btn-light btn-sm" id="printTestButton">
-                        <i class="fas fa-vial"></i> Test Print
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-info btn-sm" data-bs-toggle="collapse" data-bs-target="#scannerInfoCollapse">
+                        <i class="fas fa-info-circle me-1"></i>How to Use Scanner
+                    </button>
+                    <button class="btn btn-primary" onclick="testScan()">
+                        <i class="fas fa-vial me-2"></i>Test Scan
                     </button>
                 </div>
+            </div>
+            
+            <!-- Info Box -->
+            <div class="collapse mb-4" id="scannerInfoCollapse">
+                <div class="card border-info">
+                    <div class="card-header bg-light border-info">
+                        <h6 class="mb-0"><i class="fas fa-barcode me-2"></i>Scanner Instructions</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <h6><i class="fas fa-hand-pointer me-2"></i>Point and Scan</h6>
+                                <p class="small">Aim the wireless scanner at any barcode and press the trigger. Results will appear automatically.</p>
+                            </div>
+                            <div class="col-md-4">
+                                <h6><i class="fas fa-tags me-2"></i>Supported Barcodes</h6>
+                                <p class="small">
+                                    <strong>Containers:</strong> CNT-123<br>
+                                    <strong>Samples:</strong> BC1-xxx or SMP-123<br>
+                                    <strong>Test Samples:</strong> TST-123
+                                </p>
+                            </div>
+                            <div class="col-md-4">
+                                <h6><i class="fas fa-history me-2"></i>Scan History</h6>
+                                <p class="small">View your recent scans below and click on any item to view details again.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scanner Status -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="scanner-status" id="scannerStatus">
+                        <i class="fas fa-barcode scanner-icon"></i>
+                        <h5 class="mt-3 mb-2">Ready to Scan</h5>
+                        <p class="text-muted mb-0">Point your scanner at a barcode and press the trigger</p>
+                    </div>
+                    <div class="mt-3">
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-keyboard"></i>
+                            </span>
+                            <input type="text" class="form-control" id="manualBarcodeInput" placeholder="Or type barcode manually...">
+                            <button class="btn btn-outline-primary" onclick="manualScan()">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted">Manual input for testing or backup</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Scans -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="fas fa-history me-2"></i>Recent Scans</h6>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" onclick="filterScans('all')" id="filterAll">All</button>
+                        <button class="btn btn-outline-secondary" onclick="filterScans('container')" id="filterContainer">Containers</button>
+                        <button class="btn btn-outline-secondary" onclick="filterScans('sample')" id="filterSample">Samples</button>
+                    </div>
+                </div>
                 <div class="card-body">
-                    <div id="printerStatus" class="alert alert-secondary mb-0">
-                        <i class="fas fa-check-circle"></i> Brother QL-810W printer klar til udskrivning
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="scanHistoryTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Barcode</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scanHistoryBody">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        <i class="fas fa-barcode fa-2x mb-2"></i>
+                                        <br>No scans yet. Start scanning to see results here.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -150,9 +122,94 @@ System API Endpoints:
 {% endblock %}
 
 {% block scripts %}
-<!--
-Scanner functions are loaded from scanner-functions.js
-All scanner configuration details are documented in the HTML comments above.
--->
-<script src="{{ url_for('static', filename='js/scanner-functions.js') }}"></script>
+<script>
+// Scanner page specific functionality - placeholder for now
+// The global scanner will handle actual scanning
+function testScan() {
+    const testBarcodes = ['CNT-1', 'SMP-1', 'BC1-1751138774-1'];
+    const randomBarcode = testBarcodes[Math.floor(Math.random() * testBarcodes.length)];
+    window.barcodeScanner.scanBarcode(randomBarcode);
+}
+
+function manualScan() {
+    const input = document.getElementById('manualBarcodeInput');
+    const barcode = input.value.trim();
+    
+    if (barcode) {
+        window.barcodeScanner.scanBarcode(barcode);
+        input.value = '';
+    }
+}
+
+function filterScans(type) {
+    // Placeholder - will implement scan history later
+    console.log('Filter scans by:', type);
+}
+
+function clearScanHistory() {
+    if (window.barcodeScanner) {
+        window.barcodeScanner.clearScanHistory();
+    }
+}
+
+function filterScans(type) {
+    if (window.barcodeScanner) {
+        window.barcodeScanner.filterScans(type);
+    }
+}
+
+// Manual input handler and page initialization
+document.addEventListener('DOMContentLoaded', function() {
+    const input = document.getElementById('manualBarcodeInput');
+    if (input) {
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                manualScan();
+            }
+        });
+    }
+    
+    // Load scan history when page loads
+    setTimeout(() => {
+        if (window.barcodeScanner) {
+            window.barcodeScanner.updateScanHistoryDisplay();
+        }
+    }, 100);
+});
+</script>
+
+<style>
+.scanner-icon {
+    font-size: 3rem;
+    color: #6c757d;
+}
+
+.stats-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.stats-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    text-transform: uppercase;
+}
+
+.btn-group .btn.active {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: white;
+}
+
+#scanHistoryTable tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.table code {
+    background-color: #e9ecef;
+    color: #495057;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+}
+</style>
 {% endblock %}
