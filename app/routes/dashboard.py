@@ -16,9 +16,9 @@ def _get_storage_locations(mysql):
             sl.Rack,
             sl.Section,
             sl.Shelf
-        FROM StorageLocation sl
-        LEFT JOIN Lab l ON sl.LabID = l.LabID
-        LEFT JOIN SampleStorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
+        FROM storagelocation sl
+        LEFT JOIN lab l ON sl.LabID = l.LabID
+        LEFT JOIN samplestorage ss ON sl.LocationID = ss.LocationID AND ss.AmountRemaining > 0
         GROUP BY sl.LocationID, sl.LocationName, sl.Description, l.LabName, sl.Rack, sl.Section, sl.Shelf
         ORDER BY 
             COALESCE(sl.Rack, 999),
@@ -48,13 +48,13 @@ def init_dashboard(blueprint, mysql):
         try:
             # Get number of samples in storage
             cursor = mysql.connection.cursor()
-            cursor.execute("SELECT COUNT(*) FROM Sample WHERE Status = 'In Storage'")
+            cursor.execute("SELECT COUNT(*) FROM sample WHERE Status = 'In Storage'")
             sample_count = cursor.fetchone()[0] or 0
             
             # Get samples expiring soon (within 14 days)
             cursor.execute("""
-                SELECT COUNT(*) FROM SampleStorage ss
-                JOIN Sample s ON ss.SampleID = s.SampleID
+                SELECT COUNT(*) FROM samplestorage ss
+                JOIN sample s ON ss.SampleID = s.SampleID
                 WHERE ss.ExpireDate <= DATE_ADD(CURRENT_DATE(), INTERVAL 14 DAY)
                 AND s.Status = 'In Storage'
                 AND ss.AmountRemaining > 0
@@ -63,17 +63,17 @@ def init_dashboard(blueprint, mysql):
             
             # Get new samples today
             cursor.execute("""
-                SELECT COUNT(*) FROM Reception
+                SELECT COUNT(*) FROM reception
                 WHERE DATE(ReceivedDate) = CURRENT_DATE()
             """)
             new_today = cursor.fetchone()[0] or 0
             
             # Get number of active tests
             cursor.execute("""
-                SELECT COUNT(*) FROM Test t
+                SELECT COUNT(*) FROM test t
                 WHERE t.CreatedDate > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
                 AND NOT EXISTS (
-                    SELECT 1 FROM History h 
+                    SELECT 1 FROM history h 
                     WHERE h.TestID = t.TestID AND h.ActionType = 'Test completed'
                 )
             """)
@@ -88,9 +88,9 @@ def init_dashboard(blueprint, mysql):
                     IFNULL(s.Description, 'N/A') as SampleDesc,
                     u.Name as UserName,
                     DATE_FORMAT(h.Timestamp, '%d-%m-%Y %H:%i') as Timestamp
-                FROM History h
-                LEFT JOIN Sample s ON h.SampleID = s.SampleID
-                LEFT JOIN User u ON h.UserID = u.UserID
+                FROM history h
+                LEFT JOIN sample s ON h.SampleID = s.SampleID
+                LEFT JOIN user u ON h.UserID = u.UserID
                 ORDER BY h.Timestamp DESC
                 LIMIT 5
             """)
@@ -162,16 +162,23 @@ def init_dashboard(blueprint, mysql):
                         ELSE 'N/A'
                     END as ItemID,
                     h.Notes,
-                    r.ReceptionID
-                FROM History h
-                LEFT JOIN User u ON h.UserID = u.UserID
-                LEFT JOIN Sample s ON h.SampleID = s.SampleID
-                LEFT JOIN Test t ON h.TestID = t.TestID
-                LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
+                    r.ReceptionID,
+                    s.Description as SampleDescription,
+                    s.PartNumber as SamplePartNumber
+                FROM history h
+                LEFT JOIN user u ON h.UserID = u.UserID
+                LEFT JOIN sample s ON h.SampleID = s.SampleID
+                LEFT JOIN test t ON h.TestID = t.TestID
+                LEFT JOIN reception r ON s.ReceptionID = r.ReceptionID
                 ORDER BY h.Timestamp DESC
-                LIMIT 20
+                LIMIT 100
             """)
             history_data = cursor.fetchall()
+            
+            # Get distinct action types for filter dropdown
+            cursor.execute("SELECT DISTINCT ActionType FROM history ORDER BY ActionType")
+            action_types = [row[0] for row in cursor.fetchall()]
+            
             cursor.close()
             
             history_items = []
@@ -179,10 +186,10 @@ def init_dashboard(blueprint, mysql):
                 # Format ItemID based on type
                 item_id = item[4]
                 if item_id and item_id != 'N/A':
-                    if item_id.startswith('T'):  # Test number
-                        sample_desc = item_id
+                    if str(item_id).startswith('T'):  # Test number
+                        sample_desc = str(item_id)
                     else:  # Sample ID
-                        sample_desc = f"SMP-{item_id}"
+                        sample_desc = "SMP-" + str(item_id)
                 else:
                     sample_desc = 'N/A'
                     
@@ -193,13 +200,20 @@ def init_dashboard(blueprint, mysql):
                     "UserName": item[3],
                     "SampleDesc": sample_desc,
                     "Notes": item[5],
-                    "ReceptionID": item[6] if item[6] else None
+                    "ReceptionID": item[6] if item[6] else None,
+                    "SampleDescription": item[7] if len(item) > 7 else "",
+                    "SamplePartNumber": item[8] if len(item) > 8 else ""
                 })
             
-            return render_template('sections/history.html', history_items=history_items)
+            return render_template('sections/history.html', 
+                                 history_items=history_items,
+                                 action_types=action_types)
         except Exception as e:
-            print(f"Error loading history: {e}")
-            return render_template('sections/history.html', error="Error loading history")
+            print("Error loading history:", str(e))
+            return render_template('sections/history.html', 
+                                 error="Error loading history",
+                                 history_items=[],
+                                 action_types=[])
             
     @blueprint.route('/api/history', methods=['GET'])
     def api_get_history():
@@ -229,11 +243,11 @@ def init_dashboard(blueprint, mysql):
                     END as ItemID,
                     h.Notes,
                     r.ReceptionID
-                FROM History h
-                LEFT JOIN User u ON h.UserID = u.UserID
-                LEFT JOIN Sample s ON h.SampleID = s.SampleID
-                LEFT JOIN Test t ON h.TestID = t.TestID
-                LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
+                FROM history h
+                LEFT JOIN user u ON h.UserID = u.UserID
+                LEFT JOIN sample s ON h.SampleID = s.SampleID
+                LEFT JOIN test t ON h.TestID = t.TestID
+                LEFT JOIN reception r ON s.ReceptionID = r.ReceptionID
                 WHERE 1=1
             """
             params = []
@@ -331,10 +345,10 @@ def init_dashboard(blueprint, mysql):
                     h.Notes,
                     h.SampleID,
                     h.TestID
-                FROM History h
-                LEFT JOIN User u ON h.UserID = u.UserID
-                LEFT JOIN Sample s ON h.SampleID = s.SampleID
-                LEFT JOIN TestSample ts ON h.TestID = ts.TestID
+                FROM history h
+                LEFT JOIN user u ON h.UserID = u.UserID
+                LEFT JOIN sample s ON h.SampleID = s.SampleID
+                LEFT JOIN testsample ts ON h.TestID = ts.TestID
                 WHERE h.LogID = {0}
             """.format(log_id)
             
@@ -376,9 +390,9 @@ def init_dashboard(blueprint, mysql):
                         ss.AmountRemaining,
                         u.Name as OwnerName
                     FROM Sample s
-                    LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-                    LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
-                    LEFT JOIN User u ON s.OwnerID = u.UserID
+                    LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+                    LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+                    LEFT JOIN user u ON s.OwnerID = u.UserID
                     WHERE s.SampleID = {0}
                 """.format(log_data[6])
                 
@@ -407,8 +421,8 @@ def init_dashboard(blueprint, mysql):
                         h.ActionType,
                         u.Name as UserName,
                         h.Notes
-                    FROM History h
-                    LEFT JOIN User u ON h.UserID = u.UserID
+                    FROM history h
+                    LEFT JOIN user u ON h.UserID = u.UserID
                     WHERE h.SampleID = {0}
                     ORDER BY h.Timestamp DESC
                 """.format(log_data[6])
@@ -469,12 +483,12 @@ def init_dashboard(blueprint, mysql):
                     COALESCE(s.Description, 'N/A') as SampleDescription,
                     h.Notes,
                     COALESCE(sl.LocationName, 'N/A') as Location
-                FROM History h
-                LEFT JOIN User u ON h.UserID = u.UserID
-                LEFT JOIN Sample s ON h.SampleID = s.SampleID
-                LEFT JOIN Test t ON h.TestID = t.TestID
-                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID AND ss.AmountRemaining > 0
-                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                FROM history h
+                LEFT JOIN user u ON h.UserID = u.UserID
+                LEFT JOIN sample s ON h.SampleID = s.SampleID
+                LEFT JOIN test t ON h.TestID = t.TestID
+                LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID AND ss.AmountRemaining > 0
+                LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
                 WHERE 1=1
             """
             params = []

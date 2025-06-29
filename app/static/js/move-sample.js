@@ -157,9 +157,6 @@ function fetchContainersForMove() {
                     option.textContent = containerDesc;
                     containerSelect.appendChild(option);
                 });
-                
-                // Add search functionality to the container select
-                setupSearchableSelect('moveContainerSelect');
             }
         })
         .catch(error => {
@@ -169,48 +166,6 @@ function fetchContainersForMove() {
         });
 }
 
-// Helper function to make selects searchable
-function setupSearchableSelect(selectId) {
-    const select = document.getElementById(selectId);
-    if (!select) return;
-    
-    // Check if this select already has a search input to avoid duplicates
-    if (select.parentNode.classList.contains('searchable-select-wrapper')) {
-        return;
-    }
-    
-    // Create a wrapper div
-    const wrapper = document.createElement('div');
-    wrapper.className = 'searchable-select-wrapper';
-    wrapper.style.position = 'relative';
-    
-    // Create search input
-    const searchInput = document.createElement('input');
-    searchInput.type = 'text';
-    searchInput.className = 'form-control searchable-select-input mb-2';
-    searchInput.placeholder = 'Type to search...';
-    
-    // Insert search input before select
-    select.parentNode.insertBefore(wrapper, select);
-    wrapper.appendChild(searchInput);
-    wrapper.appendChild(select);
-    
-    // Filter options on input
-    searchInput.addEventListener('input', function() {
-        const filter = this.value.toLowerCase();
-        const options = select.options;
-        
-        for (let i = 0; i < options.length; i++) {
-            const text = options[i].textContent.toLowerCase();
-            // Always show the first option (the placeholder)
-            if (i === 0 || text.indexOf(filter) > -1) {
-                options[i].style.display = '';
-            } else {
-                options[i].style.display = 'none';
-            }
-        }
-    });
-}
 
 // Function to fetch locations for the move modal
 function fetchLocationsForMove() {
@@ -242,9 +197,6 @@ function fetchLocationsForMove() {
                     option.textContent = location.LocationName;
                     locationSelect.appendChild(option);
                 });
-                
-                // Add search functionality to the select element
-                setupSearchableSelect('moveLocationSelect');
             }
         })
         .catch(error => {
@@ -309,6 +261,64 @@ function executeMoveSample() {
 
 // Function to move a sample to a container
 function moveToContainer(data) {
+    // First validate unit type compatibility if moving to a container with existing samples
+    if (!data.removeFromContainer && data.containerId) {
+        validateUnitTypeForContainerMove(data.sampleId, data.containerId, () => {
+            executeContainerMove(data);
+        });
+    } else {
+        executeContainerMove(data);
+    }
+}
+
+// Function to validate unit type compatibility
+function validateUnitTypeForContainerMove(sampleId, containerId, callback) {
+    // First get the sample's unit type
+    fetch(`/api/samples/${sampleId}`)
+        .then(response => response.json())
+        .then(sampleData => {
+            if (!sampleData.success) {
+                throw new Error('Could not fetch sample data');
+            }
+            
+            const sampleUnit = sampleData.sample.Unit || 'pcs';
+            
+            // Then get container's existing samples and their unit types
+            fetch(`/api/containers/${containerId}`)
+                .then(response => response.json())
+                .then(containerData => {
+                    if (!containerData.success) {
+                        throw new Error('Could not fetch container data');
+                    }
+                    
+                    // Check if container has existing samples with different unit types
+                    const existingSamples = containerData.samples || [];
+                    const incompatibleUnits = existingSamples.filter(sample => 
+                        sample.Unit && sample.Unit !== sampleUnit
+                    );
+                    
+                    if (incompatibleUnits.length > 0) {
+                        const existingUnits = [...new Set(incompatibleUnits.map(s => s.Unit))];
+                        showErrorMessage(`Cannot move sample with unit "${sampleUnit}" to container with existing samples using units: ${existingUnits.join(', ')}. All samples in a container must use the same unit type.`);
+                        return;
+                    }
+                    
+                    // If validation passed, execute the move
+                    callback();
+                })
+                .catch(error => {
+                    console.error('Error validating container units:', error);
+                    showErrorMessage('Error validating unit compatibility. Please try again.');
+                });
+        })
+        .catch(error => {
+            console.error('Error validating sample unit:', error);
+            showErrorMessage('Error validating sample unit. Please try again.');
+        });
+}
+
+// Actual function to execute container move
+function executeContainerMove(data) {
     let apiUrl = '/api/containers/add-sample';
     let requestMethod = 'POST';
     
