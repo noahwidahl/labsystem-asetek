@@ -37,6 +37,13 @@ PRINTER_CONFIG = {
         'description': 'Brother QL-810W for Package Labels', 
         'format': 'large'  # Larger format for packages
     },
+    'test_sample': {
+        'printer_type': 'brother_ql810w',
+        'app_path_env': 'BROTHER_TEST_PRINTER_PATH',
+        'default_path': '',
+        'description': 'Brother QL-810W for Test Sample Labels',
+        'format': 'compact'  # Compact format for test samples
+    },
     'location': {
         'printer_type': 'brother_ql810w',
         'app_path_env': 'BROTHER_LOCATION_PRINTER_PATH', 
@@ -78,7 +85,11 @@ def generate_barcode(label_type, label_data):
         return f"SMP{sample_id}{timestamp[-6:]}"
     elif label_type in ['container', 'package']:
         container_id = label_data.get('ContainerID', '')
-        return f"CNT{container_id}{timestamp[-6:]}"
+        return f"CNT{container_id:0>4}{timestamp[-6:]}"
+    elif label_type == 'test_sample':
+        sample_id = label_data.get('SampleID', '')
+        test_id = label_data.get('TestID', '')
+        return f"TST{sample_id}{test_id}{timestamp[-4:]}"
     elif label_type == 'location':
         location_name = label_data.get('LocationName', '').replace('.', '')
         return f"LOC{location_name}{timestamp[-4:]}"
@@ -117,18 +128,57 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 """
     
     elif label_type in ['container', 'package']:
-        return f"""
+        # Enhanced container label with multiple barcodes and sample information
+        samples = data.get('samples', [])
+        packing_date = data.get('PackingDate', datetime.now().strftime('%d-%m-%Y'))
+        
+        # Create sample barcodes section
+        sample_barcodes = []
+        sample_parts = []
+        for i, sample in enumerate(samples[:6]):  # Limit to 6 samples for space
+            sample_id = sample.get('SampleID', '')
+            barcode = sample.get('Barcode', f'SMP{sample_id}')
+            part_number = sample.get('PartNumber', '')
+            sample_barcodes.append(f"│ {i+1}. {barcode:<25} │")
+            if part_number:
+                sample_parts.append(f"│    {part_number[:25]:<25} │")
+        
+        if len(samples) > 6:
+            sample_barcodes.append(f"│ ... and {len(samples)-6} more samples     │")
+        
+        # Create QR code placeholder (actual QR generation would need external library)
+        qr_data = f"CNT{data.get('ContainerID', '')}"
+        
+        label_content = f"""
 ╔═══════════════════════════════════╗
-║          PACKAGE/CONTAINER        ║
+║         CONTAINER LABEL           ║
 ╠═══════════════════════════════════╣
-║ ID: {data.get('ContainerIDFormatted', data.get('PackageID', '')):<28} ║
-║ Type: {data.get('Type', data.get('ContainerType', '')):<26} ║
-║ Barcode: {data.get('Barcode', ''):<23} ║
-║ Location: {data.get('LocationName', ''):<21} ║
-║ Contents: {data.get('SampleCount', data.get('Contents', '')):<21} ║
-║ Created: {datetime.now().strftime('%Y-%m-%d %H:%M'):<22} ║
+║ Container: CNT-{data.get('ContainerID', ''):0>4}         ║
+║ Type: {data.get('Type', data.get('ContainerType', ''))[:26]:<26} ║
+║ Description: {data.get('Description', '')[:20]:<20} ║
+║ Location: {data.get('LocationName', '')[:21]:<21} ║
+║ Packing Date: {packing_date:<17} ║
+║ Samples: {len(samples):<24} ║
+╠═══════════════════════════════════╣
+║           SAMPLE BARCODES         ║
+╠═══════════════════════════════════╣"""
+
+        # Add sample barcodes
+        for barcode_line in sample_barcodes:
+            label_content += f"\n{barcode_line}"
+        
+        # Add part numbers if any
+        for part_line in sample_parts:
+            label_content += f"\n{part_line}"
+        
+        label_content += f"""
+╠═══════════════════════════════════╣
+║ Container Barcode: {data.get('Barcode', qr_data):<14} ║
+║ QR Code: {qr_data:<22} ║
+║ Created: {datetime.now().strftime('%d-%m-%Y %H:%M'):<22} ║
 ╚═══════════════════════════════════╝
 """
+        return label_content
     
     elif label_type == 'location':
         return f"""
@@ -150,6 +200,22 @@ Message: {data.get('message', 'Test Print')}
 Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 Printer: {printer_config.get('description', 'Unknown')}
 ──────────────────────────────
+"""
+    
+    elif label_type == 'test_sample':
+        # Test sample labels for individual test specimens
+        return f"""
+╭─────────────────────────────╮
+│      TEST SAMPLE LABEL      │
+├─────────────────────────────┤
+│ Sample: {data.get('SampleIDFormatted', ''):<18} │
+│ Test ID: {data.get('TestID', ''):<17} │
+│ Barcode: {data.get('TestBarcode', ''):<16} │
+│ Part#: {data.get('PartNumber', '')[:19]:<19} │
+│ Test Type: {data.get('TestType', '')[:16]:<16} │
+│ Date: {datetime.now().strftime('%d-%m-%Y'):<20} │
+│ Container: CNT-{data.get('ContainerID', ''):0>4}       │
+╰─────────────────────────────╯
 """
     
     else:
@@ -253,6 +319,291 @@ def log_print_action(label_type, label_data, printer_config):
             
     except Exception as e:
         current_app.logger.error(f"Failed to log print action: {str(e)}")
+
+def print_sample_label(sample_data, auto_print=True):
+    """
+    Print individual sample label for direct storage samples.
+    Returns success status and message.
+    """
+    try:
+        # Generate sample barcode if not provided
+        if 'Barcode' not in sample_data or not sample_data['Barcode']:
+            sample_data['Barcode'] = generate_barcode('sample', sample_data)
+        
+        if auto_print:
+            # Get printer configuration
+            printer_config = get_printer_config('sample')
+            if not printer_config:
+                return {
+                    'status': 'warning',
+                    'message': 'Sample label prepared but no printer configured. Set BROTHER_SAMPLE_PRINTER_PATH environment variable.',
+                    'sample_data': sample_data
+                }
+            
+            # Format and print label
+            label_content = format_label_enhanced('sample', sample_data, printer_config)
+            result = print_to_device(label_content, printer_config)
+            
+            # Log print action
+            if result['status'] == 'success':
+                log_print_action('sample', sample_data, printer_config)
+            
+            return result
+        else:
+            return {
+                'status': 'success',
+                'message': 'Sample label data prepared',
+                'sample_data': sample_data
+            }
+            
+    except Exception as e:
+        current_app.logger.error(f"Error printing sample label: {str(e)}")
+        return {
+            'status': 'error',
+            'message': f'Failed to print sample label: {str(e)}'
+        }
+
+def print_container_label(container_id, auto_print=True):
+    """
+    Print container label with all sample barcodes and information.
+    Returns success status and message.
+    """
+    try:
+        if not mysql or not mysql.connection:
+            return {
+                'status': 'error',
+                'message': 'Database connection not available'
+            }
+        
+        cursor = mysql.connection.cursor()
+        
+        # Get container details
+        cursor.execute("""
+            SELECT 
+                c.ContainerID,
+                c.Description,
+                ct.TypeName,
+                sl.LocationName,
+                c.ContainerCapacity
+            FROM container c
+            LEFT JOIN containertype ct ON c.ContainerTypeID = ct.ContainerTypeID
+            LEFT JOIN storagelocation sl ON c.LocationID = sl.LocationID
+            WHERE c.ContainerID = %s
+        """, (container_id,))
+        
+        container_result = cursor.fetchone()
+        if not container_result:
+            cursor.close()
+            return {
+                'status': 'error',
+                'message': f'Container {container_id} not found'
+            }
+        
+        # Get all samples in the container
+        cursor.execute("""
+            SELECT 
+                s.SampleID,
+                s.Description,
+                s.PartNumber,
+                s.Barcode,
+                cs.Amount
+            FROM containersample cs
+            JOIN samplestorage ss ON cs.SampleStorageID = ss.StorageID
+            JOIN sample s ON ss.SampleID = s.SampleID
+            WHERE cs.ContainerID = %s
+            ORDER BY s.SampleID
+        """, (container_id,))
+        
+        samples_result = cursor.fetchall()
+        cursor.close()
+        
+        # Prepare container data for label
+        container_data = {
+            'ContainerID': container_result[0],
+            'Description': container_result[1] or '',
+            'Type': container_result[2] or 'Standard',
+            'LocationName': container_result[3] or '',
+            'ContainerCapacity': container_result[4] or 0,
+            'samples': []
+        }
+        
+        # Add sample information
+        for sample_row in samples_result:
+            sample_data = {
+                'SampleID': sample_row[0],
+                'Description': sample_row[1] or '',
+                'PartNumber': sample_row[2] or '',
+                'Barcode': sample_row[3] or f'SMP{sample_row[0]}',
+                'Amount': sample_row[4] or 1
+            }
+            container_data['samples'].append(sample_data)
+        
+        # Generate container barcode
+        container_barcode = generate_barcode('container', container_data)
+        container_data['Barcode'] = container_barcode
+        
+        if auto_print:
+            # Get printer configuration
+            printer_config = get_printer_config('container')
+            if not printer_config:
+                return {
+                    'status': 'warning',
+                    'message': 'Container label prepared but no printer configured. Set BROTHER_CONTAINER_PRINTER_PATH environment variable.',
+                    'container_data': container_data
+                }
+            
+            # Format and print label
+            label_content = format_label_enhanced('container', container_data, printer_config)
+            result = print_to_device(label_content, printer_config)
+            
+            # Log print action
+            if result['status'] == 'success':
+                log_print_action('container', container_data, printer_config)
+            
+            return result
+        else:
+            return {
+                'status': 'success',
+                'message': 'Container label data prepared',
+                'container_data': container_data
+            }
+            
+    except Exception as e:
+        current_app.logger.error(f"Error printing container label: {str(e)}")
+        return {
+            'status': 'error',
+            'message': f'Failed to print container label: {str(e)}'
+        }
+
+@printer_bp.route('/api/print/sample/<int:sample_id>', methods=['POST'])
+def print_sample_label_endpoint(sample_id):
+    """
+    Endpoint to print sample label for a specific sample.
+    """
+    try:
+        data = request.get_json() or {}
+        auto_print = data.get('auto_print', True)
+        
+        if not mysql or not mysql.connection:
+            return jsonify({
+                'status': 'error',
+                'message': 'Database connection not available'
+            }), 500
+        
+        cursor = mysql.connection.cursor()
+        
+        # Get sample details
+        cursor.execute("""
+            SELECT 
+                s.SampleID,
+                s.Description,
+                s.PartNumber,
+                s.Barcode,
+                s.Amount,
+                s.Type,
+                s.ExpireDate,
+                u.UnitName,
+                sl.LocationName
+            FROM sample s
+            LEFT JOIN unit u ON s.UnitID = u.UnitID
+            LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+            LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+            WHERE s.SampleID = %s
+        """, (sample_id,))
+        
+        sample_result = cursor.fetchone()
+        cursor.close()
+        
+        if not sample_result:
+            return jsonify({
+                'status': 'error',
+                'message': f'Sample {sample_id} not found'
+            }), 404
+        
+        # Prepare sample data for label
+        sample_data = {
+            'SampleID': sample_result[0],
+            'SampleIDFormatted': f'SMP-{sample_result[0]}',
+            'Description': sample_result[1] or '',
+            'PartNumber': sample_result[2] or '',
+            'Barcode': sample_result[3] or '',
+            'Amount': sample_result[4] or 1,
+            'Type': sample_result[5] or 'Standard',
+            'ExpireDate': sample_result[6].strftime('%d-%m-%Y') if sample_result[6] else '',
+            'UnitName': 'pcs' if (sample_result[7] or '').lower() == 'stk' else (sample_result[7] or 'pcs'),
+            'LocationName': sample_result[8] or ''
+        }
+        
+        result = print_sample_label(sample_data, auto_print)
+        return jsonify(result)
+        
+    except Exception as e:
+        current_app.logger.error(f"Sample label print endpoint error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Sample label print error: {str(e)}'
+        }), 500
+
+@printer_bp.route('/api/print/container/<int:container_id>', methods=['POST'])
+def print_container_label_endpoint(container_id):
+    """
+    Endpoint to print container label for a specific container.
+    """
+    try:
+        data = request.get_json() or {}
+        auto_print = data.get('auto_print', True)
+        
+        result = print_container_label(container_id, auto_print)
+        return jsonify(result)
+        
+    except Exception as e:
+        current_app.logger.error(f"Container label print endpoint error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Container label print error: {str(e)}'
+        }), 500
+
+@printer_bp.route('/api/print/test-sample', methods=['POST'])
+def print_test_sample_label():
+    """
+    Endpoint to print test sample labels for individual test specimens.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'status': 'error',
+                'message': 'No data provided'
+            }), 400
+        
+        # Generate test barcode if not provided
+        if 'TestBarcode' not in data:
+            data['TestBarcode'] = generate_barcode('test_sample', data)
+        
+        # Get printer configuration
+        printer_config = get_printer_config('test_sample')
+        if not printer_config:
+            return jsonify({
+                'status': 'error',
+                'message': 'No printer configured for test sample labels. Set BROTHER_TEST_PRINTER_PATH environment variable.'
+            }), 500
+        
+        # Format and print label
+        label_content = format_label_enhanced('test_sample', data, printer_config)
+        result = print_to_device(label_content, printer_config)
+        
+        # Log print action
+        if result['status'] == 'success':
+            log_print_action('test_sample', data, printer_config)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        current_app.logger.error(f"Test sample label print error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Test sample label print error: {str(e)}'
+        }), 500
 
 @printer_bp.route('/api/print/label', methods=['POST'])
 def print_label():
@@ -384,6 +735,95 @@ def get_printer_config_info():
         return jsonify({
             'status': 'error', 
             'message': str(e)
+        }), 500
+
+@printer_bp.route('/api/print/storage-info/<int:sample_id>', methods=['GET'])
+def get_sample_storage_info(sample_id):
+    """
+    Get information about how a sample is stored (container vs direct storage)
+    and recommend appropriate label printing strategy.
+    """
+    try:
+        if not mysql or not mysql.connection:
+            return jsonify({
+                'status': 'error',
+                'message': 'Database connection not available'
+            }), 500
+        
+        cursor = mysql.connection.cursor()
+        
+        # Check if sample is in a container
+        cursor.execute("""
+            SELECT 
+                s.SampleID,
+                s.Description,
+                c.ContainerID,
+                c.Description as ContainerDescription,
+                ct.TypeName as ContainerType,
+                sl.LocationName,
+                COUNT(cs2.SampleStorageID) as SamplesInContainer
+            FROM sample s
+            LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+            LEFT JOIN containersample cs ON ss.StorageID = cs.SampleStorageID
+            LEFT JOIN container c ON cs.ContainerID = c.ContainerID
+            LEFT JOIN containertype ct ON c.ContainerTypeID = ct.ContainerTypeID
+            LEFT JOIN storagelocation sl ON c.LocationID = sl.LocationID
+            LEFT JOIN containersample cs2 ON c.ContainerID = cs2.ContainerID
+            WHERE s.SampleID = %s
+            GROUP BY s.SampleID, c.ContainerID
+        """, (sample_id,))
+        
+        result = cursor.fetchone()
+        cursor.close()
+        
+        if not result:
+            return jsonify({
+                'status': 'error',
+                'message': f'Sample {sample_id} not found'
+            }), 404
+        
+        sample_id = result[0]
+        sample_description = result[1]
+        container_id = result[2]
+        container_description = result[3]
+        container_type = result[4]
+        location_name = result[5]
+        samples_in_container = result[6] if result[6] else 0
+        
+        storage_info = {
+            'sample_id': sample_id,
+            'sample_description': sample_description,
+            'storage_type': 'container' if container_id else 'direct',
+            'location_name': location_name
+        }
+        
+        if container_id:
+            # Sample is in container
+            storage_info.update({
+                'container_id': container_id,
+                'container_description': container_description,
+                'container_type': container_type,
+                'samples_in_container': samples_in_container,
+                'recommended_label': 'container',
+                'label_strategy': 'Print container label with all sample barcodes'
+            })
+        else:
+            # Direct storage
+            storage_info.update({
+                'recommended_label': 'sample',
+                'label_strategy': 'Print individual sample label'
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'storage_info': storage_info
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Storage info error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Storage info error: {str(e)}'
         }), 500
 
 # Legacy function for backwards compatibility

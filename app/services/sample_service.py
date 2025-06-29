@@ -455,6 +455,55 @@ class SampleService:
                 f"Sample '{description}' registered with {total_amount} units"
             ))
             
+            # Handle automatic label printing based on storage option
+            print_results = []
+            auto_print_enabled = sample_data.get('auto_print_labels', True)
+            
+            if auto_print_enabled:
+                try:
+                    if create_containers and container_ids:
+                        # Container storage - container labels are already printed by container service
+                        print(f"DEBUG: Container labels automatically printed for containers: {container_ids}")
+                        for container_id in container_ids:
+                            print_results.append({
+                                'type': 'container',
+                                'container_id': container_id,
+                                'status': 'printed_by_container_service'
+                            })
+                    else:
+                        # Direct storage - print individual sample labels
+                        print(f"DEBUG: Printing individual sample label for direct storage sample {sample_id}")
+                        from app.routes.printer import print_sample_label
+                        
+                        # Prepare sample data for label printing
+                        sample_label_data = {
+                            'SampleID': sample_id,
+                            'SampleIDFormatted': f'SMP-{sample_id}',
+                            'Description': description,
+                            'PartNumber': sample_data.get('partNumber', ''),
+                            'Amount': total_amount,
+                            'UnitName': self._get_unit_name(sample_data.get('unit')),
+                            'Barcode': base_barcode,
+                            'Type': sample_type,
+                            'ExpireDate': expire_date.strftime('%d-%m-%Y') if expire_date else ''
+                        }
+                        
+                        sample_print_result = print_sample_label(sample_label_data, auto_print=True)
+                        print_results.append({
+                            'type': 'sample',
+                            'sample_id': sample_id,
+                            'print_result': sample_print_result
+                        })
+                        print(f"DEBUG: Sample label print result: {sample_print_result}")
+                        
+                except Exception as print_error:
+                    print(f"DEBUG: Label printing error: {print_error}")
+                    # Don't fail sample creation if printing fails
+                    print_results.append({
+                        'type': 'error',
+                        'message': f'Sample created but label printing failed: {str(print_error)}'
+                    })
+            
             response_data = {
                 'success': True,
                 'sample_id': sample_id,
@@ -464,5 +513,32 @@ class SampleService:
             
             if create_containers and container_ids:
                 response_data['container_ids'] = container_ids
+            
+            # Add print results if attempted
+            if print_results:
+                response_data['print_results'] = print_results
                 
             return response_data
+    
+    def _get_unit_name(self, unit_id):
+        """
+        Get unit name from unit ID, with fallback to 'pcs'
+        """
+        if not unit_id:
+            return 'pcs'
+        
+        try:
+            cursor = self.mysql.connection.cursor()
+            cursor.execute("SELECT UnitName FROM unit WHERE UnitID = %s", (unit_id,))
+            result = cursor.fetchone()
+            cursor.close()
+            
+            if result:
+                unit_name = result[0]
+                # Translate 'stk' to 'pcs' for consistency
+                return 'pcs' if unit_name.lower() == 'stk' else unit_name
+            else:
+                return 'pcs'
+        except Exception as e:
+            print(f"Error getting unit name: {e}")
+            return 'pcs'

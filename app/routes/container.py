@@ -139,7 +139,7 @@ def init_container(blueprint, mysql):
             current_user = get_current_user()
             user_id = current_user['UserID']
             
-            # Create container via service
+            # Create container via service (includes automatic label printing)
             result = container_service.create_container(data, user_id)
             
             return jsonify(result)

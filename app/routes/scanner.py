@@ -64,39 +64,67 @@ def lookup_sample_by_barcode(barcode):
             return format_sample_result(result, 'serial_number')
         
         # Third try: Container barcode lookup (find samples in container)
+        # Support both direct barcode match and new CNT format
         cursor.execute("""
             SELECT c.ContainerID, c.Description, c.Barcode, c.ContainerTypeID,
                    sl.LocationName, COUNT(ss.SampleID) as SampleCount,
                    ct.TypeName as ContainerType
-            FROM Container c
-            LEFT JOIN SampleStorage ss ON c.ContainerID = ss.ContainerID
-            LEFT JOIN StorageLocation sl ON c.LocationID = sl.LocationID
-            LEFT JOIN ContainerType ct ON c.ContainerTypeID = ct.ContainerTypeID
-            WHERE c.Barcode = %s
+            FROM container c
+            LEFT JOIN containersample cs ON c.ContainerID = cs.ContainerID
+            LEFT JOIN samplestorage ss ON cs.SampleStorageID = ss.StorageID
+            LEFT JOIN storagelocation sl ON c.LocationID = sl.LocationID
+            LEFT JOIN containertype ct ON c.ContainerTypeID = ct.ContainerTypeID
+            WHERE c.Barcode = %s OR %s LIKE CONCAT('CNT', LPAD(c.ContainerID, 4, '0'), '%%')
             GROUP BY c.ContainerID
-        """, (barcode,))
+        """, (barcode, barcode))
         
         result = cursor.fetchone()
         if result:
             return format_container_result(result, barcode)
         
-        # Fourth try: Test sample identifier lookup (T1234.5_1 format)
-        if '_' in barcode and barcode.startswith('T'):
+        # Fourth try: Test sample identifier lookup (T1234.5_1 format and new TST format)
+        if ('_' in barcode and barcode.startswith('T')) or barcode.startswith('TST'):
             cursor.execute("""
                 SELECT ts.TestSampleID, ts.GeneratedIdentifier, ts.TestID, ts.SampleID,
                        t.TestNo, t.TestName, s.Description, s.PartNumber, s.Status,
                        sl.LocationName
-                FROM TestSample ts
-                JOIN Test t ON ts.TestID = t.TestID
-                JOIN Sample s ON ts.SampleID = s.SampleID
-                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                FROM testsample ts
+                JOIN test t ON ts.TestID = t.TestID
+                JOIN sample s ON ts.SampleID = s.SampleID
+                LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
                 WHERE ts.GeneratedIdentifier = %s
             """, (barcode,))
             
             result = cursor.fetchone()
             if result:
                 return format_test_sample_result(result, barcode)
+            
+            # Also try to match new TST format by extracting sample and test IDs
+            if barcode.startswith('TST'):
+                try:
+                    # Extract sample ID and test ID from TST format (TST{sampleID}{testID}{timestamp})
+                    # This is a simplified approach - in practice you might need more sophisticated parsing
+                    barcode_data = barcode[3:]  # Remove 'TST' prefix
+                    if len(barcode_data) >= 2:
+                        # Try to find samples with test data
+                        cursor.execute("""
+                            SELECT ts.TestSampleID, ts.GeneratedIdentifier, ts.TestID, ts.SampleID,
+                                   t.TestNo, t.TestName, s.Description, s.PartNumber, s.Status,
+                                   sl.LocationName
+                            FROM testsample ts
+                            JOIN test t ON ts.TestID = t.TestID
+                            JOIN sample s ON ts.SampleID = s.SampleID
+                            LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+                            LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+                            WHERE CONCAT('TST', ts.SampleID, ts.TestID) LIKE %s
+                        """, (barcode[:10] + '%',))  # Match first part of barcode
+                        
+                        result = cursor.fetchone()
+                        if result:
+                            return format_test_sample_result(result, barcode)
+                except:
+                    pass  # If parsing fails, continue to return None
         
         return None
         

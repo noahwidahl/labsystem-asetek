@@ -457,10 +457,34 @@ class ContainerService:
                     f"Container {container_id} created: {container.description}"
                 ))
                 
-                return {
+                # Automatically print container label if enabled
+                auto_print_enabled = container_data.get('auto_print_label', True)
+                print_result = None
+                
+                if auto_print_enabled:
+                    try:
+                        # Import print function to avoid circular imports
+                        from app.routes.printer import print_container_label
+                        print_result = print_container_label(container_id, auto_print=True)
+                        print(f"DEBUG: Container label print result: {print_result}")
+                    except Exception as print_error:
+                        print(f"DEBUG: Container label print error: {print_error}")
+                        # Don't fail container creation if printing fails
+                        print_result = {
+                            'status': 'error',
+                            'message': f'Container created but label printing failed: {str(print_error)}'
+                        }
+                
+                result = {
                     'success': True,
                     'container_id': container_id
                 }
+                
+                # Add print result if attempted
+                if print_result:
+                    result['print_result'] = print_result
+                
+                return result
         except Exception as e:
             print(f"DEBUG: Error in create_container: {e}")
             import traceback
@@ -719,6 +743,16 @@ class ContainerService:
                         sample_id,
                         f"Sample {sample_id} moved to Container {container_id}, amount: {amount}{capacity_note}"
                     ))
+                
+                # Optionally reprint container label when samples are added
+                # This ensures the label always shows current contents
+                try:
+                    from app.routes.printer import print_container_label
+                    print_result = print_container_label(container_id, auto_print=True)
+                    print(f"DEBUG: Container label reprint result: {print_result}")
+                except Exception as print_error:
+                    print(f"DEBUG: Container label reprint error: {print_error}")
+                    # Don't fail the operation if printing fails
                 
                 return {
                     'success': True,
