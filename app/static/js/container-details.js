@@ -366,7 +366,6 @@ function showCapacityWarningConfirm(message, currentAmount, newAmount, capacity,
         }, 300);
     });
 }
-}
 
 // Remove sample from container
 function removeSampleFromContainer(containerId, sampleId, amount) {

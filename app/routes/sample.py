@@ -429,11 +429,11 @@ def init_sample(blueprint, mysql):
             # Get total count for pagination
             count_query = f"""
                 SELECT COUNT(DISTINCT s.SampleID)
-                FROM Sample s
-                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
-                LEFT JOIN User u ON s.OwnerID = u.UserID
-                LEFT JOIN Unit un ON s.UnitID = un.UnitID
+                FROM sample s
+                LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+                LEFT JOIN user u ON s.OwnerID = u.UserID
+                LEFT JOIN unit un ON s.UnitID = un.UnitID
                 {base_conditions}
                 {search_conditions}
             """
@@ -458,11 +458,11 @@ def init_sample(blueprint, mysql):
                         ELSE un.UnitName
                     END as Unit,
                     IF(s.IsUnique=1, 1, 0) as IsUnique
-                FROM Sample s
-                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
-                LEFT JOIN User u ON s.OwnerID = u.UserID
-                LEFT JOIN Unit un ON s.UnitID = un.UnitID
+                FROM sample s
+                LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+                LEFT JOIN user u ON s.OwnerID = u.UserID
+                LEFT JOIN unit un ON s.UnitID = un.UnitID
                 {base_conditions}
                 {search_conditions}
                 ORDER BY s.SampleID DESC
@@ -493,8 +493,8 @@ def init_sample(blueprint, mysql):
                     # Get serial numbers for unique samples
                     serial_query = """
                         SELECT SerialNumber 
-                        FROM SampleSerialNumber 
-                        WHERE SampleID = %s AND Status = 'Active'
+                        FROM sampleserialnumber 
+                        WHERE SampleID = %s AND IsActive = 1
                     """
                     cursor.execute(serial_query, (sample_dict['SampleID'],))
                     serials = [row[0] for row in cursor.fetchall()]
@@ -1859,7 +1859,7 @@ def init_sample(blueprint, mysql):
             cursor.close()
             
             # Get current user
-            current_user = get_current_user()
+            current_user = get_current_user(mysql)
             
             return render_template('sections/disposal.html', 
                                   users=users,
