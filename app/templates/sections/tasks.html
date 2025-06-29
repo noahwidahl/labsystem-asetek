@@ -29,15 +29,27 @@
                     </div>
                     <div class="card-body">
                         <p class="mb-3">
-                            <strong>Task Management</strong> organizes laboratory work into structured projects that group related samples and tests together. 
-                            Create tasks to manage multi-week validation projects, automatically generate test numbers within each task, 
-                            and track overall progress with team coordination and deadline management.
+                            <strong>Task Management</strong> helps you organize laboratory work into projects. Each task groups related samples and tests together for better organization and tracking.
                         </p>
-                        <div class="alert alert-info mb-0">
-                            <small><i class="fas fa-lightbulb me-1"></i>
-                            <strong>Usage:</strong> Create a task like "Product Validation Phase 2", assign samples during registration, 
-                            create tests that get automatic numbers (PVP2-01, PVP2-02), and monitor project-wide completion status.
-                            </small>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-plus-circle me-2"></i>Create Tasks</h6>
+                                <p class="small">Set up new projects with name, description, priority, and assigned team members.</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-vial me-2"></i>Organize Samples</h6>
+                                <p class="small">Assign samples to tasks during registration or afterwards for better tracking.</p>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-edit me-2"></i>Update Status</h6>
+                                <p class="small">Change task status and priority directly in the table using dropdown menus.</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-chart-line me-2"></i>Track Progress</h6>
+                                <p class="small">Monitor how many samples and tests are connected to each task.</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -157,7 +169,6 @@
                                     <th>Status</th>
                                     <th>Priority</th>
                                     <th>Assigned To</th>
-                                    <th>Progress</th>
                                     <th>Samples</th>
                                     <th>Tests</th>
                                     <th>Due Date</th>
@@ -204,7 +215,19 @@
                         <textarea class="form-control" id="taskDescription" rows="3"></textarea>
                     </div>
                     <div class="row">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="taskStatus" class="form-label">Status</label>
+                                <select class="form-select" id="taskStatus">
+                                    <option value="Planning" selected>Planning</option>
+                                    <option value="Active">Active</option>
+                                    <option value="On Hold">On Hold</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
                             <div class="mb-3">
                                 <label for="taskPriority" class="form-label">Priority</label>
                                 <select class="form-select" id="taskPriority">
@@ -215,13 +238,13 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="mb-3">
                                 <label for="startDate" class="form-label">Start Date</label>
                                 <input type="date" class="form-control" id="startDate">
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="mb-3">
                                 <label for="endDate" class="form-label">Due Date</label>
                                 <input type="date" class="form-control" id="endDate">
@@ -427,29 +450,58 @@ function displayTasks(tasks) {
     const tbody = document.getElementById('tasksTableBody');
     tbody.innerHTML = '';
     
+    console.log('Displaying tasks:', tasks); // Debug log
+    
     tasks.forEach(task => {
+        console.log('Task data:', task); // Debug log for each task
+        
         const row = document.createElement('tr');
+        
+        // Create select elements with proper event handlers
+        const statusSelect = document.createElement('select');
+        statusSelect.className = 'form-select form-select-sm status-select';
+        statusSelect.style.cssText = 'width: auto; display: inline-block;';
+        statusSelect.innerHTML = `
+            <option value="Planning" ${task.status === 'Planning' ? 'selected' : ''}>Planning</option>
+            <option value="Active" ${task.status === 'Active' ? 'selected' : ''}>Active</option>
+            <option value="On Hold" ${task.status === 'On Hold' ? 'selected' : ''}>On Hold</option>
+            <option value="Completed" ${task.status === 'Completed' ? 'selected' : ''}>Completed</option>
+            <option value="Cancelled" ${task.status === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
+        `;
+        statusSelect.addEventListener('change', function() {
+            console.log('Status dropdown changed:', task.task_id, this.value);
+            updateTaskField(task.task_id, 'status', this.value);
+        });
+        
+        const prioritySelect = document.createElement('select');
+        prioritySelect.className = 'form-select form-select-sm priority-select';
+        prioritySelect.style.cssText = 'width: auto; display: inline-block;';
+        prioritySelect.innerHTML = `
+            <option value="Low" ${task.priority === 'Low' ? 'selected' : ''}>Low</option>
+            <option value="Medium" ${task.priority === 'Medium' ? 'selected' : ''}>Medium</option>
+            <option value="High" ${task.priority === 'High' ? 'selected' : ''}>High</option>
+            <option value="Critical" ${task.priority === 'Critical' ? 'selected' : ''}>Critical</option>
+        `;
+        prioritySelect.addEventListener('change', function() {
+            console.log('Priority dropdown changed:', task.task_id, this.value);
+            updateTaskField(task.task_id, 'priority', this.value);
+        });
+        
         row.innerHTML = `
             <td><strong>${task.task_number}</strong></td>
             <td>
                 <div class="fw-medium">${task.task_name}</div>
                 <small class="text-muted">${task.description || ''}</small>
             </td>
-            <td><span class="badge bg-${getStatusColor(task.status)}">${task.status}</span></td>
-            <td><span class="badge bg-${getPriorityColor(task.priority)}">${task.priority}</span></td>
+            <td class="status-cell"></td>
+            <td class="priority-cell"></td>
             <td>${task.assigned_to_name || 'Unassigned'}</td>
             <td>
-                <div class="progress" style="height: 6px;">
-                    <div class="progress-bar" role="progressbar" style="width: ${task.completion_percentage || 0}%"></div>
-                </div>
-                <small class="text-muted">${task.completion_percentage || 0}%</small>
-            </td>
-            <td>
-                <span class="badge bg-info">${task.total_samples || 0}</span>
+                <span class="badge bg-info">${task.total_samples}</span>
                 <small class="text-muted">samples</small>
             </td>
             <td>
-                <span class="badge bg-primary">${task.total_tests || 0}</span>
+                <span class="badge bg-primary">${task.total_tests}</span>
                 <small class="text-muted">tests</small>
             </td>
             <td>${task.end_date ? new Date(task.end_date).toLocaleDateString() : '-'}</td>
@@ -464,6 +516,13 @@ function displayTasks(tasks) {
                 </div>
             </td>
         `;
+        
+        // Insert the select elements into their designated cells
+        const statusCell = row.querySelector('.status-cell');
+        const priorityCell = row.querySelector('.priority-cell');
+        statusCell.appendChild(statusSelect);
+        priorityCell.appendChild(prioritySelect);
+        
         tbody.appendChild(row);
     });
 }
@@ -495,6 +554,7 @@ async function createTask() {
             task_name: document.getElementById('taskName').value,
             project_code: document.getElementById('projectCode').value,
             description: document.getElementById('taskDescription').value,
+            status: document.getElementById('taskStatus').value,
             priority: document.getElementById('taskPriority').value,
             start_date: document.getElementById('startDate').value,
             end_date: document.getElementById('endDate').value,
@@ -576,21 +636,20 @@ function generateTaskDetailsHTML(task, samples, tests) {
         <div class="row">
             <div class="col-md-6">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6>Samples (${samples.length})</h6>
-                    <button class="btn btn-sm btn-outline-primary" onclick="showAssignSampleModal(${task.task_id})">
-                        <i class="fas fa-plus"></i> Assign Sample
-                    </button>
+                    <h6>Task Samples (${samples.length})</h6>
+                    <small class="text-muted">Samples assigned to this project</small>
                 </div>
                 <div class="table-responsive" style="max-height: 300px;">
                     <table class="table table-sm">
-                        <thead><tr><th>Sample ID</th><th>Description</th><th>Status</th><th>Assignment</th></tr></thead>
+                        <thead><tr><th>Sample ID</th><th>Description</th><th>Status</th><th>Usage</th><th>Remaining</th></tr></thead>
                         <tbody>
                             ${samples.map(sample => `
                                 <tr>
                                     <td>${sample.SampleIDFormatted}</td>
                                     <td>${sample.Description}</td>
-                                    <td><span class="badge bg-secondary">${sample.SampleStatus}</span></td>
-                                    <td><small class="text-muted">${sample.Purpose}</small></td>
+                                    <td><span class="badge bg-${getStatusColor(sample.UsageStatus)}">${sample.UsageStatus}</span></td>
+                                    <td><small class="text-muted">${sample.TestNo ? `Test: ${sample.TestNo}` : 'Available'}</small></td>
+                                    <td><small>${sample.AmountRemaining || 0}</small></td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -633,6 +692,7 @@ async function editTask(taskId) {
             document.getElementById('taskName').value = data.task.task_name || '';
             document.getElementById('projectCode').value = data.task.project_code || '';
             document.getElementById('taskDescription').value = data.task.description || '';
+            document.getElementById('taskStatus').value = data.task.status || 'Planning';
             document.getElementById('taskPriority').value = data.task.priority || 'Medium';
             document.getElementById('startDate').value = data.task.start_date || '';
             document.getElementById('endDate').value = data.task.end_date || '';
@@ -661,6 +721,7 @@ async function updateTask(taskId) {
             task_name: document.getElementById('taskName').value,
             project_code: document.getElementById('projectCode').value,
             description: document.getElementById('taskDescription').value,
+            status: document.getElementById('taskStatus').value,
             priority: document.getElementById('taskPriority').value,
             start_date: document.getElementById('startDate').value,
             end_date: document.getElementById('endDate').value,
@@ -708,6 +769,52 @@ function resetTaskModal() {
     
     document.getElementById('startDate').value = today.toISOString().split('T')[0];
     document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+}
+
+// Update task field (status/priority) inline
+async function updateTaskField(taskId, field, value) {
+    try {
+        console.log('updateTaskField called:', { taskId, field, value });
+        
+        if (!taskId || !field || !value) {
+            console.error('Missing parameters:', { taskId, field, value });
+            showAlert('danger', 'Invalid parameters for task update');
+            return;
+        }
+        
+        const formData = {};
+        formData[field] = value;
+        
+        const response = await fetch(`/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showAlert('success', `Task ${field} updated successfully!`);
+            loadTaskStats(); // Refresh stats
+        } else {
+            console.error('API error response:', data);
+            if (data.errors && data.errors.length > 0) {
+                console.error('Validation errors:', data.errors);
+                showAlert('danger', `Validation errors: ${data.errors.join(', ')}`);
+            } else {
+                showAlert('danger', `Error updating task ${field}: ` + (data.error || 'Unknown error'));
+            }
+            // Reload tasks to revert the change
+            loadTasks();
+        }
+    } catch (error) {
+        console.error(`Error updating task ${field}:`, error);
+        showAlert('danger', `Error updating task ${field}`);
+        // Reload tasks to revert the change
+        loadTasks();
+    }
 }
 
 let currentTaskIdForAssignment = null;
@@ -948,4 +1055,23 @@ function showAlert(type, message) {
     }, 5000);
 }
 </script>
+
+<style>
+.status-select, .priority-select {
+    min-width: 100px !important;
+    font-size: 0.85rem !important;
+    padding: 0.25rem 0.5rem !important;
+    border: 1px solid #dee2e6 !important;
+    border-radius: 0.375rem !important;
+}
+
+.status-select:focus, .priority-select:focus {
+    border-color: #86b7fe !important;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25) !important;
+}
+
+.table td {
+    vertical-align: middle;
+}
+</style>
 {% endblock %}

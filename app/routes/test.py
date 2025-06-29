@@ -384,3 +384,26 @@ def init_test(blueprint, mysql):
                 'success': False,
                 'error': str(e)
             }), 500
+    
+    @blueprint.route('/api/tasks/<int:task_id>/available-samples', methods=['GET'])
+    def get_task_samples_for_test(task_id):
+        """
+        Get samples available for test assignment from a specific task.
+        """
+        try:
+            search_term = request.args.get('search', '')
+            
+            samples = test_service.get_available_samples_for_task(task_id, search_term)
+            
+            return jsonify({
+                'success': True,
+                'samples': samples,
+                'count': len(samples)
+            })
+            
+        except Exception as e:
+            print(f"Error getting task samples: {e}")
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500

@@ -440,28 +440,14 @@ class SampleService:
                         serial_number
                     ))
             
-            # Assign sample to task if task was selected during registration
+            # Log task assignment if task was selected during registration
             task_assignment_result = None
             if sample_data.get('task'):
-                try:
-                    cursor.execute("""
-                        INSERT INTO tasksample (TaskID, SampleID, AssignedBy, Purpose)
-                        VALUES (%s, %s, %s, %s)
-                    """, (
-                        sample_data.get('task'),
-                        sample_id,
-                        user_id,
-                        f"Assigned during sample registration: {description}"
-                    ))
-                    
-                    task_assignment_result = {
-                        'task_id': sample_data.get('task'),
-                        'assignment_id': cursor.lastrowid
-                    }
-                    print(f"DEBUG: Sample {sample_id} assigned to task {sample_data.get('taskId')}")
-                except Exception as task_error:
-                    print(f"WARNING: Failed to assign sample to task: {task_error}")
-                    # Don't fail sample creation if task assignment fails
+                task_assignment_result = {
+                    'task_id': sample_data.get('task'),
+                    'sample_id': sample_id
+                }
+                print(f"DEBUG: Sample {sample_id} assigned to task {sample_data.get('task')} during registration")
             
             # Log the activity
             cursor.execute("""

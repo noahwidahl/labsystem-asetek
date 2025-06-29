@@ -66,6 +66,10 @@ class TaskService:
         
         result, _ = self.db.execute_query(query, params)
         
+        print(f"DEBUG: Query returned {len(result)} tasks")
+        for i, row in enumerate(result):
+            print(f"DEBUG: Task {i+1} - ID: {row[0]}, Samples: {row[17] if len(row) > 17 else 'N/A'}, Tests: {row[18] if len(row) > 18 else 'N/A'}")
+        
         tasks = []
         for row in result:
             # Parse team members JSON
@@ -271,52 +275,56 @@ class TaskService:
                     'error': 'Task not found'
                 }
             
-            # Update task with new data
-            task = Task.from_dict(task_data)
-            task.task_id = task_id
+            # For partial updates (like status/priority), update only the provided fields
+            # without full validation
+            update_fields = []
+            update_values = []
             
-            # Validate task data
-            validation = task.validate()
-            if not validation['valid']:
+            allowed_fields = {
+                'task_number': 'TaskNumber',
+                'task_name': 'TaskName', 
+                'description': 'Description',
+                'project_code': 'ProjectCode',
+                'status': 'Status',
+                'priority': 'Priority',
+                'start_date': 'StartDate',
+                'end_date': 'EndDate',
+                'estimated_duration': 'EstimatedDuration',
+                'assigned_to': 'AssignedTo',
+                'notes': 'Notes'
+            }
+            
+            for field_key, db_column in allowed_fields.items():
+                if field_key in task_data:
+                    update_fields.append(f"{db_column} = %s")
+                    update_values.append(task_data[field_key])
+            
+            if not update_fields:
                 return {
                     'success': False,
-                    'errors': validation['errors']
+                    'error': 'No valid fields to update'
                 }
             
-            # Check if task number conflicts with other tasks
-            if task.task_number != existing_task.task_number:
+            # Check if task number conflicts with other tasks (only if task_number is being updated)
+            if 'task_number' in task_data and task_data['task_number'] != existing_task.task_number:
                 existing_query = "SELECT TaskID FROM task WHERE TaskNumber = %s AND TaskID != %s"
-                existing_result, _ = self.db.execute_query(existing_query, (task.task_number, task_id))
+                existing_result, _ = self.db.execute_query(existing_query, (task_data['task_number'], task_id))
                 
                 if existing_result:
                     return {
                         'success': False,
-                        'error': f'Task number {task.task_number} already exists'
+                        'error': f'Task number {task_data["task_number"]} already exists'
                     }
             
-            # Update task
-            update_query = """
-                UPDATE task SET
-                    TaskNumber = %s, TaskName = %s, Description = %s, ProjectCode = %s,
-                    Status = %s, Priority = %s, StartDate = %s, EndDate = %s,
-                    EstimatedDuration = %s, AssignedTo = %s, TeamMembers = %s, Notes = %s
-                WHERE TaskID = %s
-            """
+            # Update task with only the provided fields
+            update_query = f"UPDATE task SET {', '.join(update_fields)} WHERE TaskID = %s"
+            update_values.append(task_id)
             
-            # Convert team members to JSON
-            team_members_json = json.dumps(task.team_members) if task.team_members else None
-            
-            params = (
-                task.task_number, task.task_name, task.description, task.project_code,
-                task.status, task.priority, task.start_date, task.end_date,
-                task.estimated_duration, task.assigned_to, team_members_json, task.notes,
-                task_id
-            )
-            
-            self.db.execute_query(update_query, params, commit=True)
+            self.db.execute_query(update_query, update_values, commit=True)
             
             # Log the activity
-            self._log_task_activity(task_id, 'Task updated', f"Task '{task.task_name}' updated", user_id)
+            updated_fields = list(task_data.keys())
+            self._log_task_activity(task_id, 'Task updated', f"Task fields updated: {', '.join(updated_fields)}", user_id)
             
             return {
                 'success': True,

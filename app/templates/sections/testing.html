@@ -24,21 +24,27 @@
             </div>
             <div class="card-body">
                 <p class="mb-3">
-                    <strong>Test Administration</strong> handles daily execution of individual laboratory tests and sample processing. 
-                    Create and manage specific test procedures, assign samples from storage, track consumption and usage, 
-                    transfer samples between tests, and record results with complete chain of custody documentation.
+                    <strong>Test Administration</strong> manages individual laboratory tests. Create tests, assign samples, track progress, and record results.
                 </p>
-                <div class="alert alert-warning mb-3">
-                    <small><i class="fas fa-info-circle me-1"></i>
-                    <strong>Test ID Format:</strong> Tests use format <code>T1234.1</code> where T1234 is the sequential number 
-                    and .1 is the iteration (T1234.1 → T1234.2). Samples get identifiers like <code>T1234.1_1</code>, <code>T1234.1_2</code>.
-                    </small>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-plus-circle me-2"></i>Create Tests</h6>
+                        <p class="small">Set up new tests and optionally assign them to a task/project for organization.</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-vials me-2"></i>Assign Samples</h6>
+                        <p class="small">Add samples from storage to your tests and specify amounts to use.</p>
+                    </div>
                 </div>
-                <div class="alert alert-info mb-0">
-                    <small><i class="fas fa-lightbulb me-1"></i>
-                    <strong>Usage:</strong> Create tests like "Temperature Validation", assign 5ml from storage, 
-                    execute procedures, record results, and manage sample transfers or iterations as needed.
-                    </small>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-play me-2"></i>Run Tests</h6>
+                        <p class="small">Start tests and track their progress from Created → In Progress → Completed.</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-copy me-2"></i>Create Iterations</h6>
+                        <p class="small">Repeat tests with automatic numbering and copy settings from previous versions.</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -117,6 +123,23 @@
             <div class="modal-body">
                 <form id="createTestForm">
                     <div class="mb-3">
+                        <label for="taskSelection" class="form-label">Select Project/Task *</label>
+                        <select class="form-select" id="taskSelection" required onchange="onTaskSelected()">
+                            <option value="">Choose a project/task...</option>
+                            {% for task in tasks %}
+                            <option value="{{ task.TaskID }}">{{ task.TaskNumber }} - {{ task.TaskName }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">Select the project this test belongs to</small>
+                    </div>
+                    
+                    <div class="mb-3" id="testNumberSection" style="display: none;">
+                        <label for="testNumber" class="form-label">Test Number</label>
+                        <input type="text" class="form-control" id="testNumber" readonly>
+                        <small class="form-text text-muted">Auto-generated based on selected task</small>
+                    </div>
+                    
+                    <div class="mb-3">
                         <label for="testName" class="form-label">Test Name *</label>
                         <input type="text" class="form-control" id="testName" required>
                     </div>
@@ -137,7 +160,12 @@
                     
                     <!-- Sample Selection (initially hidden) -->
                     <div id="sampleSelectionSection" class="d-none">
-                        <h6>Select Samples</h6>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Task Samples:</strong> Only showing samples assigned to the selected project/task.
+                            <span id="selectedTaskName"></span>
+                        </div>
+                        <h6>Select Samples from Project Pool</h6>
                         <div class="table-responsive">
                             <table class="table table-sm">
                                 <thead>
@@ -146,25 +174,12 @@
                                         <th>Sample ID</th>
                                         <th>Description</th>
                                         <th>Available</th>
+                                        <th>Test ID</th>
                                         <th>Amount</th>
                                     </tr>
                                 </thead>
                                 <tbody id="sampleSelectionTable">
-                                    {% for sample in samples %}
-                                    <tr>
-                                        <td>
-                                            <input type="checkbox" class="form-check-input sample-checkbox" 
-                                                   value="{{ sample.SampleID }}" onchange="toggleSampleRow(this)">
-                                        </td>
-                                        <td>{{ sample.SampleIDFormatted }}</td>
-                                        <td>{{ sample.Description }}</td>
-                                        <td>{{ sample.AmountAvailable }}</td>
-                                        <td>
-                                            <input type="number" class="form-control form-control-sm sample-amount" 
-                                                   min="1" max="{{ sample.AmountAvailable }}" value="1" disabled>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
+                                    <!-- Samples will be loaded dynamically based on selected task -->
                                 </tbody>
                             </table>
                         </div>
@@ -242,18 +257,110 @@ function showCreateTestModal() {
     const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
     document.getElementById('createTestForm').reset();
     document.getElementById('sampleSelectionSection').classList.add('d-none');
+    document.getElementById('testNumberSection').style.display = 'none';
+    document.getElementById('selectedTaskName').textContent = '';
     modal.show();
 }
 
+// Handle task selection
+async function onTaskSelected() {
+    const taskSelect = document.getElementById('taskSelection');
+    const taskId = taskSelect.value;
+    const testNumberSection = document.getElementById('testNumberSection');
+    const selectedTaskName = document.getElementById('selectedTaskName');
+    
+    if (taskId) {
+        try {
+            // Get next test number for this task
+            const response = await fetch(`/api/tasks/${taskId}/next-test-number`);
+            const data = await response.json();
+            
+            if (data.success) {
+                document.getElementById('testNumber').value = data.test_number;
+                testNumberSection.style.display = 'block';
+                
+                // Update task name display
+                const selectedOption = taskSelect.options[taskSelect.selectedIndex];
+                selectedTaskName.textContent = ` (${selectedOption.text})`;
+            } else {
+                console.error('Error getting test number:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading test number:', error);
+        }
+    } else {
+        testNumberSection.style.display = 'none';
+        selectedTaskName.textContent = '';
+    }
+}
+
 // Toggle sample selection section
-document.getElementById('addSamplesNow').addEventListener('change', function() {
+document.getElementById('addSamplesNow').addEventListener('change', async function() {
     const section = document.getElementById('sampleSelectionSection');
     if (this.checked) {
-        section.classList.remove('d-none');
+        const taskId = document.getElementById('taskSelection').value;
+        if (taskId) {
+            await loadTaskSamples(taskId);
+            section.classList.remove('d-none');
+        } else {
+            alert('Please select a project/task first');
+            this.checked = false;
+        }
     } else {
         section.classList.add('d-none');
     }
 });
+
+// Load samples from selected task
+async function loadTaskSamples(taskId) {
+    try {
+        const response = await fetch(`/api/tasks/${taskId}/available-samples`);
+        const data = await response.json();
+        
+        if (data.success) {
+            displayTaskSamples(data.samples);
+        } else {
+            console.error('Error loading task samples:', data.error);
+            document.getElementById('sampleSelectionTable').innerHTML = `
+                <tr><td colspan="6" class="text-center text-muted">Error loading samples: ${data.error}</td></tr>
+            `;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('sampleSelectionTable').innerHTML = `
+            <tr><td colspan="6" class="text-center text-muted">Error loading samples</td></tr>
+        `;
+    }
+}
+
+// Display task samples in the table
+function displayTaskSamples(samples) {
+    const tableBody = document.getElementById('sampleSelectionTable');
+    
+    if (samples.length === 0) {
+        tableBody.innerHTML = `
+            <tr><td colspan="6" class="text-center text-muted">No samples available in this project</td></tr>
+        `;
+        return;
+    }
+    
+    tableBody.innerHTML = samples.map(sample => `
+        <tr>
+            <td>
+                <input type="checkbox" class="form-check-input sample-checkbox" 
+                       value="${sample.SampleID}" onchange="toggleSampleRow(this)">
+            </td>
+            <td>${sample.SampleIDFormatted}</td>
+            <td>${sample.Description}</td>
+            <td>${sample.AvailableAmount} ${sample.Unit}</td>
+            <td><span class="badge bg-info">Auto: ${document.getElementById('testNumber').value}_${samples.indexOf(sample) + 1}</span></td>
+            <td>
+                <input type="number" class="form-control form-control-sm sample-amount" 
+                       min="1" max="${sample.AvailableAmount}" value="1" disabled>
+            </td>
+        </tr>
+    `).join('');
+}
 
 // Toggle sample row
 function toggleSampleRow(checkbox) {
@@ -271,9 +378,15 @@ function toggleSampleRow(checkbox) {
 
 // Submit create test
 function submitCreateTest() {
+    const taskId = document.getElementById('taskSelection').value;
     const testName = document.getElementById('testName').value;
     const testDescription = document.getElementById('testDescription').value;
     const addSamples = document.getElementById('addSamplesNow').checked;
+    
+    if (!taskId) {
+        showError('Please select a project/task');
+        return;
+    }
     
     if (!testName.trim()) {
         showError('Test name is required');
@@ -282,7 +395,8 @@ function submitCreateTest() {
     
     const testData = {
         testName: testName,
-        description: testDescription
+        description: testDescription,
+        task_id: parseInt(taskId)
     };
     
     // Create test first
