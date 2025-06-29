@@ -311,11 +311,7 @@ class HistoryManager {
             }
         });
 
-        // Clear the history table
-        const historyTable = document.getElementById('modal-sample-history');
-        if (historyTable) {
-            historyTable.innerHTML = '<tr><td colspan="4" class="text-center">Loading...</td></tr>';
-        }
+        // Note: History table loading removed
     }
 
     populateModalWithData(data) {
@@ -345,55 +341,10 @@ class HistoryManager {
             viewSampleBtn.style.display = 'none';
         }
 
-        // Fill sample history table
-        this.populateHistoryTable(data.sample_history || []);
+        // Note: Complete sample history section removed - users can search in main history page
     }
 
-    populateHistoryTable(sampleHistory) {
-        const historyTable = document.getElementById('modal-sample-history');
-        if (!historyTable) return;
-        
-        historyTable.innerHTML = '';
-        
-        if (sampleHistory && sampleHistory.length > 0) {
-            sampleHistory.forEach(historyItem => {
-                const row = document.createElement('tr');
-                
-                // Date cell
-                const dateCell = document.createElement('td');
-                dateCell.textContent = historyItem.Timestamp;
-                row.appendChild(dateCell);
-                
-                // Action cell with badge
-                const actionCell = document.createElement('td');
-                const actionBadge = document.createElement('span');
-                actionBadge.className = `badge ${historyItem.ActionType.toLowerCase().replace(/\s+/g, '-')}`;
-                actionBadge.textContent = historyItem.ActionType;
-                actionCell.appendChild(actionBadge);
-                row.appendChild(actionCell);
-                
-                // User cell
-                const userCell = document.createElement('td');
-                userCell.textContent = historyItem.UserName;
-                row.appendChild(userCell);
-                
-                // Notes cell
-                const notesCell = document.createElement('td');
-                notesCell.textContent = historyItem.Notes;
-                row.appendChild(notesCell);
-                
-                historyTable.appendChild(row);
-            });
-        } else {
-            const row = document.createElement('tr');
-            const cell = document.createElement('td');
-            cell.colSpan = 4;
-            cell.textContent = 'No sample history found';
-            cell.className = 'text-center text-muted';
-            row.appendChild(cell);
-            historyTable.appendChild(row);
-        }
-    }
+    // Method removed - complete sample history section no longer needed
 
     showModalError(message) {
         // Clear all fields and show error message
@@ -422,11 +373,7 @@ class HistoryManager {
             viewSampleBtn.style.display = 'none';
         }
 
-        // Clear the history table
-        const historyTable = document.getElementById('modal-sample-history');
-        if (historyTable) {
-            historyTable.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading history</td></tr>';
-        }
+        // Note: History table section removed
     }
 }
 
