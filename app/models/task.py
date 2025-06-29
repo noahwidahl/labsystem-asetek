@@ -110,9 +110,9 @@ class Task:
                 'created_by_name': getattr(self, 'created_by_name', None),
                 'team_members': self.team_members,
                 'notes': self.notes,
-                'completion_percentage': 0,  # Will be calculated by service
-                'total_samples': 0,  # Will be calculated by service
-                'total_tests': 0  # Will be calculated by service
+                'completion_percentage': getattr(self, 'completion_percentage', 0),
+                'total_samples': getattr(self, 'total_samples', 0),
+                'total_tests': getattr(self, 'total_tests', 0)
             }
         except Exception as e:
             print(f"Error in Task.to_dict(): {e}")
