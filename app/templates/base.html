@@ -76,9 +76,9 @@
                 <i class="fas fa-barcode"></i>
                 <span>Scanner</span>
             </a>
-            <a href="{{ url_for('expiration.notifications_page') }}" class="nav-item {% if request.path == url_for('expiration.notifications_page') %}active{% endif %}">
-                <i class="fas fa-bell"></i>
-                <span>Notifications</span>
+            <a href="{{ url_for('sample.expiry_page') }}" class="nav-item {% if request.path == url_for('sample.expiry_page') %}active{% endif %}">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Expiry Management</span>
             </a>
         </div>
     </nav>

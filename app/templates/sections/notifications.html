@@ -10,6 +10,9 @@
             <button class="btn btn-outline-secondary" onclick="refreshNotifications()">
                 <i class="fas fa-sync-alt"></i> Refresh
             </button>
+            <button class="btn btn-outline-warning" onclick="syncNotifications()">
+                <i class="fas fa-database"></i> Sync
+            </button>
             <button class="btn btn-outline-primary" onclick="markAllAsRead()">
                 <i class="fas fa-check-double"></i> Mark All Read
             </button>
@@ -502,6 +505,27 @@ function viewSampleDetails(sampleId) {
 function refreshNotifications() {
     loadNotificationSummary();
     loadNotifications();
+}
+
+function syncNotifications() {
+    if (!confirm('Sync notifications with current sample expire dates? This will create notifications for samples that are expiring or expired.')) return;
+    
+    fetch('/api/notifications/sync', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showSuccess(data.message);
+            refreshNotifications();
+        } else {
+            showError('Failed to sync notifications: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error syncing notifications:', error);
+        showError('Error syncing notifications');
+    });
 }
 
 function formatDate(dateString) {

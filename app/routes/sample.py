@@ -15,15 +15,15 @@ def init_sample(blueprint, mysql):
             cursor = mysql.connection.cursor()
             
             # Get suppliers
-            cursor.execute("SELECT SupplierID, SupplierName FROM Supplier")
+            cursor.execute("SELECT SupplierID, SupplierName FROM supplier")
             suppliers = [dict(SupplierID=row[0], SupplierName=row[1]) for row in cursor.fetchall()]
             
             # Get users
-            cursor.execute("SELECT UserID, Name FROM User")
+            cursor.execute("SELECT UserID, Name FROM user")
             users = [dict(UserID=row[0], Name=row[1]) for row in cursor.fetchall()]
             
             # Get units (translate 'stk' to 'pcs')
-            cursor.execute("SELECT UnitID, UnitName FROM Unit ORDER BY UnitName")
+            cursor.execute("SELECT UnitID, UnitName FROM unit ORDER BY UnitName")
             units = []
             for row in cursor.fetchall():
                 unit_name = row[1]
@@ -35,8 +35,8 @@ def init_sample(blueprint, mysql):
             # Get locations
             cursor.execute("""
                 SELECT l.LocationID, l.LocationName, lb.LabName
-                FROM StorageLocation l
-                JOIN Lab lb ON l.LabID = lb.LabID
+                FROM storagelocation l
+                JOIN lab lb ON l.LabID = lb.LabID
             """)
             locations = []
             for row in cursor.fetchall():
@@ -47,7 +47,7 @@ def init_sample(blueprint, mysql):
                 })
             
             # Get container types
-            cursor.execute("SELECT ContainerTypeID, TypeName, Description, DefaultCapacity FROM ContainerType")
+            cursor.execute("SELECT ContainerTypeID, TypeName, Description, DefaultCapacity FROM containertype")
             type_columns = [col[0] for col in cursor.description]
             container_types = [dict(zip(type_columns, row)) for row in cursor.fetchall()]
             
@@ -1431,6 +1431,127 @@ def init_sample(blueprint, mysql):
                 'error': str(e)
             }), 500
             
+    @blueprint.route('/api/suppliers/search', methods=['GET'])
+    def search_suppliers():
+        """Search suppliers by name"""
+        try:
+            search_query = request.args.get('q', '').strip()
+            
+            if not search_query:
+                return jsonify({
+                    'success': True,
+                    'suppliers': []
+                })
+            
+            cursor = mysql.connection.cursor()
+            
+            # Search suppliers by name (case-insensitive partial match)
+            cursor.execute("""
+                SELECT SupplierID, SupplierName, ContactEmail, ContactPhone 
+                FROM supplier 
+                WHERE SupplierName LIKE %s 
+                ORDER BY SupplierName 
+                LIMIT 10
+            """, (f"%{search_query}%",))
+            
+            suppliers = []
+            for row in cursor.fetchall():
+                suppliers.append({
+                    'id': row[0],
+                    'name': row[1],
+                    'email': row[2] if row[2] else None,
+                    'phone': row[3] if row[3] else None
+                })
+            
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'suppliers': suppliers
+            })
+            
+        except Exception as e:
+            print(f"API error searching suppliers: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+    @blueprint.route('/api/notifications/create-test-data', methods=['POST'])
+    def create_test_notifications():
+        """
+        Create test notifications for demonstration and testing
+        """
+        try:
+            cursor = mysql.connection.cursor()
+            
+            # First, update some samples to have different expire dates for testing
+            # Update sample 1 to expire in 3 days
+            cursor.execute("""
+                UPDATE sample 
+                SET ExpireDate = DATE_ADD(CURDATE(), INTERVAL 3 DAY)
+                WHERE SampleID = 1
+            """)
+            
+            # Update sample 2 to expire in 10 days
+            cursor.execute("""
+                UPDATE sample 
+                SET ExpireDate = DATE_ADD(CURDATE(), INTERVAL 10 DAY)
+                WHERE SampleID = 2
+            """)
+            
+            # Update sample 3 to be expired (yesterday)
+            cursor.execute("""
+                UPDATE sample 
+                SET ExpireDate = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+                WHERE SampleID = 3
+            """)
+            
+            # Update sample 6 to expire in 5 days
+            cursor.execute("""
+                UPDATE sample 
+                SET ExpireDate = DATE_ADD(CURDATE(), INTERVAL 5 DAY)
+                WHERE SampleID = 6
+            """)
+            
+            # Now create notifications for these samples
+            notifications_created = 0
+            
+            # Create EXPIRED notification for sample 3
+            cursor.execute("""
+                INSERT INTO expirationnotification (SampleID, UserID, NotificationType)
+                VALUES (3, 1, 'EXPIRED')
+            """)
+            notifications_created += 1
+            
+            # Create EXPIRING_SOON notifications for samples 1, 2, 6
+            for sample_id in [1, 2, 6]:
+                cursor.execute("""
+                    INSERT INTO expirationnotification (SampleID, UserID, NotificationType)
+                    VALUES (%s, 1, 'EXPIRING_SOON')
+                """, (sample_id,))
+                notifications_created += 1
+            
+            mysql.connection.commit()
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'message': f'Created {notifications_created} test notifications and updated sample expire dates',
+                'notifications_created': notifications_created
+            })
+            
+        except Exception as e:
+            print(f"Error creating test notifications: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
     @blueprint.route('/api/suppliers', methods=['POST'])
     def create_supplier():
         """
@@ -1626,6 +1747,13 @@ def init_sample(blueprint, mysql):
                 'sample': None
             }), 500
     
+    @blueprint.route('/expiry')
+    def expiry_page():
+        """
+        Render the dedicated expiry management page
+        """
+        return render_template('sections/expiry.html')
+
     @blueprint.route('/disposal')
     def disposal_page():
         """
