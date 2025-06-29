@@ -68,14 +68,10 @@ def init_dashboard(blueprint, mysql):
             """)
             new_today = cursor.fetchone()[0] or 0
             
-            # Get number of active tests
+            # Get number of active tests (In Progress or Created status)
             cursor.execute("""
                 SELECT COUNT(*) FROM test t
-                WHERE t.CreatedDate > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
-                AND NOT EXISTS (
-                    SELECT 1 FROM history h 
-                    WHERE h.TestID = t.TestID AND h.ActionType = 'Test completed'
-                )
+                WHERE t.Status IN ('In Progress', 'Created')
             """)
             active_tests_count = cursor.fetchone()[0] or 0
             

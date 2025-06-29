@@ -14,8 +14,12 @@ def init_test(blueprint, mysql):
     @blueprint.route('/testing')
     def testing():
         try:
-            # Get active tests
-            active_tests = test_service.get_active_tests()
+            # Get current user and filter tests to only show user's own tests
+            current_user = get_current_user_with_mysql()
+            user_id = current_user.get('UserID', 1)
+            
+            # Get active tests (only for current user)
+            active_tests = test_service.get_active_tests(user_filter=user_id)
             
             # Get available samples for test creation
             cursor = mysql.connection.cursor()
@@ -86,7 +90,11 @@ def init_test(blueprint, mysql):
             if task_filter:
                 task_filter = int(task_filter)
             
-            tests = test_service.get_active_tests(task_filter)
+            # Get current user and filter tests to only show user's own tests
+            current_user = get_current_user_with_mysql()
+            user_id = current_user.get('UserID', 1)
+            
+            tests = test_service.get_active_tests(task_filter, user_filter=user_id)
             
             return jsonify({
                 'success': True,

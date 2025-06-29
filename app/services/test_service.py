@@ -6,7 +6,7 @@ class TestService:
         self.mysql = mysql
         self.db = DatabaseManager(mysql)
     
-    def get_active_tests(self, task_filter=None):
+    def get_active_tests(self, task_filter=None, user_filter=None):
         """Get all active tests with sample information, optionally filtered by task"""
         query = """
             SELECT 
@@ -40,6 +40,10 @@ class TestService:
         if task_filter:
             query += " AND t.TaskID = %s"
             params.append(task_filter)
+        
+        if user_filter:
+            query += " AND t.UserID = %s"
+            params.append(user_filter)
         
         query += " ORDER BY t.CreatedDate DESC"
         
