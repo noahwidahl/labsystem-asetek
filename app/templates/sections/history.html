@@ -2,6 +2,7 @@
 
 {% block title %}Chain of Custody - Laboratory Sample System{% endblock %}
 
+
 {% block content %}
 <section id="history" class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
@@ -74,6 +75,8 @@
                                 <i class="fas fa-box"></i>
                                 {% elif item.ActionType == "Transfer" %}
                                 <i class="fas fa-exchange-alt"></i>
+                                {% elif "Container" in item.ActionType %}
+                                <i class="fas fa-cube"></i>
                                 {% else %}
                                 <i class="fas fa-history"></i>
                                 {% endif %}
@@ -83,8 +86,12 @@
                         <div class="custody-content">
                             <div class="custody-header d-flex justify-content-between align-items-center">
                                 <div>
-                                    <span class="custody-type badge {{ item.ActionType|lower }}">{{ item.ActionType }}</span>
-                                    <span class="custody-id ms-2 fw-bold">{{ item.SampleDesc }}</span>
+                                    <span class="custody-type badge {{ item.ActionType|lower|replace(' ', '-') }}">{{ item.ActionType }}</span>
+                                    {% if item.SampleDesc and item.SampleDesc != 'N/A' and item.SampleDesc != None %}
+                                        <span class="custody-id ms-2 fw-bold">{{ item.SampleDesc }}</span>
+                                    {% elif item.ActionType|lower in ['container created', 'container updated', 'container deleted'] %}
+                                        <span class="custody-id ms-2 fw-bold text-muted">Container Action</span>
+                                    {% endif %}
                                 </div>
                                 <button class="btn btn-sm btn-outline-secondary btn-details" 
                                         data-log-id="{{ item.LogID }}"
@@ -208,194 +215,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-
-    // Search and filter functionality
-    const searchInput = document.getElementById('searchInput');
-    const actionFilter = document.getElementById('actionFilter');
-    const clearFiltersBtn = document.getElementById('clearFilters');
-    const resultsInfo = document.getElementById('resultsInfo');
-    
-    // Get all custody items
-    const allItems = document.querySelectorAll('.custody-item');
-    const totalItems = allItems.length;
-    
-    function filterItems() {
-        const searchTerm = searchInput.value.toLowerCase().trim();
-        const selectedAction = actionFilter.value;
-        
-        let visibleCount = 0;
-        
-        allItems.forEach(item => {
-            let showItem = true;
-            
-            // Check search term
-            if (searchTerm) {
-                const sampleDesc = (item.dataset.sample || '').toLowerCase();
-                const notes = (item.dataset.notes || '').toLowerCase();
-                const description = (item.dataset.description || '').toLowerCase();
-                const partNumber = (item.dataset.partnumber || '').toLowerCase();
-                const actionType = (item.dataset.action || '').toLowerCase();
-                
-                const matchesSearch = sampleDesc.includes(searchTerm) || 
-                                    notes.includes(searchTerm) || 
-                                    description.includes(searchTerm) || 
-                                    partNumber.includes(searchTerm) ||
-                                    actionType.includes(searchTerm);
-                
-                if (!matchesSearch) {
-                    showItem = false;
-                }
-            }
-            
-            // Check action filter
-            if (selectedAction && item.dataset.action !== selectedAction) {
-                showItem = false;
-            }
-            
-            // Show/hide item
-            if (showItem) {
-                item.style.display = '';
-                visibleCount++;
-            } else {
-                item.style.display = 'none';
-            }
-        });
-        
-        // Update results info
-        if (searchTerm || selectedAction) {
-            let filterText = '';
-            if (searchTerm) filterText += ` search: "${searchTerm}"`;
-            if (selectedAction) filterText += ` action: "${selectedAction}"`;
-            resultsInfo.innerHTML = `Found ${visibleCount} of ${totalItems} records${filterText}`;
-        } else {
-            resultsInfo.innerHTML = `Showing ${totalItems} most recent history records. Use search and filter to narrow results.`;
-        }
-    }
-    
-    // Event listeners
-    searchInput.addEventListener('input', filterItems);
-    actionFilter.addEventListener('change', filterItems);
-    
-    clearFiltersBtn.addEventListener('click', function() {
-        searchInput.value = '';
-        actionFilter.value = '';
-        filterItems();
-    });
-    
-    // Details modal functionality
-    document.querySelectorAll('.btn-details').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const logId = this.getAttribute('data-log-id');
-            
-            // Show spinner in modal while loading
-            document.getElementById('modal-action-type').innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
-            document.getElementById('modal-timestamp').innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
-            
-            // Show the modal
-            const modal = new bootstrap.Modal(document.getElementById('historyDetailsModal'));
-            modal.show();
-            
-            // Make AJAX request to get detailed information
-            fetch(`/api/history/details/${logId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Fill modal with data
-                        document.getElementById('modal-action-type').textContent = data.details.ActionType;
-                        document.getElementById('modal-timestamp').textContent = data.details.Timestamp;
-                        document.getElementById('modal-user').textContent = data.details.UserName;
-                        document.getElementById('modal-notes').textContent = data.details.Notes;
-                        
-                        document.getElementById('modal-sample-id').textContent = data.details.SampleDesc;
-                        document.getElementById('modal-sample-desc').textContent = data.sample_info?.Description || 'N/A';
-                        document.getElementById('modal-sample-status').textContent = data.sample_info?.Status || 'N/A';
-                        document.getElementById('modal-sample-location').textContent = data.sample_info?.Location || 'N/A';
-                        
-                        // Update the View Sample button
-                        const viewSampleBtn = document.getElementById('viewSampleBtn');
-                        if (data.sample_info?.SampleID) {
-                            viewSampleBtn.style.display = '';
-                            viewSampleBtn.onclick = () => {
-                                window.location.href = `/samples/${data.sample_info.SampleID}`;
-                            };
-                        } else {
-                            viewSampleBtn.style.display = 'none';
-                        }
-                        
-                        // Fill sample history table
-                        const historyTable = document.getElementById('modal-sample-history');
-                        historyTable.innerHTML = '';
-                        
-                        if (data.sample_history && data.sample_history.length > 0) {
-                            data.sample_history.forEach(historyItem => {
-                                const row = document.createElement('tr');
-                                
-                                const dateCell = document.createElement('td');
-                                dateCell.textContent = historyItem.Timestamp;
-                                row.appendChild(dateCell);
-                                
-                                const actionCell = document.createElement('td');
-                                const actionBadge = document.createElement('span');
-                                actionBadge.className = `badge ${historyItem.ActionType.toLowerCase()}`;
-                                actionBadge.textContent = historyItem.ActionType;
-                                actionCell.appendChild(actionBadge);
-                                row.appendChild(actionCell);
-                                
-                                const userCell = document.createElement('td');
-                                userCell.textContent = historyItem.UserName;
-                                row.appendChild(userCell);
-                                
-                                const notesCell = document.createElement('td');
-                                notesCell.textContent = historyItem.Notes;
-                                row.appendChild(notesCell);
-                                
-                                historyTable.appendChild(row);
-                            });
-                        } else {
-                            const row = document.createElement('tr');
-                            const cell = document.createElement('td');
-                            cell.colSpan = 4;
-                            cell.textContent = 'No history available for this sample';
-                            cell.className = 'text-center';
-                            row.appendChild(cell);
-                            historyTable.appendChild(row);
-                        }
-                    } else {
-                        // Show error in modal
-                        document.getElementById('modal-action-type').textContent = 'Error';
-                        document.getElementById('modal-notes').textContent = data.error || 'Failed to load details';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading details:', error);
-                    document.getElementById('modal-action-type').textContent = 'Error';
-                    document.getElementById('modal-notes').textContent = 'Failed to load details';
-                });
-        });
-    });
-    
-    // Export to CSV functionality  
-    document.getElementById('exportCsv').addEventListener('click', function() {
-        // Get current filter state from URL parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        const search = urlParams.get('search') || '';
-        const action = urlParams.get('action') || '';
-        
-        // Build query parameters for export
-        const params = new URLSearchParams();
-        if (search) params.append('search', search);
-        if (action) params.append('action', action);
-        
-        // Redirect to export endpoint with current filters
-        window.location.href = `/api/history/export?${params.toString()}`;
-    });
-});
-</script>
+<script src="{{ url_for('static', filename='js/history.js') }}"></script>
 {% endblock %}

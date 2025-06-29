@@ -185,11 +185,16 @@ def init_dashboard(blueprint, mysql):
             for item in history_data:
                 # Format ItemID based on type
                 item_id = item[4]
+                action_type = item[2]
+                
                 if item_id and item_id != 'N/A':
                     if str(item_id).startswith('T'):  # Test number
                         sample_desc = str(item_id)
                     else:  # Sample ID
                         sample_desc = "SMP-" + str(item_id)
+                elif action_type and action_type.lower() in ['container created', 'container updated', 'container deleted']:
+                    # For container actions without sample ID, use a more descriptive text
+                    sample_desc = None  # Will be handled in template
                 else:
                     sample_desc = 'N/A'
                     
