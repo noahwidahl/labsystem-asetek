@@ -46,6 +46,7 @@ function setupContainerDetailButtons() {
 window.loadContainerDetails = function(containerId) {
     // Clear previous content
     document.getElementById('container-id').textContent = '-';
+    document.getElementById('container-barcode').textContent = '-';
     document.getElementById('container-description').textContent = '-';
     document.getElementById('container-type').textContent = '-';
     document.getElementById('container-status').textContent = '-';
@@ -66,6 +67,7 @@ window.loadContainerDetails = function(containerId) {
                 
                 // Update container information
                 document.getElementById('container-id').textContent = container.ContainerID;
+                document.getElementById('container-barcode').textContent = container.Barcode || '-';
                 document.getElementById('container-description').textContent = container.Description || '-';
                 document.getElementById('container-type').textContent = container.TypeName || 'Standard';
                 document.getElementById('container-status').innerHTML = `<span class="badge bg-primary">${container.Status || 'Active'}</span>`;

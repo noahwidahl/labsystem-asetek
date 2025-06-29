@@ -13,7 +13,7 @@ class BarcodeScanner {
         
         this.barcodePatterns = {
             container: /^CNT-\d+$/,
-            sample: /^(BC\d+-.*|SMP-\d+)$/
+            sample: /^BC\d+-.*$/
         };
         
         // Scan history storage

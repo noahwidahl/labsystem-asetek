@@ -59,6 +59,10 @@ class TaskService:
             search_param = f"%{search_term}%"
             params.extend([search_param, search_param, search_param])
         
+        # Always exclude completed tasks unless specifically requested
+        if not status_filter or status_filter != 'Completed':
+            conditions.append("t.Status != 'Completed'")
+        
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
         
@@ -322,9 +326,28 @@ class TaskService:
             
             self.db.execute_query(update_query, update_values, commit=True)
             
-            # Log the activity
+            # Log the activity with specific attention to status changes
             updated_fields = list(task_data.keys())
-            self._log_task_activity(task_id, 'Task updated', f"Task fields updated: {', '.join(updated_fields)}", user_id)
+            
+            # Special handling for status changes
+            if 'status' in task_data:
+                old_status = existing_task.status
+                new_status = task_data['status']
+                
+                if new_status == 'Completed' and old_status != 'Completed':
+                    # Log task completion specifically
+                    self._log_task_activity(task_id, 'Task completed', f"Task '{existing_task.task_name}' marked as completed", user_id)
+                elif old_status != new_status:
+                    # Log status change
+                    self._log_task_activity(task_id, 'Task status change', f"Status changed from '{old_status}' to '{new_status}'", user_id)
+                
+                # If other fields were also updated, log them separately
+                other_fields = [f for f in updated_fields if f != 'status']
+                if other_fields:
+                    self._log_task_activity(task_id, 'Task updated', f"Task fields updated: {', '.join(other_fields)}", user_id)
+            else:
+                # Regular update log
+                self._log_task_activity(task_id, 'Task updated', f"Task fields updated: {', '.join(updated_fields)}", user_id)
             
             return {
                 'success': True,

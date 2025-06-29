@@ -18,7 +18,7 @@ def init_barcode(blueprint, mysql):
             # Determine barcode type and lookup accordingly
             if barcode.startswith('CNT-'):
                 return lookup_container_barcode(cursor, barcode)
-            elif barcode.startswith('SMP-') or barcode.startswith('BC'):
+            elif barcode.startswith('BC'):
                 return lookup_sample_barcode(cursor, barcode)
             else:
                 return jsonify({
@@ -105,22 +105,10 @@ def init_barcode(blueprint, mysql):
         })
     
     def lookup_sample_barcode(cursor, barcode):
-        """Lookup sample by BC- or SMP- barcode"""
-        # Handle both BC- and SMP- formats
-        if barcode.startswith('SMP-'):
-            try:
-                sample_id = int(barcode.replace('SMP-', ''))
-                query_condition = "s.SampleID = %s"
-                query_param = sample_id
-            except ValueError:
-                return jsonify({
-                    'success': False,
-                    'error': f'Invalid sample barcode format: {barcode}'
-                }), 400
-        else:
-            # BC- format - lookup by barcode field
-            query_condition = "s.Barcode = %s"
-            query_param = barcode
+        """Lookup sample by BC- barcode"""
+        # Only BC- format - lookup by barcode field
+        query_condition = "s.Barcode = %s"
+        query_param = barcode
         
         # Get sample information
         cursor.execute(f"""

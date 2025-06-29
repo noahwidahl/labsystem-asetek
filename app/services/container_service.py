@@ -920,7 +920,7 @@ class ContainerService:
             cursor.execute("""
                 SELECT COUNT(*) 
                 FROM test t
-                JOIN testsample ts ON t.TestID = ts.TestID
+                JOIN testsampleusage ts ON t.TestID = ts.TestID
                 JOIN sample s ON ts.SampleID = s.SampleID
                 JOIN samplestorage ss ON s.SampleID = ss.SampleID
                 JOIN containersample cs ON ss.StorageID = cs.SampleStorageID

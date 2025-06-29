@@ -26,6 +26,7 @@ function setupSampleDetailButtons() {
 window.loadSampleDetails = function(sampleId) {
     // Clear previous content
     document.getElementById('sample-id').textContent = '-';
+    document.getElementById('sample-barcode').textContent = '-';
     document.getElementById('sample-description').textContent = '-';
     document.getElementById('sample-part-number').textContent = '-';
     document.getElementById('sample-amount').textContent = '-';
@@ -54,6 +55,7 @@ window.loadSampleDetails = function(sampleId) {
                 // Update sample basic information
                 // Handle and display sample data safely
                 document.getElementById('sample-id').textContent = sample.SampleID ? `SMP-${sample.SampleID}` : `SMP-${sampleId}`;
+                document.getElementById('sample-barcode').textContent = sample.Barcode || '-';
                 document.getElementById('sample-description').textContent = sample.Description || '-';
                 document.getElementById('sample-part-number').textContent = sample.PartNumber || '-';
                 
