@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, render_template, current_app
 from app.models.sample import Sample
+from app.utils.auth import get_current_user
 import json
 import logging
 from datetime import datetime
@@ -193,11 +194,15 @@ def format_test_sample_result(result, barcode):
         'scanned_barcode': barcode
     }
 
-def log_scan_action(barcode, result, user_id=1):
+def log_scan_action(barcode, result, user_id=None):
     """
     Log scan actions to database for audit trail.
     """
     try:
+        if user_id is None:
+            current_user = get_current_user(mysql)
+            user_id = current_user.get('UserID', 1)
+        
         cursor = mysql.connection.cursor()
         
         action_type = "Barcode scanned"
@@ -393,7 +398,7 @@ def register_serial_number():
             sample_id,
             'Serial number registered',
             f'Serial number {serial_number} registered for unique sample',
-            1,  # Default user
+            get_current_user(mysql).get('UserID', 1),  # Current user
             datetime.now()
         ))
         

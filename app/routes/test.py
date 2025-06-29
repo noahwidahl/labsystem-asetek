@@ -8,6 +8,9 @@ test_bp = Blueprint('test', __name__)
 def init_test(blueprint, mysql):
     test_service = TestService(mysql)
     
+    def get_current_user_with_mysql():
+        return get_current_user(mysql)
+    
     @blueprint.route('/testing')
     def testing():
         try:
@@ -102,7 +105,7 @@ def init_test(blueprint, mysql):
     def create_test():
         try:
             data = request.json
-            user_id = get_current_user()['UserID']
+            user_id = get_current_user_with_mysql()['UserID']
             
             result = test_service.create_test(data, user_id)
             return jsonify(result)
@@ -118,7 +121,7 @@ def init_test(blueprint, mysql):
     def create_test_iteration():
         try:
             data = request.json
-            user_id = get_current_user()['UserID']
+            user_id = get_current_user_with_mysql()['UserID']
             base_test_no = data.get('base_test_no')
             
             if not base_test_no:
@@ -141,7 +144,7 @@ def init_test(blueprint, mysql):
     def add_samples_to_test(test_id):
         try:
             data = request.json
-            user_id = get_current_user()['UserID']
+            user_id = get_current_user_with_mysql()['UserID']
             sample_assignments = data.get('samples', [])
             
             result = test_service.add_samples_to_test(test_id, sample_assignments, user_id)
@@ -174,7 +177,7 @@ def init_test(blueprint, mysql):
     def remove_sample_from_test(usage_id):
         try:
             data = request.json
-            user_id = get_current_user()['UserID']
+            user_id = get_current_user_with_mysql()['UserID']
             
             action = data.get('action')  # 'return' or 'transfer'
             amount = data.get('amount')
@@ -209,7 +212,7 @@ def init_test(blueprint, mysql):
     def update_test_status(test_id):
         try:
             data = request.json
-            user_id = get_current_user()['UserID']
+            user_id = get_current_user_with_mysql()['UserID']
             new_status = data.get('status')
             
             if not new_status:
@@ -239,7 +242,7 @@ def init_test(blueprint, mysql):
     def complete_test(test_id):
         try:
             data = request.json
-            user_id = get_current_user()['UserID']
+            user_id = get_current_user_with_mysql()['UserID']
             sample_completions = data.get('sample_completions', [])
             
             result = test_service.complete_test(test_id, sample_completions, user_id)

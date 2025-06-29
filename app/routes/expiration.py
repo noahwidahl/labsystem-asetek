@@ -8,14 +8,17 @@ expiration_bp = Blueprint('expiration', __name__)
 def init_expiration(blueprint, mysql):
     expiration_service = ExpirationService(mysql)
     
+    def get_current_user_with_mysql():
+        return get_current_user(mysql)
+    
     @blueprint.route('/api/notifications/expiration', methods=['GET'])
     def get_expiration_notifications():
         """
         Get expiration notifications for the current user.
         """
         try:
-            user = get_current_user()
-            user_id = user.get('UserID') if user else 1  # Extract UserID from dict
+            user = get_current_user_with_mysql()
+            user_id = user.get('UserID', 1)  # Extract UserID from dict
             include_read = request.args.get('include_read', 'false').lower() == 'true'
             
             notifications = expiration_service.get_user_notifications(user_id, include_read)
@@ -38,8 +41,8 @@ def init_expiration(blueprint, mysql):
         Get a summary of unread expiration notifications.
         """
         try:
-            user = get_current_user()
-            user_id = user.get('UserID') if user else 1
+            user = get_current_user_with_mysql()
+            user_id = user.get('UserID', 1)
             summary = expiration_service.get_notification_summary(user_id)
             
             return jsonify({
@@ -59,8 +62,8 @@ def init_expiration(blueprint, mysql):
         Mark a specific notification as read.
         """
         try:
-            user = get_current_user()
-            user_id = user.get('UserID') if user else 1
+            user = get_current_user_with_mysql()
+            user_id = user.get('UserID', 1)
             expiration_service.mark_notification_read(notification_id, user_id)
             
             return jsonify({
@@ -80,8 +83,8 @@ def init_expiration(blueprint, mysql):
         Mark all notifications as read for the current user.
         """
         try:
-            user = get_current_user()
-            user_id = user.get('UserID') if user else 1
+            user = get_current_user_with_mysql()
+            user_id = user.get('UserID', 1)
             expiration_service.mark_all_notifications_read(user_id)
             
             return jsonify({
@@ -101,8 +104,8 @@ def init_expiration(blueprint, mysql):
         Get list of expired samples.
         """
         try:
-            user = get_current_user()
-            user_id = user.get('UserID') if user else 1
+            user = get_current_user_with_mysql()
+            user_id = user.get('UserID', 1)
             my_samples_only = request.args.get('my_samples_only', 'false').lower() == 'true'
             
             if my_samples_only:
@@ -128,8 +131,8 @@ def init_expiration(blueprint, mysql):
         Get list of samples expiring soon.
         """
         try:
-            user = get_current_user()
-            user_id = user.get('UserID') if user else 1
+            user = get_current_user_with_mysql()
+            user_id = user.get('UserID', 1)
             my_samples_only = request.args.get('my_samples_only', 'false').lower() == 'true'
             days_ahead = int(request.args.get('days_ahead', 7))
             
