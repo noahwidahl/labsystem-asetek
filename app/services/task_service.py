@@ -18,10 +18,27 @@ class TaskService:
                 t.Status, t.Priority, t.StartDate, t.EndDate, t.EstimatedDuration,
                 t.CreatedDate, t.CreatedBy, t.AssignedTo, t.TeamMembers, t.Notes,
                 creator.Name as CreatedByName,
-                assignee.Name as AssignedToName
+                assignee.Name as AssignedToName,
+                COALESCE(sample_counts.total_samples, 0) as total_samples,
+                COALESCE(test_counts.total_tests, 0) as total_tests
             FROM task t
             LEFT JOIN user creator ON t.CreatedBy = creator.UserID
             LEFT JOIN user assignee ON t.AssignedTo = assignee.UserID
+            LEFT JOIN (
+                SELECT TaskID, COUNT(DISTINCT SampleID) as total_samples
+                FROM (
+                    SELECT TaskID, SampleID FROM sample WHERE TaskID IS NOT NULL
+                    UNION
+                    SELECT TaskID, SampleID FROM tasksample
+                ) all_task_samples
+                GROUP BY TaskID
+            ) sample_counts ON t.TaskID = sample_counts.TaskID
+            LEFT JOIN (
+                SELECT TaskID, COUNT(*) as total_tests
+                FROM test 
+                WHERE TaskID IS NOT NULL
+                GROUP BY TaskID
+            ) test_counts ON t.TaskID = test_counts.TaskID
         """
         
         conditions = []
@@ -65,9 +82,11 @@ class TaskService:
             
             task = Task.from_db_row(row_with_parsed_json)
             
-            # Add user names from extended query
+            # Add user names and counts from extended query
             task.created_by_name = row[15] if len(row) > 15 else None
             task.assigned_to_name = row[16] if len(row) > 16 else None
+            task.total_samples = row[17] if len(row) > 17 else 0
+            task.total_tests = row[18] if len(row) > 18 else 0
             
             tasks.append(task)
         
@@ -83,10 +102,27 @@ class TaskService:
                 t.Status, t.Priority, t.StartDate, t.EndDate, t.EstimatedDuration,
                 t.CreatedDate, t.CreatedBy, t.AssignedTo, t.TeamMembers, t.Notes,
                 creator.Name as CreatedByName,
-                assignee.Name as AssignedToName
+                assignee.Name as AssignedToName,
+                COALESCE(sample_counts.total_samples, 0) as total_samples,
+                COALESCE(test_counts.total_tests, 0) as total_tests
             FROM task t
             LEFT JOIN user creator ON t.CreatedBy = creator.UserID
             LEFT JOIN user assignee ON t.AssignedTo = assignee.UserID
+            LEFT JOIN (
+                SELECT TaskID, COUNT(DISTINCT SampleID) as total_samples
+                FROM (
+                    SELECT TaskID, SampleID FROM sample WHERE TaskID IS NOT NULL
+                    UNION
+                    SELECT TaskID, SampleID FROM tasksample
+                ) all_task_samples
+                GROUP BY TaskID
+            ) sample_counts ON t.TaskID = sample_counts.TaskID
+            LEFT JOIN (
+                SELECT TaskID, COUNT(*) as total_tests
+                FROM test 
+                WHERE TaskID IS NOT NULL
+                GROUP BY TaskID
+            ) test_counts ON t.TaskID = test_counts.TaskID
             WHERE t.TaskID = %s
         """
         
@@ -110,9 +146,11 @@ class TaskService:
         
         task = Task.from_db_row(row_with_parsed_json)
         
-        # Add user names from extended query
+        # Add user names and counts from extended query
         task.created_by_name = row[15] if len(row) > 15 else None
         task.assigned_to_name = row[16] if len(row) > 16 else None
+        task.total_samples = row[17] if len(row) > 17 else 0
+        task.total_tests = row[18] if len(row) > 18 else 0
         
         return task
     
@@ -393,63 +431,6 @@ class TaskService:
         
         return overviews[0] if task_id and overviews else overviews
     
-    def assign_sample_to_task(self, task_id, sample_id, user_id, purpose=None):
-        """
-        Assign a sample to a task.
-        """
-        try:
-            # Check if task exists
-            if not self.get_task_by_id(task_id):
-                return {
-                    'success': False,
-                    'error': 'Task not found'
-                }
-            
-            # Check if sample exists
-            sample_query = "SELECT SampleID, Description FROM sample WHERE SampleID = %s"
-            sample_result, _ = self.db.execute_query(sample_query, (sample_id,))
-            
-            if not sample_result:
-                return {
-                    'success': False,
-                    'error': 'Sample not found'
-                }
-            
-            sample_desc = sample_result[0][1]
-            
-            # Check if already assigned
-            existing_query = "SELECT TaskSampleID FROM tasksample WHERE TaskID = %s AND SampleID = %s"
-            existing_result, _ = self.db.execute_query(existing_query, (task_id, sample_id))
-            
-            if existing_result:
-                return {
-                    'success': False,
-                    'error': 'Sample is already assigned to this task'
-                }
-            
-            # Insert assignment
-            insert_query = """
-                INSERT INTO tasksample (TaskID, SampleID, AssignedBy, Purpose)
-                VALUES (%s, %s, %s, %s)
-            """
-            
-            result, cursor = self.db.execute_query(insert_query, (task_id, sample_id, user_id, purpose or ''), commit=True)
-            
-            # Log the activity
-            self._log_task_activity(task_id, 'Sample assigned', f"Sample SMP-{sample_id} ({sample_desc}) assigned to task", user_id)
-            
-            return {
-                'success': True,
-                'task_sample_id': cursor
-            }
-            
-        except Exception as e:
-            print(f"Error assigning sample to task: {e}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
-    
     def get_task_tests(self, task_id):
         """
         Get all tests assigned to a task.
@@ -465,7 +446,7 @@ class TaskService:
                 SELECT 
                     TestID,
                     COUNT(*) as total_samples
-                FROM TestSampleUsage
+                FROM testsampleusage
                 GROUP BY TestID
             ) sample_counts ON t.TestID = sample_counts.TestID
             WHERE t.TaskID = %s
@@ -492,63 +473,63 @@ class TaskService:
     
     def get_task_samples(self, task_id):
         """
-        Get all samples assigned to a task.
-        Includes both directly assigned samples (Sample.TaskID) and separately assigned samples (tasksample table).
+        Get all samples assigned to this task.
+        Includes both samples assigned directly during registration (Sample.TaskID) 
+        and samples currently being used in tests that belong to this task.
         """
-        # Get samples assigned via tasksample table
-        tasksample_query = """
-            SELECT 
-                ts.TaskSampleID, ts.SampleID, s.Description, s.PartNumber,
-                s.Status as SampleStatus, ts.Status as AssignmentStatus,
-                ts.AssignedDate, ts.Purpose, ts.Notes,
-                u.Name as AssignedBy, 'explicit' as assignment_type
-            FROM tasksample ts
-            JOIN sample s ON ts.SampleID = s.SampleID
-            LEFT JOIN user u ON ts.AssignedBy = u.UserID
-            WHERE ts.TaskID = %s
-        """
-        
-        # Get samples assigned directly during registration (Sample.TaskID)
-        direct_query = """
-            SELECT 
-                NULL as TaskSampleID, s.SampleID, s.Description, s.PartNumber,
-                s.Status as SampleStatus, 'Assigned' as AssignmentStatus,
-                r.ReceivedDate as AssignedDate, 'Registered to task' as Purpose, '' as Notes,
-                u.Name as AssignedBy, 'direct' as assignment_type
+        query = """
+            SELECT DISTINCT
+                s.SampleID,
+                s.Description,
+                s.PartNumber,
+                s.Status as SampleStatus,
+                CASE 
+                    WHEN tsu.SampleID IS NOT NULL THEN tsu.Status
+                    ELSE 'Available for Task'
+                END as UsageStatus,
+                COALESCE(tsu.CreatedDate, r.ReceivedDate) as AssignedDate,
+                CASE 
+                    WHEN tsu.SampleID IS NOT NULL THEN CONCAT('Used in test ', t.TestNo)
+                    ELSE 'Available for task assignment'
+                END as Purpose,
+                COALESCE(tsu.Notes, '') as Notes,
+                COALESCE(test_user.Name, owner.Name) as AssignedBy,
+                t.TestNo,
+                t.TestName,
+                tsu.SampleIdentifier,
+                tsu.AmountAllocated,
+                ss.AmountRemaining
             FROM sample s
             LEFT JOIN reception r ON s.ReceptionID = r.ReceptionID
-            LEFT JOIN user u ON s.OwnerID = u.UserID
+            LEFT JOIN user owner ON s.OwnerID = owner.UserID
+            LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+            LEFT JOIN testsampleusage tsu ON s.SampleID = tsu.SampleID
+            LEFT JOIN test t ON tsu.TestID = t.TestID AND t.TaskID = %s
+            LEFT JOIN user test_user ON t.UserID = test_user.UserID
             WHERE s.TaskID = %s
-            AND s.SampleID NOT IN (
-                SELECT SampleID FROM tasksample WHERE TaskID = %s
-            )
-        """
-        
-        # Combine both queries with UNION
-        combined_query = f"""
-            ({tasksample_query})
-            UNION
-            ({direct_query})
             ORDER BY AssignedDate DESC
         """
         
-        result, _ = self.db.execute_query(combined_query, (task_id, task_id, task_id))
+        result, _ = self.db.execute_query(query, (task_id, task_id))
         
         samples = []
         for row in result:
             sample = {
-                'TaskSampleID': row[0],
-                'SampleID': row[1],
-                'SampleIDFormatted': f'SMP-{row[1]}',
-                'Description': row[2],
-                'PartNumber': row[3] or '',
-                'SampleStatus': row[4],
-                'AssignmentStatus': row[5],
-                'AssignedDate': row[6].strftime('%Y-%m-%d %H:%M:%S') if row[6] else None,
-                'Purpose': row[7] or '',
-                'Notes': row[8] or '',
-                'AssignedBy': row[9],
-                'AssignmentType': row[10]  # 'explicit' or 'direct'
+                'SampleID': row[0],
+                'SampleIDFormatted': f'SMP-{row[0]}',
+                'Description': row[1],
+                'PartNumber': row[2] or '',
+                'SampleStatus': row[3],
+                'UsageStatus': row[4],
+                'AssignedDate': row[5].strftime('%Y-%m-%d %H:%M:%S') if row[5] else None,
+                'Purpose': row[6] or '',
+                'Notes': row[7] or '',
+                'AssignedBy': row[8],
+                'TestNo': row[9] or '',
+                'TestName': row[10] or '',
+                'SampleIdentifier': row[11] or '',
+                'AmountAllocated': row[12] or 0,
+                'AmountRemaining': row[13] or 0
             }
             samples.append(sample)
         

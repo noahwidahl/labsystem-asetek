@@ -69,7 +69,7 @@ class TestService:
         try:
             with self.db.transaction() as cursor:
                 # Generate test number based on task or use general numbering
-                task_id = test_data.get('taskId')
+                task_id = test_data.get('task_id')
                 
                 if task_id:
                     # Use task-specific test numbering
@@ -514,3 +514,73 @@ class TestService:
             })
         
         return history
+    
+    def get_available_samples_for_task(self, task_id, search_term=None):
+        """
+        Get samples available for test assignment from a specific task.
+        Only shows samples that are assigned to the task but not yet fully consumed in tests.
+        """
+        query = """
+            SELECT 
+                s.SampleID,
+                s.Description,
+                s.PartNumber,
+                s.Barcode,
+                ss.AmountRemaining,
+                COALESCE(sl.LocationName, 'Unknown') as LocationName,
+                CASE
+                    WHEN un.UnitName IS NULL THEN 'pcs'
+                    WHEN LOWER(un.UnitName) = 'stk' THEN 'pcs'
+                    ELSE un.UnitName
+                END as Unit,
+                COALESCE(SUM(tsu.AmountAllocated), 0) as AllocatedToTests
+            FROM sample s
+            LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+            LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+            LEFT JOIN unit un ON s.UnitID = un.UnitID
+            LEFT JOIN testsampleusage tsu ON s.SampleID = tsu.SampleID AND tsu.Status IN ('Allocated', 'Active')
+            WHERE s.TaskID = %s
+            AND s.Status = 'In Storage'
+            AND (ss.AmountRemaining > 0 OR ss.AmountRemaining IS NULL)
+        """
+        
+        params = [task_id]
+        
+        if search_term:
+            query += """
+                AND (s.Description LIKE %s 
+                     OR s.Barcode LIKE %s 
+                     OR s.PartNumber LIKE %s
+                     OR CONCAT('SMP-', s.SampleID) LIKE %s)
+            """
+            search_param = f"%{search_term}%"
+            params.extend([search_param, search_param, search_param, search_param])
+        
+        query += """
+            GROUP BY s.SampleID, s.Description, s.PartNumber, s.Barcode, 
+                     ss.AmountRemaining, sl.LocationName, un.UnitName
+            HAVING (ss.AmountRemaining - COALESCE(AllocatedToTests, 0)) > 0
+            ORDER BY s.SampleID DESC
+            LIMIT 50
+        """
+        
+        result, _ = self.db.execute_query(query, params)
+        
+        samples = []
+        for row in result:
+            available_amount = (row[4] or 0) - (row[7] or 0)
+            sample = {
+                'SampleID': row[0],
+                'SampleIDFormatted': f'SMP-{row[0]}',
+                'Description': row[1],
+                'PartNumber': row[2] or '',
+                'Barcode': row[3],
+                'AmountRemaining': row[4] or 0,
+                'LocationName': row[5],
+                'Unit': row[6],
+                'AllocatedToTests': row[7] or 0,
+                'AvailableAmount': available_amount
+            }
+            samples.append(sample)
+        
+        return samples
