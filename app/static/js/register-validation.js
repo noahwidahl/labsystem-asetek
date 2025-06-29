@@ -56,19 +56,71 @@ function validateCurrentStep() {
                 isValid = false;
             }
             
-            // Minimal container validation
+            // Container validation with capacity checks
             const storageOptionStep2 = document.querySelector('input[name="storageOption"]:checked')?.value || 'direct';
             
             if (storageOptionStep2 === 'container') {
                 // Check if existing container option is selected
                 const existingContainerOption = document.getElementById('existingContainerOption');
                 
-                // Only validate existing container selection
                 if (existingContainerOption && existingContainerOption.checked) {
                     const existingContainerSelect = document.getElementById('existingContainerSelect');
                     if (!existingContainerSelect || !existingContainerSelect.value) {
                         showErrorMessage('Please select an existing container', 'existingContainerSelect');
                         isValid = false;
+                    } else {
+                        // Check capacity of selected container
+                        const selectedOption = existingContainerSelect.options[existingContainerSelect.selectedIndex];
+                        if (selectedOption && selectedOption.textContent) {
+                            const containerText = selectedOption.textContent;
+                            const capacityMatch = containerText.match(/(\d+)\/(\d+) available/);
+                            if (capacityMatch) {
+                                const availableCapacity = parseInt(capacityMatch[1]);
+                                const sampleAmount = parseInt(totalAmount.value) || 0;
+                                
+                                if (sampleAmount > availableCapacity) {
+                                    showErrorMessage(`Sample amount (${sampleAmount}) exceeds available container capacity (${availableCapacity})`, 'totalAmount');
+                                    isValid = false;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Validate new container capacity
+                    const createNewTypeOption = document.getElementById('createNewTypeOption');
+                    const useExistingTypeOption = document.getElementById('useExistingTypeOption');
+                    
+                    let containerCapacity = 0;
+                    
+                    if (createNewTypeOption && createNewTypeOption.checked) {
+                        // Get capacity from new container type
+                        const newTypeCapacity = document.getElementById('newContainerTypeCapacity');
+                        if (newTypeCapacity && newTypeCapacity.value) {
+                            containerCapacity = parseInt(newTypeCapacity.value) || 0;
+                        }
+                    } else if (useExistingTypeOption && useExistingTypeOption.checked) {
+                        // Get capacity from existing container type
+                        const containerTypeSelect = document.getElementById('containerType');
+                        const containerCapacityInput = document.getElementById('containerCapacity');
+                        
+                        if (containerCapacityInput && containerCapacityInput.value) {
+                            containerCapacity = parseInt(containerCapacityInput.value) || 0;
+                        } else if (containerTypeSelect && containerTypeSelect.selectedIndex > 0) {
+                            const selectedTypeOption = containerTypeSelect.options[containerTypeSelect.selectedIndex];
+                            const defaultCapacity = selectedTypeOption.getAttribute('data-capacity');
+                            if (defaultCapacity) {
+                                containerCapacity = parseInt(defaultCapacity) || 0;
+                            }
+                        }
+                    }
+                    
+                    // Validate that sample amount doesn't exceed container capacity
+                    if (containerCapacity > 0) {
+                        const sampleAmount = parseInt(totalAmount.value) || 0;
+                        if (sampleAmount > containerCapacity) {
+                            showErrorMessage(`Sample amount (${sampleAmount}) exceeds container capacity (${containerCapacity}). Please choose a larger container type or reduce the sample amount.`, 'totalAmount');
+                            isValid = false;
+                        }
                     }
                 }
             }

@@ -500,14 +500,16 @@ class ContainerService:
                 if container_capacity and not force_add:
                     new_total = current_amount + amount
                     if new_total > container_capacity:
+                        available_space = container_capacity - current_amount
                         return {
                             'success': False,
                             'warning': True,
                             'capacity_exceeded': True,
-                            'error': f'Adding {amount} samples would exceed the container capacity of {container_capacity}. Current amount: {current_amount}',
+                            'error': f'Cannot add {amount} samples to container. Container has {available_space} of {container_capacity} units available (current: {current_amount})',
                             'current_amount': current_amount,
                             'new_amount': new_total,
-                            'capacity': container_capacity
+                            'capacity': container_capacity,
+                            'available_space': available_space
                         }
                 
                 # Check if sample exists and is available

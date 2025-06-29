@@ -306,6 +306,29 @@ class SampleService:
                 if sample_data.get('useExistingContainer') and sample_data.get('existingContainerId'):
                     container_id = sample_data.get('existingContainerId')
                     print(f"DEBUG: Using existing container with ID: {container_id}")
+                    
+                    # First check if existing container has enough capacity
+                    cursor.execute("""
+                        SELECT 
+                            c.ContainerCapacity,
+                            IFNULL(SUM(cs.Amount), 0) as CurrentAmount
+                        FROM container c
+                        LEFT JOIN ContainerSample cs ON c.ContainerID = cs.ContainerID
+                        WHERE c.ContainerID = %s
+                        GROUP BY c.ContainerID, c.ContainerCapacity
+                    """, (container_id,))
+                    
+                    capacity_check = cursor.fetchone()
+                    if capacity_check:
+                        container_capacity = capacity_check[0]
+                        current_amount = capacity_check[1] or 0
+                        
+                        if container_capacity and (current_amount + total_amount > container_capacity):
+                            return {
+                                'success': False,
+                                'error': f'Cannot add {total_amount} samples to container. Current: {current_amount}, Capacity: {container_capacity}, Available: {container_capacity - current_amount}'
+                            }
+                    
                     container_ids.append(container_id)
                     
                     # Add sample to existing container
@@ -319,7 +342,12 @@ class SampleService:
                     )
                     
                     if not result.get('success'):
-                        print(f"WARNING: Failed to add sample to existing container: {result.get('error')}")
+                        error_msg = result.get('error', 'Unknown error')
+                        print(f"ERROR: Failed to add sample to existing container: {error_msg}")
+                        return {
+                            'success': False,
+                            'error': f'Failed to add sample to existing container: {error_msg}'
+                        }
                 
                 else:
                     # Create new container
@@ -354,6 +382,33 @@ class SampleService:
                         'isMixed': sample_data.get('containerIsMixed', False)
                     }
                     
+                    # First check if the container will have enough capacity for the sample
+                    container_capacity = container_data.get('capacity')
+                    if not container_capacity and container_data.get('containerTypeId'):
+                        # Get capacity from container type
+                        cursor.execute("""
+                            SELECT DefaultCapacity 
+                            FROM ContainerType 
+                            WHERE ContainerTypeID = %s
+                        """, (container_data.get('containerTypeId'),))
+                        capacity_result = cursor.fetchone()
+                        if capacity_result:
+                            container_capacity = capacity_result[0]
+                    elif not container_capacity and container_data.get('newContainerType'):
+                        container_capacity = container_data.get('newContainerType', {}).get('capacity')
+                    
+                    # Validate capacity before creating container
+                    if container_capacity:
+                        try:
+                            capacity = int(container_capacity)
+                            if total_amount > capacity:
+                                return {
+                                    'success': False,
+                                    'error': f'Sample amount ({total_amount}) exceeds container capacity ({capacity}). Please choose a larger container type or reduce the sample amount.'
+                                }
+                        except (ValueError, TypeError):
+                            print(f"WARNING: Invalid container capacity: {container_capacity}")
+                    
                     result = container_service.create_container(container_data, user_id)
                     
                     if result.get('success'):
@@ -361,7 +416,7 @@ class SampleService:
                         container_ids.append(container_id)
                         print(f"DEBUG: Created new container with ID: {container_id}")
                         
-                        # Add sample to new container
+                        # Add sample to new container (this will also check capacity again)
                         add_result = container_service.add_sample_to_container(
                             container_id, 
                             sample_id, 
@@ -370,9 +425,19 @@ class SampleService:
                         )
                         
                         if not add_result.get('success'):
-                            print(f"WARNING: Failed to add sample to new container: {add_result.get('error')}")
+                            error_msg = add_result.get('error', 'Unknown error')
+                            print(f"ERROR: Failed to add sample to new container: {error_msg}")
+                            return {
+                                'success': False,
+                                'error': f'Container created but failed to add sample: {error_msg}'
+                            }
                     else:
-                        print(f"ERROR: Failed to create container: {result.get('error')}")
+                        error_msg = result.get('error', 'Unknown error')
+                        print(f"ERROR: Failed to create container: {error_msg}")
+                        return {
+                            'success': False,
+                            'error': f'Failed to create container: {error_msg}'
+                        }
             
             # Add serial numbers if provided
             if sample_data.get('hasSerialNumbers') and sample_data.get('serialNumbers'):

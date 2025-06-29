@@ -105,7 +105,15 @@ function setupStorageOptions() {
     // Handle storage option changes
     const storageOptions = document.querySelectorAll('input[name="storageOption"]');
     storageOptions.forEach(option => {
-        option.addEventListener('change', updateContainerOptions);
+        option.addEventListener('change', function() {
+            updateContainerOptions();
+            // Clear capacity warnings when switching storage options
+            clearCapacityWarnings();
+            // Validate if container option is selected
+            if (this.value === 'container') {
+                setTimeout(validateContainerCapacity, 100);
+            }
+        });
     });
     
     
@@ -128,6 +136,8 @@ function setupContainerOptions() {
             if (this.checked) {
                 if (existingContainerSelectArea) existingContainerSelectArea.classList.add('d-none');
                 if (containerDetailsSection) containerDetailsSection.classList.remove('d-none');
+                clearCapacityWarnings();
+                setTimeout(validateContainerCapacity, 100);
             }
         });
         
@@ -135,18 +145,47 @@ function setupContainerOptions() {
             if (this.checked) {
                 if (existingContainerSelectArea) existingContainerSelectArea.classList.remove('d-none');
                 if (containerDetailsSection) containerDetailsSection.classList.add('d-none');
-                
+                clearCapacityWarnings();
                 fetchExistingContainers();
+                setTimeout(validateContainerCapacity, 100);
             }
         });
     }
     
-    // Listen for container selection to get its location
+    // Listen for container selection to get its location and validate capacity
     const existingContainerSelect = document.getElementById('existingContainerSelect');
     if (existingContainerSelect) {
         existingContainerSelect.addEventListener('change', function() {
             fetchContainerLocation(this.value);
+            validateContainerCapacity();
         });
+    }
+    
+    // Add capacity validation for amount changes
+    const totalAmountInput = document.querySelector('[name="totalAmount"]');
+    if (totalAmountInput) {
+        totalAmountInput.addEventListener('input', validateContainerCapacity);
+    }
+    
+    // Add capacity validation for container type changes
+    const containerTypeSelect = document.getElementById('containerType');
+    if (containerTypeSelect) {
+        containerTypeSelect.addEventListener('change', function() {
+            updateContainerCapacityFromType();
+            validateContainerCapacity();
+        });
+    }
+    
+    // Add capacity validation for new container type capacity
+    const newContainerTypeCapacity = document.getElementById('newContainerTypeCapacity');
+    if (newContainerTypeCapacity) {
+        newContainerTypeCapacity.addEventListener('input', validateContainerCapacity);
+    }
+    
+    // Add capacity validation for manual capacity input
+    const containerCapacityInput = document.getElementById('containerCapacity');
+    if (containerCapacityInput) {
+        containerCapacityInput.addEventListener('input', validateContainerCapacity);
     }
     
     // Initial state
@@ -222,8 +261,14 @@ function setupContainerTypeCreation() {
     }
     
     // Add event listeners to both radio buttons
-    useExistingTypeOption.addEventListener('change', handleContainerTypeOptionChange);
-    createNewTypeOption.addEventListener('change', handleContainerTypeOptionChange);
+    useExistingTypeOption.addEventListener('change', function() {
+        handleContainerTypeOptionChange();
+        validateContainerCapacity();
+    });
+    createNewTypeOption.addEventListener('change', function() {
+        handleContainerTypeOptionChange();
+        validateContainerCapacity();
+    });
     
     // Call the function initially to set the correct state
     handleContainerTypeOptionChange();
@@ -370,5 +415,136 @@ function fetchContainerLocation(containerId) {
             }
         })
         .catch(error => console.error("ERROR: Failed to fetch container location:", error));
+}
+
+// Function to update container capacity when container type is selected
+function updateContainerCapacityFromType() {
+    const containerTypeSelect = document.getElementById('containerType');
+    const containerCapacityInput = document.getElementById('containerCapacity');
+    
+    if (!containerTypeSelect || !containerCapacityInput) return;
+    
+    if (containerTypeSelect.selectedIndex > 0) {
+        const selectedOption = containerTypeSelect.options[containerTypeSelect.selectedIndex];
+        const defaultCapacity = selectedOption.getAttribute('data-capacity');
+        
+        if (defaultCapacity) {
+            containerCapacityInput.value = defaultCapacity;
+            containerCapacityInput.placeholder = `Default: ${defaultCapacity}`;
+        }
+    } else {
+        containerCapacityInput.value = '';
+        containerCapacityInput.placeholder = 'Will use type\'s default capacity if not specified';
+    }
+}
+
+// Function to validate container capacity in real-time
+function validateContainerCapacity() {
+    // Only validate if container storage is selected
+    const containerStorageOption = document.getElementById('containerStorageOption');
+    if (!containerStorageOption || !containerStorageOption.checked) {
+        return;
+    }
+    
+    const totalAmountInput = document.querySelector('[name="totalAmount"]');
+    const sampleAmount = parseInt(totalAmountInput?.value) || 0;
+    
+    if (sampleAmount <= 0) return;
+    
+    // Clear previous capacity warnings
+    clearCapacityWarnings();
+    
+    const existingContainerOption = document.getElementById('existingContainerOption');
+    
+    if (existingContainerOption && existingContainerOption.checked) {
+        // Validate existing container capacity
+        validateExistingContainerCapacity(sampleAmount);
+    } else {
+        // Validate new container capacity
+        validateNewContainerCapacity(sampleAmount);
+    }
+}
+
+// Function to validate existing container capacity
+function validateExistingContainerCapacity(sampleAmount) {
+    const existingContainerSelect = document.getElementById('existingContainerSelect');
+    if (!existingContainerSelect || !existingContainerSelect.value) return;
+    
+    const selectedOption = existingContainerSelect.options[existingContainerSelect.selectedIndex];
+    if (!selectedOption) return;
+    
+    const containerText = selectedOption.textContent;
+    const capacityMatch = containerText.match(/(\d+)\/(\d+) available/);
+    
+    if (capacityMatch) {
+        const availableCapacity = parseInt(capacityMatch[1]);
+        
+        if (sampleAmount > availableCapacity) {
+            showCapacityWarning(`Sample amount (${sampleAmount}) exceeds available container capacity (${availableCapacity})`);
+        }
+    }
+}
+
+// Function to validate new container capacity
+function validateNewContainerCapacity(sampleAmount) {
+    const createNewTypeOption = document.getElementById('createNewTypeOption');
+    const useExistingTypeOption = document.getElementById('useExistingTypeOption');
+    
+    let containerCapacity = 0;
+    
+    if (createNewTypeOption && createNewTypeOption.checked) {
+        // Get capacity from new container type
+        const newTypeCapacity = document.getElementById('newContainerTypeCapacity');
+        if (newTypeCapacity && newTypeCapacity.value) {
+            containerCapacity = parseInt(newTypeCapacity.value) || 0;
+        }
+    } else if (useExistingTypeOption && useExistingTypeOption.checked) {
+        // Get capacity from existing container type
+        const containerTypeSelect = document.getElementById('containerType');
+        const containerCapacityInput = document.getElementById('containerCapacity');
+        
+        if (containerCapacityInput && containerCapacityInput.value) {
+            containerCapacity = parseInt(containerCapacityInput.value) || 0;
+        } else if (containerTypeSelect && containerTypeSelect.selectedIndex > 0) {
+            const selectedTypeOption = containerTypeSelect.options[containerTypeSelect.selectedIndex];
+            const defaultCapacity = selectedTypeOption.getAttribute('data-capacity');
+            if (defaultCapacity) {
+                containerCapacity = parseInt(defaultCapacity) || 0;
+            }
+        }
+    }
+    
+    if (containerCapacity > 0 && sampleAmount > containerCapacity) {
+        showCapacityWarning(`Sample amount (${sampleAmount}) exceeds container capacity (${containerCapacity}). Please choose a larger container type or reduce the sample amount.`);
+    }
+}
+
+// Function to show capacity warning
+function showCapacityWarning(message) {
+    // Create or update warning element
+    let warningElement = document.getElementById('capacityWarning');
+    if (!warningElement) {
+        warningElement = document.createElement('div');
+        warningElement.id = 'capacityWarning';
+        warningElement.className = 'alert alert-warning mt-2';
+        warningElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ';
+        
+        // Insert after the amount input
+        const totalAmountInput = document.querySelector('[name="totalAmount"]');
+        if (totalAmountInput && totalAmountInput.parentNode) {
+            totalAmountInput.parentNode.insertBefore(warningElement, totalAmountInput.nextSibling);
+        }
+    }
+    
+    warningElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + message;
+    warningElement.style.display = 'block';
+}
+
+// Function to clear capacity warnings
+function clearCapacityWarnings() {
+    const warningElement = document.getElementById('capacityWarning');
+    if (warningElement) {
+        warningElement.style.display = 'none';
+    }
 }
 
