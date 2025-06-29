@@ -18,6 +18,8 @@ window.registerApp = {
     // Container-related state
     containerIds: [],
     oneContainerPerPackage: false,
+    // Store location data for validation
+    locations: [],
     
     // Store module states
     modulesLoaded: {
@@ -105,12 +107,34 @@ window.registerApp = {
         this.selectedContainerLocation = null;
         this.skipLocationSelection = false;
         
+        // Load location data for container validation
+        this.loadLocationData();
+        
         // Initialize the first step
         if (typeof showStep === 'function') {
             showStep(1);
         }
         
         console.log('Registration system initialized');
+    },
+    
+    // Load location data for validation purposes
+    loadLocationData: function() {
+        console.log('Loading location data for registration...');
+        
+        fetch('/api/basic-locations')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.locations) {
+                    this.locations = data.locations;
+                    console.log('Loaded', data.locations.length, 'locations for registration');
+                } else {
+                    console.warn('Failed to load location data:', data.error || 'Unknown error');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading location data:', error);
+            });
     }
 };
 

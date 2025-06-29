@@ -390,10 +390,13 @@ class ContainerService:
                         VALUES (%s, %s, %s, %s, %s)
                     """
                     
+                    # Handle isMixed parameter from container_data
+                    is_mixed = container_data.get('isMixed', container.is_mixed)
+                    
                     cursor.execute(query, (
                         container.description,
                         container.container_type_id,
-                        1 if container.is_mixed else 0,
+                        1 if is_mixed else 0,
                         capacity,
                         location_id
                     ))
@@ -426,9 +429,12 @@ class ContainerService:
                         VALUES (%s, %s, %s, %s)
                     """
                     
+                    # Handle isMixed parameter from container_data
+                    is_mixed = container_data.get('isMixed', container.is_mixed)
+                    
                     cursor.execute(query, (
                         container.description,
-                        1 if container.is_mixed else 0,
+                        1 if is_mixed else 0,
                         capacity,
                         location_id
                     ))

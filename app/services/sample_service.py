@@ -326,12 +326,32 @@ class SampleService:
                     from app.services.container_service import ContainerService
                     container_service = ContainerService(self.mysql)
                     
+                    # Handle container location - convert text to LocationID if needed
+                    container_location_id = sample_data.get('containerLocationId')
+                    if not container_location_id and sample_data.get('containerLocationText'):
+                        # Try to find location by name
+                        location_text = sample_data.get('containerLocationText')
+                        cursor.execute(
+                            "SELECT LocationID FROM StorageLocation WHERE LocationName = %s LIMIT 1",
+                            (location_text,)
+                        )
+                        location_result = cursor.fetchone()
+                        if location_result:
+                            container_location_id = location_result[0]
+                            print(f"DEBUG: Found location ID {container_location_id} for location text '{location_text}'")
+                        else:
+                            print(f"WARNING: Could not find location for text '{location_text}', using default")
+                            container_location_id = location_id
+                    elif not container_location_id:
+                        container_location_id = location_id
+                    
                     container_data = {
                         'description': sample_data.get('containerDescription') or description,
                         'containerTypeId': sample_data.get('containerTypeId'),
                         'newContainerType': sample_data.get('newContainerType'),
-                        'locationId': sample_data.get('containerLocationId') or location_id,
-                        'capacity': sample_data.get('containerCapacity')
+                        'locationId': container_location_id,
+                        'capacity': sample_data.get('containerCapacity'),
+                        'isMixed': sample_data.get('containerIsMixed', False)
                     }
                     
                     result = container_service.create_container(container_data, user_id)

@@ -319,7 +319,7 @@ function handleFormSubmission() {
                 formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
                 
                 // Check if we're creating a new container type
-                const createContainerType = document.getElementById('createContainerType')?.checked || false;
+                const createContainerType = document.getElementById('createNewTypeOption')?.checked || false;
                 
                 if (createContainerType) {
                     // Creating a new container type
@@ -335,11 +335,30 @@ function handleFormSubmission() {
                     formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
                 }
                 
-                // Save container location separately
-                const containerLocationSelect = document.getElementById('containerLocation');
-                if (containerLocationSelect && containerLocationSelect.value) {
-                    formData.containerLocationId = containerLocationSelect.value;
-                    console.log("Container location set to:", containerLocationSelect.value);
+                // Save container location separately - check text input format first
+                const containerLocationInput = document.getElementById('containerLocation');
+                if (containerLocationInput && containerLocationInput.value) {
+                    // For text input like "1.1.1", we need to convert to LocationID
+                    const locationText = containerLocationInput.value.trim();
+                    
+                    // Check if we have the location data in the global state
+                    if (window.registerApp && window.registerApp.locations) {
+                        const matchingLocation = window.registerApp.locations.find(loc => 
+                            loc.LocationName === locationText
+                        );
+                        if (matchingLocation) {
+                            formData.containerLocationId = matchingLocation.LocationID;
+                            console.log("Container location set to:", locationText, "(ID:", matchingLocation.LocationID, ")");
+                        } else {
+                            // If no match found, try to create the location or use fallback
+                            formData.containerLocationText = locationText;
+                            console.log("Container location text set to:", locationText, "(will be resolved server-side)");
+                        }
+                    } else {
+                        // Fallback - send as text and let server handle
+                        formData.containerLocationText = locationText;
+                        console.log("Container location text set to:", locationText, "(no location data available)");
+                    }
                 }
             }
     }
