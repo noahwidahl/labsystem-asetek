@@ -1936,3 +1936,82 @@ def init_sample(blueprint, mysql):
             traceback.print_exc()
             return render_template('sections/disposal.html', 
                                   error="Error loading disposal page")
+    
+    @blueprint.route('/api/samples/available-for-task', methods=['GET'])
+    def get_available_samples_for_task():
+        """
+        Get samples available for assignment to a task.
+        """
+        try:
+            task_id = request.args.get('task_id')
+            search_term = request.args.get('search', '')
+            
+            cursor = mysql.connection.cursor()
+            
+            # Build the query to get samples that are not already assigned to this task
+            query = """
+                SELECT 
+                    s.SampleID,
+                    s.Barcode,
+                    s.Description,
+                    s.PartNumber,
+                    s.Status,
+                    COALESCE(SUM(ss.AmountRemaining), s.Amount, 1) as AmountAvailable,
+                    sl.LocationName,
+                    CONCAT('SMP-', s.SampleID) as SampleIDFormatted
+                FROM sample s
+                LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+                LEFT JOIN tasksample ts ON s.SampleID = ts.SampleID AND ts.TaskID = %s
+                WHERE s.Status = 'In Storage'
+                AND ts.SampleID IS NULL
+            """
+            
+            params = [task_id]
+            
+            if search_term:
+                query += """
+                    AND (s.Description LIKE %s 
+                    OR s.PartNumber LIKE %s 
+                    OR s.Barcode LIKE %s)
+                """
+                search_pattern = f"%{search_term}%"
+                params.extend([search_pattern, search_pattern, search_pattern])
+            
+            query += """
+                GROUP BY s.SampleID, s.Description, s.PartNumber, sl.LocationName, s.Status, s.Amount, s.Barcode
+                HAVING AmountAvailable > 0
+                ORDER BY s.Description
+                LIMIT 50
+            """
+            
+            cursor.execute(query, params)
+            
+            samples = []
+            for row in cursor.fetchall():
+                samples.append({
+                    "SampleID": row[0],
+                    "Barcode": row[1],
+                    "Description": row[2],
+                    "PartNumber": row[3] or "",
+                    "Status": row[4],
+                    "AmountAvailable": row[5],
+                    "LocationName": row[6] or "Unknown",
+                    "SampleIDFormatted": row[7]
+                })
+            
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'samples': samples
+            })
+            
+        except Exception as e:
+            print(f"Error getting available samples for task: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500

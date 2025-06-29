@@ -300,3 +300,46 @@ def init_task(blueprint, mysql):
                 'error': str(e)
             }), 500
     
+    @blueprint.route('/api/tasks/<int:task_id>/assign-samples', methods=['POST'])
+    def assign_samples_to_task(task_id):
+        """
+        Assign samples to a task.
+        """
+        try:
+            data = request.get_json()
+            sample_ids = data.get('sample_ids', [])
+            purpose = data.get('purpose', '')
+            
+            if not sample_ids:
+                return jsonify({
+                    'success': False,
+                    'error': 'No samples provided'
+                }), 400
+            
+            # Get current user
+            current_user = get_current_user(mysql)
+            user_id = current_user.get('UserID', 1)
+            
+            # Use task service to assign samples
+            result = task_service.assign_samples_to_task(task_id, sample_ids, user_id, purpose)
+            
+            if result['success']:
+                return jsonify({
+                    'success': True,
+                    'message': f'Successfully assigned {len(sample_ids)} sample(s) to task'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result.get('error', 'Failed to assign samples')
+                }), 500
+                
+        except Exception as e:
+            print(f"Error assigning samples to task: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+    

@@ -516,15 +516,17 @@ class TaskService:
                 s.Status as SampleStatus,
                 CASE 
                     WHEN tsu.SampleID IS NOT NULL THEN tsu.Status
+                    WHEN ts.SampleID IS NOT NULL THEN ts.Status
                     ELSE 'Available for Task'
                 END as UsageStatus,
-                COALESCE(tsu.CreatedDate, r.ReceivedDate) as AssignedDate,
+                COALESCE(tsu.CreatedDate, ts.AssignedDate, r.ReceivedDate) as AssignedDate,
                 CASE 
                     WHEN tsu.SampleID IS NOT NULL THEN CONCAT('Used in test ', t.TestNo)
+                    WHEN ts.SampleID IS NOT NULL THEN COALESCE(ts.Purpose, 'Assigned to task')
                     ELSE 'Available for task assignment'
                 END as Purpose,
-                COALESCE(tsu.Notes, '') as Notes,
-                COALESCE(test_user.Name, owner.Name) as AssignedBy,
+                COALESCE(tsu.Notes, ts.Notes, '') as Notes,
+                COALESCE(test_user.Name, task_user.Name, owner.Name) as AssignedBy,
                 t.TestNo,
                 t.TestName,
                 tsu.SampleIdentifier,
@@ -537,11 +539,13 @@ class TaskService:
             LEFT JOIN testsampleusage tsu ON s.SampleID = tsu.SampleID
             LEFT JOIN test t ON tsu.TestID = t.TestID AND t.TaskID = %s
             LEFT JOIN user test_user ON t.UserID = test_user.UserID
-            WHERE s.TaskID = %s
+            LEFT JOIN tasksample ts ON s.SampleID = ts.SampleID AND ts.TaskID = %s
+            LEFT JOIN user task_user ON ts.AssignedBy = task_user.UserID
+            WHERE s.TaskID = %s OR ts.TaskID = %s
             ORDER BY AssignedDate DESC
         """
         
-        result, _ = self.db.execute_query(query, (task_id, task_id))
+        result, _ = self.db.execute_query(query, (task_id, task_id, task_id, task_id))
         
         samples = []
         for row in result:
@@ -627,3 +631,97 @@ class TaskService:
             
         except Exception as e:
             print(f"Error logging task activity: {e}")
+    
+    def assign_samples_to_task(self, task_id, sample_ids, user_id, purpose=""):
+        """
+        Assign multiple samples to a task.
+        """
+        try:
+            cursor = self.mysql.connection.cursor()
+            cursor.execute("START TRANSACTION")
+            
+            success_count = 0
+            errors = []
+            
+            for sample_id in sample_ids:
+                try:
+                    # Check if sample is already assigned to this task
+                    cursor.execute("""
+                        SELECT TaskSampleID FROM tasksample 
+                        WHERE TaskID = %s AND SampleID = %s
+                    """, (task_id, sample_id))
+                    
+                    if cursor.fetchone():
+                        errors.append(f"Sample {sample_id} is already assigned to this task")
+                        continue
+                    
+                    # Check if sample exists and is available
+                    cursor.execute("""
+                        SELECT SampleID, Description FROM sample 
+                        WHERE SampleID = %s AND Status = 'In Storage'
+                    """, (sample_id,))
+                    
+                    sample_result = cursor.fetchone()
+                    if not sample_result:
+                        errors.append(f"Sample {sample_id} not found or not available")
+                        continue
+                    
+                    # Insert into tasksample table
+                    cursor.execute("""
+                        INSERT INTO tasksample (TaskID, SampleID, AssignedBy, Purpose, Status)
+                        VALUES (%s, %s, %s, %s, 'Assigned')
+                    """, (task_id, sample_id, user_id, purpose))
+                    
+                    # Log the assignment
+                    cursor.execute("""
+                        INSERT INTO History (SampleID, ActionType, Notes, UserID, Timestamp)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (
+                        sample_id,
+                        'Sample assigned',
+                        f'Task ID {task_id}: Sample SMP-{sample_id} ({sample_result[1]}) assigned to task',
+                        user_id,
+                        datetime.now()
+                    ))
+                    
+                    success_count += 1
+                    
+                except Exception as e:
+                    errors.append(f"Error assigning sample {sample_id}: {str(e)}")
+                    continue
+            
+            if success_count > 0:
+                cursor.execute("COMMIT")
+                
+                # Log overall task activity
+                self._log_task_activity(
+                    task_id, 
+                    'Samples assigned', 
+                    f'{success_count} sample(s) assigned to task', 
+                    user_id
+                )
+                
+                return {
+                    'success': True,
+                    'assigned_count': success_count,
+                    'errors': errors
+                }
+            else:
+                cursor.execute("ROLLBACK")
+                return {
+                    'success': False,
+                    'error': 'No samples were assigned',
+                    'errors': errors
+                }
+                
+        except Exception as e:
+            cursor.execute("ROLLBACK")
+            print(f"Error in assign_samples_to_task: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'error': str(e)
+            }
+        finally:
+            cursor.close()
