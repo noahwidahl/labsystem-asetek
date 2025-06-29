@@ -10,7 +10,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setupStorageOptions();
     setupContainerOptions();
     setupContainerTypeCreation();
-    setupLocationValidation();
     
     // Mark this module as loaded in the global state
     if (window.registerApp) {
@@ -21,47 +20,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Setup location validation for text input
-function setupLocationValidation() {
-    const locationInput = document.getElementById('containerLocation');
-    if (!locationInput) return;
-    
-    console.log('Setting up location validation');
-    
-    // Function to validate location format (x.x.x)
-    function validateLocationFormat(value) {
-        if (!value) return false;
-        
-        // Check format with regex - allows for 1.1.1, 10.5.3, etc.
-        // Format is x.x.x where x is one or more digits
-        const locationRegex = /^\d+\.\d+\.\d+$/;
-        return locationRegex.test(value);
-    }
-    
-    // Add input event listener to validate on typing
-    locationInput.addEventListener('input', function() {
-        const value = this.value.trim();
-        const isValid = validateLocationFormat(value);
-        
-        // Show/hide error message
-        if (value && !isValid) {
-            this.classList.add('is-invalid');
-            this.setCustomValidity('Please enter a valid location in format "x.x.x" (e.g. 1.1.1)');
-        } else {
-            this.classList.remove('is-invalid');
-            this.setCustomValidity('');
-        }
-    });
-    
-    // Add blur event to validate on focus loss
-    locationInput.addEventListener('blur', function() {
-        const value = this.value.trim();
-        if (value && !validateLocationFormat(value)) {
-            this.classList.add('is-invalid');
-            this.setCustomValidity('Please enter a valid location in format "x.x.x" (e.g. 1.1.1)');
-        }
-    });
-}
 
 // Setup storage options (Direct vs Container)
 function setupStorageOptions() {
@@ -109,6 +67,16 @@ function setupStorageOptions() {
             updateContainerOptions();
             // Clear capacity warnings when switching storage options
             clearCapacityWarnings();
+            
+            // Clear container location when switching away from container storage
+            if (this.value === 'direct') {
+                if (registerApp.selectedContainerLocation) {
+                    console.log("Clearing selected container location when switching to direct storage");
+                    registerApp.selectedContainerLocation = null;
+                    registerApp.skipLocationSelection = false;
+                }
+            }
+            
             // Validate if container option is selected
             if (this.value === 'container') {
                 setTimeout(validateContainerCapacity, 100);
@@ -137,6 +105,14 @@ function setupContainerOptions() {
                 if (existingContainerSelectArea) existingContainerSelectArea.classList.add('d-none');
                 if (containerDetailsSection) containerDetailsSection.classList.remove('d-none');
                 clearCapacityWarnings();
+                
+                // Clear any selected container location when switching to new container
+                if (registerApp.selectedContainerLocation) {
+                    console.log("Clearing selected container location when switching to new container");
+                    registerApp.selectedContainerLocation = null;
+                    registerApp.skipLocationSelection = false;
+                }
+                
                 setTimeout(validateContainerCapacity, 100);
             }
         });

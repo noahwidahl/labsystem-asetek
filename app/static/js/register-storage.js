@@ -23,7 +23,6 @@ function setupStorageGrid() {
     grid.innerHTML = '<div class="text-center p-3"><div class="spinner-border"></div><p>Loading storage locations...</p></div>';
 
     // Check if there's a pre-selected location from container details
-    const containerLocationSelect = document.getElementById('containerLocation');
     let selectedLocationId = null;
     
     // Reset the saved rack number
@@ -34,7 +33,14 @@ function setupStorageGrid() {
     updateStorageInstructions();
     
     // First check if we have a selected container location from existing container
-    if (registerApp.selectedContainerLocation && registerApp.selectedContainerLocation.LocationID) {
+    // Only use it if "existing container" option is actually selected
+    const existingContainerOption = document.getElementById('existingContainerOption');
+    const containerStorageOption = document.getElementById('containerStorageOption');
+    
+    if (containerStorageOption && containerStorageOption.checked && 
+        existingContainerOption && existingContainerOption.checked && 
+        registerApp.selectedContainerLocation && registerApp.selectedContainerLocation.LocationID) {
+        
         selectedLocationId = registerApp.selectedContainerLocation.LocationID;
         
         // Parse the location name to get the rack number
@@ -46,21 +52,6 @@ function setupStorageGrid() {
         }
         
         console.log("Using location from existing container:", selectedLocationId, registerApp.selectedContainerLocation.LocationName, "Rack:", window.selectedRackNum);
-    }
-    // Otherwise use the selected container location from the new container form
-    else if (containerLocationSelect && containerLocationSelect.value) {
-        selectedLocationId = containerLocationSelect.value;
-        
-        // Try to extract rack number
-        if (containerLocationSelect.selectedOptions && containerLocationSelect.selectedOptions[0]) {
-            const locationText = containerLocationSelect.selectedOptions[0].textContent;
-            const match = locationText.match(/(\d+)\.(\d+)\.(\d+)/);
-            if (match) {
-                window.selectedRackNum = match[1];
-            }
-        }
-        
-        console.log("Using pre-selected location from container form:", selectedLocationId, "Rack:", window.selectedRackNum);
     }
 
     // Fetch storage locations from API

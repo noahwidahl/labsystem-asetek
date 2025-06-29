@@ -387,31 +387,7 @@ function handleFormSubmission() {
                     formData.containerCapacity = document.getElementById('containerCapacity')?.value || '';
                 }
                 
-                // Save container location separately - check text input format first
-                const containerLocationInput = document.getElementById('containerLocation');
-                if (containerLocationInput && containerLocationInput.value) {
-                    // For text input like "1.1.1", we need to convert to LocationID
-                    const locationText = containerLocationInput.value.trim();
-                    
-                    // Check if we have the location data in the global state
-                    if (window.registerApp && window.registerApp.locations) {
-                        const matchingLocation = window.registerApp.locations.find(loc => 
-                            loc.LocationName === locationText
-                        );
-                        if (matchingLocation) {
-                            formData.containerLocationId = matchingLocation.LocationID;
-                            console.log("Container location set to:", locationText, "(ID:", matchingLocation.LocationID, ")");
-                        } else {
-                            // If no match found, try to create the location or use fallback
-                            formData.containerLocationText = locationText;
-                            console.log("Container location text set to:", locationText, "(will be resolved server-side)");
-                        }
-                    } else {
-                        // Fallback - send as text and let server handle
-                        formData.containerLocationText = locationText;
-                        console.log("Container location text set to:", locationText, "(no location data available)");
-                    }
-                }
+                // Container location will be set from the main location selection in step 4
             }
     }
     

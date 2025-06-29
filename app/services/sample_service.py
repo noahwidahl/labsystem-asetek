@@ -354,24 +354,9 @@ class SampleService:
                     from app.services.container_service import ContainerService
                     container_service = ContainerService(self.mysql)
                     
-                    # Handle container location - convert text to LocationID if needed
-                    container_location_id = sample_data.get('containerLocationId')
-                    if not container_location_id and sample_data.get('containerLocationText'):
-                        # Try to find location by name
-                        location_text = sample_data.get('containerLocationText')
-                        cursor.execute(
-                            "SELECT LocationID FROM StorageLocation WHERE LocationName = %s LIMIT 1",
-                            (location_text,)
-                        )
-                        location_result = cursor.fetchone()
-                        if location_result:
-                            container_location_id = location_result[0]
-                            print(f"DEBUG: Found location ID {container_location_id} for location text '{location_text}'")
-                        else:
-                            print(f"WARNING: Could not find location for text '{location_text}', using default")
-                            container_location_id = location_id
-                    elif not container_location_id:
-                        container_location_id = location_id
+                    # Use the main location selected in step 4 for the container
+                    container_location_id = location_id
+                    print(f"DEBUG: Using main location ID {container_location_id} for new container")
                     
                     container_data = {
                         'description': sample_data.get('containerDescription') or description,

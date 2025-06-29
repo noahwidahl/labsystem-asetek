@@ -107,6 +107,8 @@ window.registerApp = {
         this.selectedContainerLocation = null;
         this.skipLocationSelection = false;
         
+        console.log("Global state reset - cleared all location selections");
+        
         // Load location data for container validation
         this.loadLocationData();
         
