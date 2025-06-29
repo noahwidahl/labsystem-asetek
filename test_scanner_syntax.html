@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner Syntax Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .result { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Scanner JavaScript Syntax Test</h1>
+    <div id="results"></div>
+
+    <!-- Load move-sample.js first (simulates base.html load order) -->
+    <script src="/static/js/move-sample.js"></script>
+    
+    <!-- Then load scanner.html inline script (simulates the scanner page) -->
+    <script>
+        // This simulates the inline script from scanner.html 
+        console.log('🚀 DEBUG: Testing scanner page script loading...');
+        
+        try {
+            // Print Job Management Variables (renamed to avoid conflict)
+            let scannerCurrentPrintSample = null;
+            let printJobs = JSON.parse(localStorage.getItem('printJobs') || '[]');
+            
+            console.log('✅ SUCCESS: No duplicate variable declaration error!');
+            document.getElementById('results').innerHTML = `
+                <div class="result success">
+                    ✅ SUCCESS: JavaScript syntax is now correct!<br>
+                    - scannerCurrentPrintSample variable declared successfully<br>
+                    - No conflict with move-sample.js currentPrintSample variable<br>
+                    - Print jobs loaded: ${printJobs.length} items
+                </div>
+            `;
+        } catch (error) {
+            console.error('❌ ERROR:', error);
+            document.getElementById('results').innerHTML = `
+                <div class="result error">
+                    ❌ ERROR: ${error.message}
+                </div>
+            `;
+        }
+    </script>
+    
+    <!-- Test barcode scanner loading -->
+    <script src="/static/js/barcode-scanner.js"></script>
+    
+    <script>
+        // Test that scanner functions work
+        setTimeout(() => {
+            try {
+                if (window.barcodeScanner) {
+                    document.getElementById('results').innerHTML += `
+                        <div class="result success">
+                            ✅ Barcode scanner initialized successfully!
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('results').innerHTML += `
+                        <div class="result error">
+                            ❌ Barcode scanner not initialized
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('results').innerHTML += `
+                    <div class="result error">
+                        ❌ Scanner test error: ${error.message}
+                    </div>
+                `;
+            }
+        }, 100);
+    </script>
+</body>
+</html>

@@ -19,16 +19,20 @@ PRINTER_CONFIG = {
     'sample': {
         'printer_type': 'brother_ql810w',
         'app_path_env': 'BROTHER_SAMPLE_PRINTER_PATH',
+        'zebra_app_path_env': 'ZEBRA_SAMPLE_PRINTER_PATH',
         'default_path': '',
-        'description': 'Brother QL-810W for Sample Labels',
-        'format': 'compact'  # Smaller format for individual samples
+        'description': 'Brother QL-810W for Sample Labels (Zebra Scanner Compatible)',
+        'format': 'compact',  # Smaller format for individual samples
+        'use_zpl': True  # Use ZPL for Zebra scanner compatibility
     },
     'container': {
         'printer_type': 'brother_ql810w', 
         'app_path_env': 'BROTHER_CONTAINER_PRINTER_PATH',
+        'zebra_app_path_env': 'ZEBRA_CONTAINER_PRINTER_PATH',
         'default_path': '',
-        'description': 'Brother QL-810W for Container/Package Labels',
-        'format': 'large'  # Larger format for packages/containers
+        'description': 'Brother QL-810W for Container Labels (Zebra Scanner Compatible)',
+        'format': 'large',  # Larger format for packages/containers
+        'use_zpl': True  # Use ZPL for Zebra scanner compatibility
     },
     'package': {
         'printer_type': 'brother_ql810w', 
@@ -56,12 +60,23 @@ PRINTER_CONFIG = {
 def get_printer_config(label_type, printer_id=None):
     """
     Get printer configuration for a specific label type.
-    Falls back to BROTHER_APP_PATH if specific printer not configured.
+    Supports both Brother and Zebra printers with automatic ZPL detection.
     """
     if label_type in PRINTER_CONFIG:
         config = PRINTER_CONFIG[label_type].copy()
         
-        # Try to get specific printer path
+        # Check for Zebra printer first (if ZPL is enabled)
+        zebra_path = os.getenv(config.get('zebra_app_path_env', ''), '')
+        use_zebra = os.getenv('USE_ZEBRA_PRINTERS', 'False').lower() == 'true'
+        
+        if zebra_path and use_zebra:
+            config['app_path'] = zebra_path
+            config['use_zpl'] = True
+            config['printer_type'] = 'zebra'
+            config['description'] = config['description'].replace('Brother QL-810W', 'Zebra ZPL Printer')
+            return config
+        
+        # Fall back to Brother printer
         printer_path = os.getenv(config['app_path_env'], '')
         
         # Fall back to general BROTHER_APP_PATH if specific not set
@@ -70,6 +85,7 @@ def get_printer_config(label_type, printer_id=None):
         
         if printer_path:
             config['app_path'] = printer_path
+            config['use_zpl'] = False
             return config
     
     return None
@@ -96,14 +112,51 @@ def generate_barcode(label_type, label_data):
     else:
         return f"LAB{timestamp}"
 
+def generate_zpl_barcode(barcode_data, barcode_type='128', height=60, width=3):
+    """
+    Generate ZPL (Zebra Programming Language) barcode command optimized for scanning.
+    """
+    if barcode_type == '128':
+        # Code 128 - most reliable for alphanumeric data
+        return f"^BY{width},3,{height}^BC,{height},Y,N,N^FD{barcode_data}^FS"
+    elif barcode_type == 'QR':
+        # QR Code - good for mobile scanners
+        return f"^BQN,2,6,M,7^FD{barcode_data}^FS"
+    elif barcode_type == '39':
+        # Code 39 - widely compatible
+        return f"^BY{width},3,{height}^B3,N,{height},Y,N^FD{barcode_data}^FS"
+    else:
+        # Default to Code 128
+        return f"^BY{width},3,{height}^BC,{height},Y,N,N^FD{barcode_data}^FS"
+
 def format_label_enhanced(label_type, data, printer_config):
     """
     Enhanced label formatting with improved layouts for different label types.
+    Supports both text-based and ZPL (Zebra) formats.
     """
     format_type = printer_config.get('format', 'standard')
+    use_zpl = printer_config.get('use_zpl', False)
     
     if label_type == 'sample':
-        if format_type == 'compact':
+        if use_zpl:
+            # ZPL format for Zebra printers with large scannable barcodes
+            barcode = data.get('Barcode', '')
+            sample_id = data.get('SampleIDFormatted', '')
+            
+            return f"""^XA
+^LH0,0^FS
+^FO30,20^A0N,25,25^FDSAMPLE LABEL^FS
+^FO30,60^A0N,30,30^FD{sample_id}^FS
+^FO30,100^A0N,20,20^FDDesc: {(data.get('Description', ''))[:25]}^FS
+^FO30,130^A0N,18,18^FDPart: {data.get('PartNumber', '')[:20]}^FS
+^FO30,160^A0N,18,18^FDAmt: {data.get('Amount', '')} {data.get('UnitName', '')}^FS
+
+^FO30,200{generate_zpl_barcode(barcode, '128', 80, 3)}
+^FO30,290^A0N,16,16^FD{barcode}^FS
+
+^FO30,320^A0N,14,14^FD{datetime.now().strftime('%d-%m-%Y %H:%M')}^FS
+^XZ"""
+        elif format_type == 'compact':
             return f"""
 ╭─────────────────────────────╮
 │ SAMPLE: {data.get('SampleIDFormatted', ''):<18} │
@@ -131,6 +184,38 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
         # Enhanced container label with multiple barcodes and sample information
         samples = data.get('samples', [])
         packing_date = data.get('PackingDate', datetime.now().strftime('%d-%m-%Y'))
+        
+        if use_zpl:
+            # ZPL format for container labels with large scannable barcodes
+            container_barcode = data.get('Barcode', f"CNT{data.get('ContainerID', '')}")
+            container_id = data.get('ContainerID', '')
+            
+            zpl_content = f"""^XA
+^LH0,0^FS
+^FO30,20^A0N,30,30^FDCONTAINER LABEL^FS
+^FO30,60^A0N,35,35^FDCNT-{container_id:0>4}^FS
+^FO30,110^A0N,18,18^FDType: {data.get('Type', '')[:20]}^FS
+^FO30,135^A0N,18,18^FDLocation: {data.get('LocationName', '')[:18]}^FS
+^FO30,160^A0N,18,18^FDSamples: {len(samples)}^FS
+
+^FO30,200{generate_zpl_barcode(container_barcode, '128', 100, 4)}
+^FO30,310^A0N,18,18^FD{container_barcode}^FS
+
+^FO30,350^A0N,16,16^FDSample Barcodes:^FS"""
+
+            # Sample barcodes (show first 4)
+            y_pos = 380
+            for i, sample in enumerate(samples[:4]):
+                sample_barcode = sample.get('Barcode', f"SMP{sample.get('SampleID', '')}")
+                zpl_content += f"\n^FO30,{y_pos}^A0N,16,16^FD{i+1}. {sample_barcode}^FS"
+                y_pos += 22
+            
+            if len(samples) > 4:
+                zpl_content += f"\n^FO30,{y_pos}^A0N,14,14^FD... and {len(samples)-4} more^FS"
+            
+            zpl_content += f"\n\n^FO30,{y_pos + 30}^A0N,12,12^FD{datetime.now().strftime('%d-%m-%Y %H:%M')}^FS"
+            zpl_content += "\n^XZ"
+            return zpl_content
         
         # Create sample barcodes section
         sample_barcodes = []

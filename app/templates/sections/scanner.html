@@ -200,18 +200,40 @@
 // Scanner page specific functionality - placeholder for now
 // The global scanner will handle actual scanning
 function testScan() {
+    console.log('🧪 DEBUG: testScan() called');
     const testBarcodes = ['CNT-1', 'SMP-1', 'BC1-1751138774-1'];
     const randomBarcode = testBarcodes[Math.floor(Math.random() * testBarcodes.length)];
-    window.barcodeScanner.scanBarcode(randomBarcode);
+    console.log('🎲 DEBUG: Selected test barcode:', randomBarcode);
+    
+    if (window.barcodeScanner) {
+        console.log('✅ DEBUG: window.barcodeScanner exists, calling scanBarcode');
+        console.log('🔍 DEBUG: window.barcodeScanner object:', window.barcodeScanner);
+        window.barcodeScanner.scanBarcode(randomBarcode);
+    } else {
+        console.error('❌ DEBUG: window.barcodeScanner is NOT defined!');
+        alert('ERROR: Barcode scanner not initialized! Check console for details.');
+    }
 }
 
 function manualScan() {
+    console.log('⌨️ DEBUG: manualScan() called');
     const input = document.getElementById('manualBarcodeInput');
     const barcode = input.value.trim();
+    console.log('📝 DEBUG: Manual barcode input:', barcode);
     
     if (barcode) {
-        window.barcodeScanner.scanBarcode(barcode);
-        input.value = '';
+        if (window.barcodeScanner) {
+            console.log('✅ DEBUG: window.barcodeScanner exists, scanning barcode');
+            window.barcodeScanner.scanBarcode(barcode);
+            input.value = '';
+            console.log('🧹 DEBUG: Input field cleared');
+        } else {
+            console.error('❌ DEBUG: window.barcodeScanner is NOT defined!');
+            alert('ERROR: Barcode scanner not initialized! Check console for details.');
+        }
+    } else {
+        console.log('⚠️ DEBUG: Empty barcode input');
+        alert('Please enter a barcode');
     }
 }
 
@@ -233,11 +255,11 @@ function filterScans(type) {
 }
 
 // Print Job Management Variables
-let currentPrintSample = null;
+let scannerCurrentPrintSample = null;
 let printJobs = JSON.parse(localStorage.getItem('printJobs') || '[]');
 
 function showPrintConfirmation(sampleData) {
-    currentPrintSample = sampleData;
+    scannerCurrentPrintSample = sampleData;
     document.getElementById('printSampleId').textContent = sampleData.SampleIDFormatted || `SMP-${sampleData.SampleID}`;
     document.getElementById('printBarcode').textContent = sampleData.Barcode;
     document.getElementById('printDescription').textContent = sampleData.Description;
@@ -246,10 +268,10 @@ function showPrintConfirmation(sampleData) {
 }
 
 async function printNow() {
-    if (!currentPrintSample) return;
+    if (!scannerCurrentPrintSample) return;
     
     try {
-        const response = await fetch(`/api/print/sample/${currentPrintSample.SampleID}`, {
+        const response = await fetch(`/api/print/sample/${scannerCurrentPrintSample.SampleID}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -262,10 +284,10 @@ async function printNow() {
         const result = await response.json();
         
         if (result.status === 'success') {
-            addPrintJob(currentPrintSample, 'printed');
+            addPrintJob(scannerCurrentPrintSample, 'printed');
             showAlert('success', 'Label printed successfully!');
         } else {
-            addPrintJob(currentPrintSample, 'failed');
+            addPrintJob(scannerCurrentPrintSample, 'failed');
             // Check for specific printer not found error
             const errorMessage = result.message || 'Print failed';
             if (errorMessage.toLowerCase().includes('printer') && (errorMessage.toLowerCase().includes('not found') || errorMessage.toLowerCase().includes('unavailable'))) {
@@ -276,10 +298,10 @@ async function printNow() {
         }
         
         bootstrap.Modal.getInstance(document.getElementById('printConfirmModal')).hide();
-        currentPrintSample = null;
+        scannerCurrentPrintSample = null;
         
     } catch (error) {
-        addPrintJob(currentPrintSample, 'failed');
+        addPrintJob(scannerCurrentPrintSample, 'failed');
         // Handle network/connection errors which often indicate no printer
         if (error.message.includes('fetch') || error.message.includes('NetworkError')) {
             showAlert('warning', 'No printer found or printer service unavailable');
@@ -291,13 +313,13 @@ async function printNow() {
 }
 
 function savePrintJobForLater() {
-    if (!currentPrintSample) return;
+    if (!scannerCurrentPrintSample) return;
     
-    addPrintJob(currentPrintSample, 'queued');
+    addPrintJob(scannerCurrentPrintSample, 'queued');
     showAlert('info', 'Print job saved for later');
     
     bootstrap.Modal.getInstance(document.getElementById('printConfirmModal')).hide();
-    currentPrintSample = null;
+    scannerCurrentPrintSample = null;
 }
 
 function addPrintJob(sampleData, status) {
@@ -323,7 +345,11 @@ function addPrintJob(sampleData, status) {
 }
 
 function loadPrintJobs() {
+    // Reload from localStorage in case jobs were added from registration
+    printJobs = JSON.parse(localStorage.getItem('printJobs') || '[]');
+    
     const tbody = document.getElementById('printJobsBody');
+    console.log(`Loading ${printJobs.length} print jobs from localStorage`);
     
     if (printJobs.length === 0) {
         tbody.innerHTML = `
@@ -458,23 +484,50 @@ window.showPrintConfirmation = showPrintConfirmation;
 
 // Manual input handler and page initialization
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🏁 DEBUG: Scanner page DOMContentLoaded fired');
+    
     // Load print jobs when page loads
+    console.log('📋 DEBUG: Loading print jobs');
     loadPrintJobs();
+    
+    // Refresh print jobs every 5 seconds to pick up new jobs from registration
+    console.log('⏰ DEBUG: Setting up print jobs refresh interval');
+    setInterval(loadPrintJobs, 5000);
+    
     const input = document.getElementById('manualBarcodeInput');
     if (input) {
+        console.log('✅ DEBUG: Manual barcode input field found, adding Enter key listener');
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
+                console.log('⏎ DEBUG: Enter key pressed in manual input');
                 manualScan();
             }
         });
+    } else {
+        console.error('❌ DEBUG: Manual barcode input field NOT found!');
     }
     
     // Load scan history when page loads
+    console.log('⏳ DEBUG: Setting up scan history loader with 100ms delay');
     setTimeout(() => {
+        console.log('📚 DEBUG: Attempting to load scan history');
         if (window.barcodeScanner) {
+            console.log('✅ DEBUG: window.barcodeScanner available, updating scan history');
             window.barcodeScanner.updateScanHistoryDisplay();
+        } else {
+            console.log('⏳ DEBUG: window.barcodeScanner not ready yet, trying again in 500ms');
+            setTimeout(() => {
+                if (window.barcodeScanner) {
+                    console.log('✅ DEBUG: window.barcodeScanner now available, updating scan history');
+                    window.barcodeScanner.updateScanHistoryDisplay();
+                } else {
+                    console.error('❌ DEBUG: window.barcodeScanner still not available after 600ms total!');
+                }
+            }, 500);
         }
     }, 100);
+    
+    console.log('🎯 DEBUG: Scanner page initialization completed');
 });
 </script>
 

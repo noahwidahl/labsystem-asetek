@@ -5,6 +5,7 @@
 
 class BarcodeScanner {
     constructor() {
+        console.log('🚀 DEBUG: BarcodeScanner constructor called');
         this.scanBuffer = '';
         this.scanTimeout = null;
         this.scanTimeoutDuration = 100; // ms between characters from scanner
@@ -13,24 +14,29 @@ class BarcodeScanner {
         
         this.barcodePatterns = {
             container: /^CNT-\d+$/,
-            sample: /^BC\d+-.*$/
+            sample: /^(BC\d+-.*|SMP-\d+|BC\d+.*-.*)$/
         };
+        console.log('🔍 DEBUG: Barcode patterns:', this.barcodePatterns);
         
         // Scan history storage
         this.scanHistory = JSON.parse(localStorage.getItem('scanHistory') || '[]');
         this.currentFilter = 'all';
+        console.log('📚 DEBUG: Loaded scan history:', this.scanHistory.length, 'items');
         
         this.init();
+        console.log('✅ DEBUG: BarcodeScanner constructor completed');
     }
     
     init() {
+        console.log('🔧 DEBUG: BarcodeScanner init() called');
         // Listen for keydown events globally
         document.addEventListener('keydown', (event) => this.handleKeyInput(event));
+        console.log('⌨️ DEBUG: Global keydown listener added');
         
         // Prevent scanner input from interfering with forms when modal is closed
         this.isModalOpen = false;
         
-        console.log('Barcode Scanner initialized');
+        console.log('✅ DEBUG: BarcodeScanner initialized successfully');
     }
     
     handleKeyInput(event) {
@@ -116,28 +122,37 @@ class BarcodeScanner {
     }
     
     async handleBarcodeScan(barcode, type) {
+        console.log('🔄 DEBUG: handleBarcodeScan() called with:', barcode, type);
         try {
             // Show loading toast instead of modal
+            console.log('📡 DEBUG: Showing loading toast');
             this.showLoadingToast(barcode);
             
             // Lookup barcode in database
-            const response = await fetch(`/api/barcode/${encodeURIComponent(barcode)}`);
+            const apiUrl = `/api/barcode/${encodeURIComponent(barcode)}`;
+            console.log('🌐 DEBUG: Making API call to:', apiUrl);
+            const response = await fetch(apiUrl);
+            console.log('📥 DEBUG: API response status:', response.status, response.statusText);
+            
             const data = await response.json();
+            console.log('📊 DEBUG: API response data:', data);
             
             // Hide loading toast
             this.hideLoadingToast();
             
             if (data.success) {
+                console.log('✅ DEBUG: Barcode found, showing modal');
                 // Add to scan history
                 this.addToScanHistory(barcode, type, data, true);
                 this.showScanModal(barcode, type, data);
             } else {
+                console.log('❌ DEBUG: Barcode not found');
                 // Add failed scan to history
                 this.addToScanHistory(barcode, type, null, false);
                 this.showError(`Barcode not found: ${barcode}`);
             }
         } catch (error) {
-            console.error('Error looking up barcode:', error);
+            console.error('💥 DEBUG: Error looking up barcode:', error);
             // Hide loading toast
             this.hideLoadingToast();
             // Add failed scan to history
@@ -269,7 +284,10 @@ class BarcodeScanner {
         
         // Add action buttons
         footer.innerHTML = `
-            <button type="button" class="btn btn-outline-primary" onclick="window.location.href='/containers'">
+            <button type="button" class="btn btn-outline-primary" onclick="window.barcodeScanner.addContainerToPrintQueue(${container.ContainerID}, '${container.ContainerIDFormatted || 'CNT-' + container.ContainerID}', '${barcode}', '${container.Description || ''}')">
+                <i class="fas fa-print me-1"></i>Add to Print Queue
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="window.location.href='/containers'">
                 <i class="fas fa-box me-1"></i>View All Containers
             </button>
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -319,6 +337,9 @@ class BarcodeScanner {
         
         // Add action buttons
         footer.innerHTML = `
+            <button type="button" class="btn btn-outline-primary" onclick="window.barcodeScanner.addSampleToPrintQueue(${sample.SampleID}, '${sample.SampleIDFormatted}', '${barcode}', '${sample.Description || ''}')">
+                <i class="fas fa-print me-1"></i>Add to Print Queue
+            </button>
             <button type="button" class="btn btn-outline-success" onclick="window.barcodeScanner.showMoveToTestModal(${sample.SampleID}, '${sample.SampleIDFormatted}')">
                 <i class="fas fa-flask me-1"></i>Move to Test
             </button>
@@ -399,10 +420,14 @@ class BarcodeScanner {
     
     // Public method to manually trigger a scan (for testing)
     scanBarcode(barcode) {
+        console.log('🎯 DEBUG: scanBarcode() called with:', barcode);
         const type = this.determineBarcodeType(barcode);
+        console.log('🔍 DEBUG: Determined barcode type:', type);
         if (type) {
+            console.log('✅ DEBUG: Valid barcode type, calling handleBarcodeScan');
             this.handleBarcodeScan(barcode, type);
         } else {
+            console.log('❌ DEBUG: Invalid barcode format');
             this.showError(`Invalid barcode format: ${barcode}`);
         }
     }
@@ -753,9 +778,122 @@ class BarcodeScanner {
             }
         });
     }
+    
+    addSampleToPrintQueue(sampleId, sampleIdFormatted, barcode, description) {
+        try {
+            let printJobs = JSON.parse(localStorage.getItem('printJobs') || '[]');
+            
+            const printJob = {
+                id: Date.now(),
+                timestamp: new Date().toISOString(),
+                sampleId: sampleId,
+                sampleIdFormatted: sampleIdFormatted,
+                barcode: barcode,
+                description: description,
+                type: 'sample',
+                status: 'queued'
+            };
+            
+            printJobs.unshift(printJob); // Add to beginning
+            
+            // Keep only last 50 jobs
+            if (printJobs.length > 50) {
+                printJobs = printJobs.slice(0, 50);
+            }
+            
+            localStorage.setItem('printJobs', JSON.stringify(printJobs));
+            console.log('Sample added to print queue:', printJob);
+            
+            // Show success message
+            this.showSuccess(`Sample ${sampleIdFormatted} added to print queue!`);
+            
+            // Trigger print queue refresh if on scanner page
+            if (typeof loadPrintJobs === 'function') {
+                loadPrintJobs();
+            }
+            
+            // Close the current modal
+            const currentModal = document.getElementById('barcodeModal');
+            if (currentModal) {
+                const currentBsModal = bootstrap.Modal.getInstance(currentModal);
+                if (currentBsModal) {
+                    currentBsModal.hide();
+                }
+            }
+            
+        } catch (error) {
+            console.error('Error adding sample to print queue:', error);
+            this.showError('Error adding sample to print queue');
+        }
+    }
+    
+    addContainerToPrintQueue(containerId, containerIdFormatted, barcode, description) {
+        try {
+            let printJobs = JSON.parse(localStorage.getItem('printJobs') || '[]');
+            
+            const printJob = {
+                id: Date.now(),
+                timestamp: new Date().toISOString(),
+                containerId: containerId,
+                containerIdFormatted: containerIdFormatted,
+                // For compatibility with scanner page - use container data as sample data
+                sampleId: containerId,
+                sampleIdFormatted: containerIdFormatted,
+                barcode: barcode,
+                description: description,
+                type: 'container',
+                status: 'queued'
+            };
+            
+            printJobs.unshift(printJob); // Add to beginning
+            
+            // Keep only last 50 jobs
+            if (printJobs.length > 50) {
+                printJobs = printJobs.slice(0, 50);
+            }
+            
+            localStorage.setItem('printJobs', JSON.stringify(printJobs));
+            console.log('Container added to print queue:', printJob);
+            
+            // Show success message
+            this.showSuccess(`Container ${containerIdFormatted} added to print queue!`);
+            
+            // Trigger print queue refresh if on scanner page
+            if (typeof loadPrintJobs === 'function') {
+                loadPrintJobs();
+            }
+            
+            // Close the current modal
+            const currentModal = document.getElementById('barcodeModal');
+            if (currentModal) {
+                const currentBsModal = bootstrap.Modal.getInstance(currentModal);
+                if (currentBsModal) {
+                    currentBsModal.hide();
+                }
+            }
+            
+        } catch (error) {
+            console.error('Error adding container to print queue:', error);
+            this.showError('Error adding container to print queue');
+        }
+    }
 }
 
 // Initialize global scanner when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    window.barcodeScanner = new BarcodeScanner();
+    console.log('🌟 DEBUG: DOM loaded, initializing global barcode scanner');
+    try {
+        window.barcodeScanner = new BarcodeScanner();
+        console.log('🎉 DEBUG: Global barcode scanner initialized successfully');
+        console.log('🔗 DEBUG: window.barcodeScanner:', window.barcodeScanner);
+        
+        // Test if scanner is accessible
+        if (typeof window.barcodeScanner.scanBarcode === 'function') {
+            console.log('✅ DEBUG: scanBarcode method is accessible');
+        } else {
+            console.error('❌ DEBUG: scanBarcode method NOT accessible');
+        }
+    } catch (error) {
+        console.error('💥 DEBUG: Failed to initialize barcode scanner:', error);
+    }
 });

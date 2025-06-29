@@ -347,10 +347,26 @@ function executeContainerMove(data) {
                 modal.hide();
             }
             
-            // Reload the page after a short delay
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
+            // Show print prompt if moving to a container
+            if (data.containerId && !data.removeFromContainer) {
+                // Sample moved to container - show print prompt
+                if (typeof showContainerUpdatePrintPrompt === 'function') {
+                    showContainerUpdatePrintPrompt(data.containerId, {
+                        description: `Container after moving sample`,
+                        action: 'Sample moved to container'
+                    });
+                } else {
+                    // Fallback if function not available - just reload
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                }
+            } else {
+                // Sample removed from container or moved to location - just reload
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            }
         } else {
             showErrorMessage(`Error moving sample: ${responseData.error}`);
         }
@@ -381,10 +397,11 @@ function moveToLocation(data) {
                 modal.hide();
             }
             
-            // Reload the page after a short delay
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
+            // Show sample print prompt for location move
+            showSampleLocationPrintPrompt(data.sampleId, {
+                description: `Sample moved to new location`,
+                action: 'Location updated'
+            });
         } else {
             showErrorMessage(`Error updating sample location: ${responseData.error}`);
         }
@@ -448,4 +465,201 @@ function showErrorMessage(message) {
         errorToast.classList.remove('show');
         setTimeout(() => errorToast.remove(), 300);
     }, 5000);
+}
+
+// Sample location print prompt functionality
+let currentPrintSample = null;
+
+function showSampleLocationPrintPrompt(sampleId, updateInfo) {
+    console.log('Sample location print prompt called with:', { sampleId, updateInfo });
+    
+    // First fetch sample data
+    fetch(`/api/samples/${sampleId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.sample) {
+                const sampleData = data.sample;
+                
+                // Store sample info for printing
+                currentPrintSample = {
+                    id: sampleId,
+                    data: sampleData,
+                    updateInfo: updateInfo
+                };
+                
+                // Create modal if it doesn't exist
+                let modal = document.getElementById('sampleLocationPrintModal');
+                if (!modal) {
+                    modal = createSampleLocationPrintModal();
+                    document.body.appendChild(modal);
+                }
+                
+                // Update modal content
+                document.getElementById('printMovedSampleId').textContent = sampleData.SampleIDFormatted || `SMP-${sampleId}`;
+                document.getElementById('printMovedSampleBarcode').textContent = sampleData.Barcode || `SMP-${sampleId}`;
+                document.getElementById('printMovedSampleAction').textContent = updateInfo?.action || 'Sample updated';
+                
+                // Show modal
+                const bootstrapModal = new bootstrap.Modal(modal);
+                bootstrapModal.show();
+            } else {
+                console.error('Failed to fetch sample data for print prompt');
+                // Fallback - just reload page
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching sample data for print prompt:', error);
+            // Fallback - just reload page
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        });
+}
+
+function createSampleLocationPrintModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.id = 'sampleLocationPrintModal';
+    modal.tabIndex = -1;
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Sample Updated - Print Label?</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Sample has been updated. Would you like to print an updated label?</p>
+                    <div class="alert alert-info">
+                        <strong>Sample:</strong> <span id="printMovedSampleId"></span><br>
+                        <strong>Barcode:</strong> <span id="printMovedSampleBarcode"></span><br>
+                        <strong>Change:</strong> <span id="printMovedSampleAction"></span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="skipSampleLocationPrint()">
+                        <i class="fas fa-times me-1"></i>Skip
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="printSampleLocationNow()">
+                        <i class="fas fa-print me-1"></i>Print Updated Label
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    return modal;
+}
+
+async function printSampleLocationNow() {
+    if (!currentPrintSample) return;
+    
+    try {
+        const response = await fetch(`/api/print/sample/${currentPrintSample.id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                auto_print: true
+            })
+        });
+        
+        const result = await response.json();
+        
+        // Add to print job queue regardless of result
+        const sampleData = currentPrintSample.data;
+        
+        let status = 'failed';
+        if (result && result.status === 'success') {
+            status = 'printed';
+            showSuccessMessage('Sample label printed successfully!');
+        } else if (result && result.status === 'warning') {
+            status = 'queued'; // Printer not available, but can retry later
+            showSuccessMessage('Sample label queued for printing.');
+        } else {
+            status = 'queued'; // Failed but can retry
+            showSuccessMessage('Sample label added to print queue.');
+        }
+        
+        // Add to print job queue
+        addSamplePrintJob(sampleData, status);
+        
+        // Hide modal and reload page
+        bootstrap.Modal.getInstance(document.getElementById('sampleLocationPrintModal')).hide();
+        currentPrintSample = null;
+        
+        // Reload page to show updated sample
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Print error:', error);
+        
+        // Add to print job queue as failed/queued
+        const sampleData = currentPrintSample.data;
+        addSamplePrintJob(sampleData, 'queued');
+        
+        showSuccessMessage('Sample label added to print queue due to printer issues.');
+        
+        // Hide modal and reload page
+        bootstrap.Modal.getInstance(document.getElementById('sampleLocationPrintModal')).hide();
+        currentPrintSample = null;
+        
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+    }
+}
+
+function skipSampleLocationPrint() {
+    // Add to print job queue when skipping
+    if (currentPrintSample) {
+        const sampleData = currentPrintSample.data;
+        addSamplePrintJob(sampleData, 'queued');
+        showSuccessMessage('Sample label added to print queue.');
+    }
+    
+    // Hide modal and reload page
+    bootstrap.Modal.getInstance(document.getElementById('sampleLocationPrintModal')).hide();
+    currentPrintSample = null;
+    
+    // Reload page to show updated sample
+    setTimeout(() => {
+        window.location.reload();
+    }, 1000);
+}
+
+// Function to add sample print job to queue
+function addSamplePrintJob(sampleData, status) {
+    try {
+        let printJobs = JSON.parse(localStorage.getItem('printJobs') || '[]');
+        
+        const printJob = {
+            id: Date.now(),
+            timestamp: new Date().toISOString(),
+            sampleId: sampleData.SampleID,
+            sampleIdFormatted: sampleData.SampleIDFormatted || `SMP-${sampleData.SampleID}`,
+            barcode: sampleData.Barcode || `SMP-${sampleData.SampleID}`,
+            description: sampleData.Description || `Sample ${sampleData.SampleID}`,
+            type: 'sample',
+            status: status // 'queued', 'printed', 'failed'
+        };
+        
+        printJobs.unshift(printJob); // Add to beginning
+        
+        // Keep only last 50 jobs
+        if (printJobs.length > 50) {
+            printJobs = printJobs.slice(0, 50);
+        }
+        
+        localStorage.setItem('printJobs', JSON.stringify(printJobs));
+        console.log('Sample print job added to queue:', printJob);
+        
+    } catch (error) {
+        console.error('Error adding sample print job to queue:', error);
+    }
 }

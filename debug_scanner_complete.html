@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 COMPLETE Scanner Debug Tool</title>
+    <style>
+        body { font-family: monospace; margin: 20px; background: #f5f5f5; }
+        .debug-section { background: white; margin: 10px 0; padding: 15px; border-radius: 5px; border-left: 4px solid #007bff; }
+        .success { border-left-color: #28a745; }
+        .error { border-left-color: #dc3545; }
+        .warning { border-left-color: #ffc107; }
+        button { margin: 5px; padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 3px; width: 200px; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .status { font-weight: bold; padding: 5px 10px; border-radius: 3px; }
+        .status.ok { background: #d4edda; color: #155724; }
+        .status.fail { background: #f8d7da; color: #721c24; }
+        .status.pending { background: #fff3cd; color: #856404; }
+        #console { height: 300px; overflow-y: auto; background: #000; color: #0f0; padding: 10px; font-family: 'Courier New', monospace; }
+    </style>
+</head>
+<body>
+    <h1>🔧 COMPLETE Scanner Debug Tool</h1>
+    <p><strong>This page will help you debug EXACTLY what's wrong with the scanner system.</strong></p>
+
+    <div class="debug-section">
+        <h2>📊 System Status</h2>
+        <div>Flask Server: <span id="serverStatus" class="status pending">Testing...</span></div>
+        <div>Database: <span id="dbStatus" class="status pending">Testing...</span></div>
+        <div>JavaScript Loaded: <span id="jsStatus" class="status pending">Testing...</span></div>
+        <div>Barcode Scanner Object: <span id="scannerStatus" class="status pending">Testing...</span></div>
+    </div>
+
+    <div class="debug-section">
+        <h2>🧪 API Testing</h2>
+        <button onclick="testAPI('BC1-1751138774-1')">Test Sample API (BC1-1751138774-1)</button>
+        <button onclick="testAPI('CNT-12')">Test Container API (CNT-12)</button>
+        <button onclick="testAPI('INVALID')">Test Invalid Barcode</button>
+        <div id="apiResults"></div>
+    </div>
+
+    <div class="debug-section">
+        <h2>🎯 Scanner Testing</h2>
+        <input type="text" id="testBarcode" placeholder="Enter barcode to test" value="BC1-1751138774-1">
+        <button onclick="testScanner()">Test Scanner Function</button>
+        <button onclick="testManualScan()">Test Manual Scan</button>
+        <div id="scannerResults"></div>
+    </div>
+
+    <div class="debug-section">
+        <h2>📋 Print Jobs Testing</h2>
+        <button onclick="testPrintJobs()">Check Print Jobs in localStorage</button>
+        <button onclick="addTestPrintJob()">Add Test Print Job</button>
+        <button onclick="clearAllPrintJobs()">Clear All Print Jobs</button>
+        <div id="printJobResults"></div>
+    </div>
+
+    <div class="debug-section">
+        <h2>📝 Debug Console</h2>
+        <button onclick="clearConsole()">Clear Console</button>
+        <div id="console"></div>
+    </div>
+
+    <script>
+        // Redirect console.log to our debug console
+        const originalLog = console.log;
+        const originalError = console.error;
+        const debugConsole = document.getElementById('console');
+
+        function logToDebugConsole(message, type = 'log') {
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? '#f00' : type === 'warn' ? '#ff0' : '#0f0';
+            debugConsole.innerHTML += `<div style="color: ${color}">[${timestamp}] ${message}</div>`;
+            debugConsole.scrollTop = debugConsole.scrollHeight;
+        }
+
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            logToDebugConsole(args.join(' '), 'log');
+        };
+
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            logToDebugConsole(args.join(' '), 'error');
+        };
+
+        console.warn = function(...args) {
+            console.error.apply(console, args);
+            logToDebugConsole(args.join(' '), 'warn');
+        };
+
+        function clearConsole() {
+            debugConsole.innerHTML = '';
+        }
+
+        function updateStatus(elementId, success, message) {
+            const element = document.getElementById(elementId);
+            element.className = success ? 'status ok' : 'status fail';
+            element.textContent = message;
+        }
+
+        // Test server connection
+        async function testServerConnection() {
+            try {
+                const response = await fetch('/api/barcode/TEST', { method: 'HEAD' });
+                updateStatus('serverStatus', true, `OK (${response.status})`);
+                return true;
+            } catch (error) {
+                updateStatus('serverStatus', false, `FAILED: ${error.message}`);
+                return false;
+            }
+        }
+
+        // Test API endpoints
+        async function testAPI(barcode) {
+            console.log(`🌐 TESTING API: /api/barcode/${barcode}`);
+            const resultsDiv = document.getElementById('apiResults');
+            
+            try {
+                const response = await fetch(`/api/barcode/${barcode}`);
+                const data = await response.json();
+                
+                resultsDiv.innerHTML = `
+                    <h4>API Response for ${barcode}:</h4>
+                    <div>Status: ${response.status} ${response.statusText}</div>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                console.log(`✅ API Response:`, data);
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <h4>API Error for ${barcode}:</h4>
+                    <div class="error">Error: ${error.message}</div>
+                `;
+                console.error(`❌ API Error:`, error);
+            }
+        }
+
+        // Test scanner functionality
+        function testScanner() {
+            const barcode = document.getElementById('testBarcode').value;
+            const resultsDiv = document.getElementById('scannerResults');
+            
+            console.log(`🎯 TESTING SCANNER: ${barcode}`);
+            
+            if (window.barcodeScanner) {
+                console.log(`✅ window.barcodeScanner exists`);
+                console.log(`🔍 Scanner object:`, window.barcodeScanner);
+                
+                if (typeof window.barcodeScanner.scanBarcode === 'function') {
+                    console.log(`✅ scanBarcode method exists`);
+                    window.barcodeScanner.scanBarcode(barcode);
+                    resultsDiv.innerHTML = `<div class="success">Scanner called with: ${barcode}</div>`;
+                } else {
+                    console.error(`❌ scanBarcode method NOT found`);
+                    resultsDiv.innerHTML = `<div class="error">scanBarcode method NOT found</div>`;
+                }
+            } else {
+                console.error(`❌ window.barcodeScanner NOT defined`);
+                resultsDiv.innerHTML = `<div class="error">window.barcodeScanner NOT defined</div>`;
+            }
+        }
+
+        // Test manual scan (simulating scanner page)
+        function testManualScan() {
+            console.log(`⌨️ TESTING MANUAL SCAN`);
+            // Simulate the scanner page manualScan function
+            if (typeof manualScan === 'function') {
+                manualScan();
+            } else {
+                console.log(`Creating test manual scan...`);
+                const barcode = document.getElementById('testBarcode').value;
+                if (window.barcodeScanner && barcode) {
+                    window.barcodeScanner.scanBarcode(barcode);
+                }
+            }
+        }
+
+        // Test print jobs
+        function testPrintJobs() {
+            const resultsDiv = document.getElementById('printJobResults');
+            const printJobs = JSON.parse(localStorage.getItem('printJobs') || '[]');
+            
+            console.log(`📋 TESTING PRINT JOBS: Found ${printJobs.length} jobs`);
+            
+            resultsDiv.innerHTML = `
+                <h4>Print Jobs in localStorage:</h4>
+                <div>Count: ${printJobs.length}</div>
+                <pre>${JSON.stringify(printJobs, null, 2)}</pre>
+            `;
+        }
+
+        function addTestPrintJob() {
+            const testJob = {
+                id: Date.now(),
+                timestamp: new Date().toISOString(),
+                sampleId: 999,
+                sampleIdFormatted: 'SMP-999',
+                barcode: 'TEST-123',
+                description: 'Debug Test Sample',
+                status: 'queued'
+            };
+            
+            let printJobs = JSON.parse(localStorage.getItem('printJobs') || '[]');
+            printJobs.unshift(testJob);
+            localStorage.setItem('printJobs', JSON.stringify(printJobs));
+            
+            console.log(`➕ Added test print job:`, testJob);
+            testPrintJobs();
+        }
+
+        function clearAllPrintJobs() {
+            localStorage.removeItem('printJobs');
+            console.log(`🗑️ Cleared all print jobs`);
+            testPrintJobs();
+        }
+
+        // Check JavaScript loading
+        function checkJavaScript() {
+            console.log(`🔍 CHECKING JAVASCRIPT LOADING`);
+            
+            // Check if main scripts are loaded
+            const scripts = Array.from(document.scripts);
+            console.log(`📜 Found ${scripts.length} script tags`);
+            
+            // Check for barcode-scanner.js
+            const barcodeScript = scripts.find(s => s.src.includes('barcode-scanner.js'));
+            if (barcodeScript) {
+                console.log(`✅ barcode-scanner.js found:`, barcodeScript.src);
+            } else {
+                console.error(`❌ barcode-scanner.js NOT found`);
+            }
+            
+            updateStatus('jsStatus', true, 'Scripts loaded');
+        }
+
+        // Check scanner object
+        function checkScannerObject() {
+            console.log(`🎯 CHECKING SCANNER OBJECT`);
+            
+            if (window.barcodeScanner) {
+                console.log(`✅ window.barcodeScanner exists`);
+                console.log(`🔍 Type:`, typeof window.barcodeScanner);
+                console.log(`🔍 Constructor:`, window.barcodeScanner.constructor.name);
+                console.log(`🔍 Methods:`, Object.getOwnPropertyNames(Object.getPrototypeOf(window.barcodeScanner)));
+                updateStatus('scannerStatus', true, 'Scanner object exists');
+            } else {
+                console.error(`❌ window.barcodeScanner NOT defined`);
+                updateStatus('scannerStatus', false, 'Scanner object missing');
+            }
+        }
+
+        // Initialize testing
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log(`🚀 DEBUG PAGE LOADED`);
+            
+            // Test server connection
+            await testServerConnection();
+            
+            // Check JavaScript
+            checkJavaScript();
+            
+            // Wait a bit for scanner to initialize, then check
+            setTimeout(() => {
+                checkScannerObject();
+            }, 1000);
+            
+            console.log(`🎉 DEBUG PAGE READY`);
+        });
+    </script>
+
+    <!-- Load the actual barcode scanner script -->
+    <script src="/static/js/barcode-scanner.js"></script>
+</body>
+</html>

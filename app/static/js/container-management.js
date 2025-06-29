@@ -390,13 +390,15 @@ function addSampleToContainer() {
         if (data.success) {
             showSuccessMessage('Sample added to container!');
             
-            // Close modal and reload page
+            // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('addSampleToContainerModal'));
             modal.hide();
             
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
+            // Show print prompt for container update
+            showContainerUpdatePrintPrompt(containerId, {
+                description: `Container after adding sample`,
+                action: 'Sample added'
+            });
         } else {
             showErrorMessage(`Error adding sample: ${data.error}`);
         }
@@ -518,13 +520,12 @@ function createContainer() {
         if (data.success) {
             showSuccessMessage('Container created successfully!');
             
-            // Close modal and reload page
+            // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('createContainerModal'));
             if (modal) modal.hide();
             
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
+            // Show print prompt with container data from the form
+            showContainerPrintPrompt(data.container_id, containerData);
         } else {
             // If there's a field-specific error, show it on that field
             if (data.field) {
@@ -1082,3 +1083,345 @@ function hideOverlayMessage() {
         }, 300);
     }
 }
+
+// Container print prompt functionality
+let currentPrintContainer = null;
+
+function showContainerPrintPrompt(containerId, containerData) {
+    console.log('Container print prompt called with:', { containerId, containerData });
+    
+    // Store container info for printing
+    currentPrintContainer = {
+        id: containerId,
+        data: containerData
+    };
+    
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('containerPrintConfirmModal');
+    if (!modal) {
+        modal = createContainerPrintModal();
+        document.body.appendChild(modal);
+    }
+    
+    // Update modal content
+    document.getElementById('printContainerId').textContent = `CNT-${containerId}`;
+    document.getElementById('printContainerDescription').textContent = containerData?.description || 'Container';
+    
+    // Show modal
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+}
+
+function createContainerPrintModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.id = 'containerPrintConfirmModal';
+    modal.tabIndex = -1;
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Print Container Label</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Would you like to print the label for this container now?</p>
+                    <div class="alert alert-info">
+                        <strong>Container:</strong> <span id="printContainerId"></span><br>
+                        <strong>Description:</strong> <span id="printContainerDescription"></span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="skipContainerPrint()">
+                        <i class="fas fa-times me-1"></i>Skip
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="printContainerNow()">
+                        <i class="fas fa-print me-1"></i>Print Now
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    return modal;
+}
+
+async function printContainerNow() {
+    if (!currentPrintContainer) return;
+    
+    try {
+        const response = await fetch(`/api/print/container/${currentPrintContainer.id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                auto_print: true
+            })
+        });
+        
+        const result = await response.json();
+        
+        // Add to print job queue regardless of result
+        const containerData = {
+            id: currentPrintContainer.id,
+            description: currentPrintContainer.data?.description || `Container CNT-${currentPrintContainer.id}`,
+            type: 'container'
+        };
+        
+        let status = 'failed';
+        if (result && result.status === 'success') {
+            status = 'printed';
+            showSuccessMessage('Container label printed successfully!');
+        } else if (result && result.status === 'warning') {
+            status = 'queued'; // Printer not available, but can retry later
+            showSuccessMessage('Container label queued for printing.');
+        } else {
+            status = 'queued'; // Failed but can retry
+            showSuccessMessage('Container label added to print queue.');
+        }
+        
+        // Add to print job queue
+        addContainerPrintJob(containerData, status);
+        
+        // Hide modal and reload page
+        bootstrap.Modal.getInstance(document.getElementById('containerPrintConfirmModal')).hide();
+        currentPrintContainer = null;
+        
+        // Reload page to show the new container
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Print error:', error);
+        
+        // Add to print job queue as failed/queued
+        const containerData = {
+            id: currentPrintContainer.id,
+            description: currentPrintContainer.data?.description || `Container CNT-${currentPrintContainer.id}`,
+            type: 'container'
+        };
+        addContainerPrintJob(containerData, 'queued');
+        
+        showSuccessMessage('Container label added to print queue due to printer issues.');
+        
+        // Hide modal and reload page
+        bootstrap.Modal.getInstance(document.getElementById('containerPrintConfirmModal')).hide();
+        currentPrintContainer = null;
+        
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+    }
+}
+
+function skipContainerPrint() {
+    // Add to print job queue when skipping
+    if (currentPrintContainer) {
+        const containerData = {
+            id: currentPrintContainer.id,
+            description: currentPrintContainer.data?.description || `Container CNT-${currentPrintContainer.id}`,
+            type: 'container'
+        };
+        addContainerPrintJob(containerData, 'queued');
+        showSuccessMessage('Container label added to print queue.');
+    }
+    
+    // Hide modal and reload page
+    bootstrap.Modal.getInstance(document.getElementById('containerPrintConfirmModal')).hide();
+    currentPrintContainer = null;
+    
+    // Reload page to show the new container
+    setTimeout(() => {
+        window.location.reload();
+    }, 1000);
+}
+
+// Container update print prompt functionality (for when samples are added/removed)
+function showContainerUpdatePrintPrompt(containerId, updateInfo) {
+    console.log('Container update print prompt called with:', { containerId, updateInfo });
+    
+    // Store container info for printing
+    currentPrintContainer = {
+        id: containerId,
+        data: updateInfo
+    };
+    
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('containerUpdatePrintModal');
+    if (!modal) {
+        modal = createContainerUpdatePrintModal();
+        document.body.appendChild(modal);
+    }
+    
+    // Update modal content
+    document.getElementById('updateContainerId').textContent = `CNT-${containerId}`;
+    document.getElementById('updateContainerAction').textContent = updateInfo?.action || 'Container updated';
+    
+    // Show modal
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+}
+
+function createContainerUpdatePrintModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.id = 'containerUpdatePrintModal';
+    modal.tabIndex = -1;
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Container Updated - Print Label?</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Container has been updated. Would you like to print an updated label with current contents?</p>
+                    <div class="alert alert-info">
+                        <strong>Container:</strong> <span id="updateContainerId"></span><br>
+                        <strong>Change:</strong> <span id="updateContainerAction"></span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="skipContainerUpdatePrint()">
+                        <i class="fas fa-times me-1"></i>Skip
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="printContainerUpdateNow()">
+                        <i class="fas fa-print me-1"></i>Print Updated Label
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    return modal;
+}
+
+async function printContainerUpdateNow() {
+    if (!currentPrintContainer) return;
+    
+    try {
+        const response = await fetch(`/api/print/container/${currentPrintContainer.id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                auto_print: true
+            })
+        });
+        
+        const result = await response.json();
+        
+        // Add to print job queue regardless of result
+        const containerData = {
+            id: currentPrintContainer.id,
+            description: `Container CNT-${currentPrintContainer.id} (${currentPrintContainer.data?.action || 'Updated'})`,
+            type: 'container'
+        };
+        
+        let status = 'failed';
+        if (result && result.status === 'success') {
+            status = 'printed';
+            showSuccessMessage('Container label printed successfully!');
+        } else if (result && result.status === 'warning') {
+            status = 'queued'; // Printer not available, but can retry later
+            showSuccessMessage('Container label queued for printing.');
+        } else {
+            status = 'queued'; // Failed but can retry
+            showSuccessMessage('Container label added to print queue.');
+        }
+        
+        // Add to print job queue
+        addContainerPrintJob(containerData, status);
+        
+        // Hide modal and reload page
+        bootstrap.Modal.getInstance(document.getElementById('containerUpdatePrintModal')).hide();
+        currentPrintContainer = null;
+        
+        // Reload page to show updated container
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Print error:', error);
+        
+        // Add to print job queue as failed/queued
+        const containerData = {
+            id: currentPrintContainer.id,
+            description: `Container CNT-${currentPrintContainer.id} (${currentPrintContainer.data?.action || 'Updated'})`,
+            type: 'container'
+        };
+        addContainerPrintJob(containerData, 'queued');
+        
+        showSuccessMessage('Container label added to print queue due to printer issues.');
+        
+        // Hide modal and reload page
+        bootstrap.Modal.getInstance(document.getElementById('containerUpdatePrintModal')).hide();
+        currentPrintContainer = null;
+        
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+    }
+}
+
+function skipContainerUpdatePrint() {
+    // Add to print job queue when skipping
+    if (currentPrintContainer) {
+        const containerData = {
+            id: currentPrintContainer.id,
+            description: `Container CNT-${currentPrintContainer.id} (${currentPrintContainer.data?.action || 'Updated'})`,
+            type: 'container'
+        };
+        addContainerPrintJob(containerData, 'queued');
+        showSuccessMessage('Container label added to print queue.');
+    }
+    
+    // Hide modal and reload page
+    bootstrap.Modal.getInstance(document.getElementById('containerUpdatePrintModal')).hide();
+    currentPrintContainer = null;
+    
+    // Reload page to show updated container
+    setTimeout(() => {
+        window.location.reload();
+    }, 1000);
+}
+
+// Function to add container print job to queue
+function addContainerPrintJob(containerData, status) {
+    try {
+        let printJobs = JSON.parse(localStorage.getItem('printJobs') || '[]');
+        
+        const printJob = {
+            id: Date.now(),
+            timestamp: new Date().toISOString(),
+            containerId: containerData.id,
+            containerIdFormatted: `CNT-${containerData.id}`,
+            // For compatibility with scanner page - use container data as sample data
+            sampleId: containerData.id,
+            sampleIdFormatted: `CNT-${containerData.id}`,
+            barcode: `CNT-${containerData.id}`,
+            description: containerData.description,
+            type: 'container',
+            status: status // 'queued', 'printed', 'failed'
+        };
+        
+        printJobs.unshift(printJob); // Add to beginning
+        
+        // Keep only last 50 jobs
+        if (printJobs.length > 50) {
+            printJobs = printJobs.slice(0, 50);
+        }
+        
+        localStorage.setItem('printJobs', JSON.stringify(printJobs));
+        console.log('Container print job added to queue:', printJob);
+        
+    } catch (error) {
+        console.error('Error adding container print job to queue:', error);
+    }
+}
+
+// Make container print functions globally available for other scripts
+window.showContainerPrintPrompt = showContainerPrintPrompt;
+window.showContainerUpdatePrintPrompt = showContainerUpdatePrintPrompt;

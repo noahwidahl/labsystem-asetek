@@ -24,7 +24,8 @@
       "Bash(rm:*)",
       "Bash(timeout:*)",
       "Bash(node:*)",
-      "Bash(mysql:*)"
+      "Bash(mysql:*)",
+      "Bash(curl:*)"
     ]
   },
   "enableAllProjectMcpServers": false

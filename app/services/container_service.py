@@ -764,15 +764,8 @@ class ContainerService:
                         f"Sample {sample_id} moved to Container {container_id}, amount: {amount}{capacity_note}"
                     ))
                 
-                # Optionally reprint container label when samples are added
-                # This ensures the label always shows current contents
-                try:
-                    from app.routes.printer import print_container_label
-                    print_result = print_container_label(container_id, auto_print=True)
-                    print(f"DEBUG: Container label reprint result: {print_result}")
-                except Exception as print_error:
-                    print(f"DEBUG: Container label reprint error: {print_error}")
-                    # Don't fail the operation if printing fails
+                # Note: Container label printing is now handled by frontend prompt
+                # This allows user to choose whether to print or skip
                 
                 return {
                     'success': True,

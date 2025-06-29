@@ -23,41 +23,65 @@ def lookup_sample_by_barcode(barcode):
         # First try: Direct sample barcode lookup
         cursor.execute("""
             SELECT s.SampleID, s.Barcode, s.PartNumber, s.Description, s.Status,
-                   s.Amount, s.UnitID, s.OwnerID, s.ReceptionID, s.SerialNumber,
+                   s.Amount, s.UnitID, s.OwnerID, s.ReceptionID, 
                    r.ReceivedDate, r.TrackingNumber, sp.SupplierName,
                    u.UnitName, sl.LocationName, c.ContainerID, c.Description as ContainerDescription,
                    receiver.Name as ReceivedBy
-            FROM Sample s
-            LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
-            LEFT JOIN Supplier sp ON r.SupplierID = sp.SupplierID
-            LEFT JOIN Unit u ON s.UnitID = u.UnitID
-            LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-            LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
-            LEFT JOIN Container c ON ss.ContainerID = c.ContainerID
-            LEFT JOIN User receiver ON r.ReceivedBy = receiver.UserID
+            FROM sample s
+            LEFT JOIN reception r ON s.ReceptionID = r.ReceptionID
+            LEFT JOIN supplier sp ON r.SupplierID = sp.SupplierID
+            LEFT JOIN unit u ON s.UnitID = u.UnitID
+            LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+            LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+            LEFT JOIN containersample cs ON ss.StorageID = cs.SampleStorageID
+            LEFT JOIN container c ON cs.ContainerID = c.ContainerID
+            LEFT JOIN user receiver ON r.UserID = receiver.UserID
             WHERE s.Barcode = %s
         """, (barcode,))
         
         result = cursor.fetchone()
         if result:
-            return format_sample_result(result, 'barcode')
+            # For barcode lookup, we don't have SerialNumber in result, so adjust the mapping
+            sample_result = {
+                'type': 'sample',
+                'lookup_type': 'barcode',
+                'SampleID': result[0],
+                'SampleIDFormatted': f"SMP-{result[0]}",
+                'Barcode': result[1],
+                'PartNumber': result[2],
+                'Description': result[3],
+                'Status': result[4],
+                'Amount': result[5],
+                'SerialNumber': None,  # Not included in barcode lookup
+                'ReceivedDate': result[9].strftime('%Y-%m-%d') if result[9] else None,
+                'TrackingNumber': result[10],
+                'SupplierName': result[11],
+                'UnitName': result[12] or 'pcs',
+                'LocationName': result[13] or 'Unknown',
+                'ContainerID': result[14],
+                'ContainerDescription': result[15],
+                'ReceivedBy': result[16]
+            }
+            return sample_result
         
         # Second try: Serial number lookup (for unique samples)
         cursor.execute("""
             SELECT s.SampleID, s.Barcode, s.PartNumber, s.Description, s.Status,
-                   s.Amount, s.UnitID, s.OwnerID, s.ReceptionID, s.SerialNumber,
+                   s.Amount, s.UnitID, s.OwnerID, s.ReceptionID, sn.SerialNumber,
                    r.ReceivedDate, r.TrackingNumber, sp.SupplierName,
                    u.UnitName, sl.LocationName, c.ContainerID, c.Description as ContainerDescription,
                    receiver.Name as ReceivedBy
-            FROM Sample s
-            LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
-            LEFT JOIN Supplier sp ON r.SupplierID = sp.SupplierID
-            LEFT JOIN Unit u ON s.UnitID = u.UnitID
-            LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-            LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
-            LEFT JOIN Container c ON ss.ContainerID = c.ContainerID
-            LEFT JOIN User receiver ON r.ReceivedBy = receiver.UserID
-            WHERE s.SerialNumber = %s
+            FROM sample s
+            LEFT JOIN sampleserialnumber sn ON s.SampleID = sn.SampleID AND sn.IsActive = 1
+            LEFT JOIN reception r ON s.ReceptionID = r.ReceptionID
+            LEFT JOIN supplier sp ON r.SupplierID = sp.SupplierID
+            LEFT JOIN unit u ON s.UnitID = u.UnitID
+            LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+            LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+            LEFT JOIN containersample cs ON ss.StorageID = cs.SampleStorageID
+            LEFT JOIN container c ON cs.ContainerID = c.ContainerID
+            LEFT JOIN user receiver ON r.UserID = receiver.UserID
+            WHERE sn.SerialNumber = %s
         """, (barcode,))
         
         result = cursor.fetchone()
@@ -75,7 +99,7 @@ def lookup_sample_by_barcode(barcode):
             LEFT JOIN samplestorage ss ON cs.SampleStorageID = ss.StorageID
             LEFT JOIN storagelocation sl ON c.LocationID = sl.LocationID
             LEFT JOIN containertype ct ON c.ContainerTypeID = ct.ContainerTypeID
-            WHERE c.Barcode = %s OR %s LIKE CONCAT('CNT', LPAD(c.ContainerID, 4, '0'), '%%')
+            WHERE c.Barcode = %s OR c.Barcode LIKE CONCAT('CNT-', c.ContainerID) OR %s = CONCAT('CNT-', c.ContainerID)
             GROUP BY c.ContainerID
         """, (barcode, barcode))
         
@@ -83,49 +107,23 @@ def lookup_sample_by_barcode(barcode):
         if result:
             return format_container_result(result, barcode)
         
-        # Fourth try: Test sample identifier lookup (T1234.5_1 format and new TST format)
-        if ('_' in barcode and barcode.startswith('T')) or barcode.startswith('TST'):
+        # Fourth try: Test sample identifier lookup (T1234.5_1 format)
+        if ('_' in barcode and barcode.startswith('T')):
             cursor.execute("""
-                SELECT ts.TestSampleID, ts.GeneratedIdentifier, ts.TestID, ts.SampleID,
+                SELECT tsu.UsageID, tsu.SampleIdentifier, tsu.TestID, tsu.SampleID,
                        t.TestNo, t.TestName, s.Description, s.PartNumber, s.Status,
                        sl.LocationName
-                FROM testsample ts
-                JOIN test t ON ts.TestID = t.TestID
-                JOIN sample s ON ts.SampleID = s.SampleID
+                FROM testsampleusage tsu
+                JOIN test t ON tsu.TestID = t.TestID
+                JOIN sample s ON tsu.SampleID = s.SampleID
                 LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
                 LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
-                WHERE ts.GeneratedIdentifier = %s
+                WHERE tsu.SampleIdentifier = %s
             """, (barcode,))
             
             result = cursor.fetchone()
             if result:
                 return format_test_sample_result(result, barcode)
-            
-            # Also try to match new TST format by extracting sample and test IDs
-            if barcode.startswith('TST'):
-                try:
-                    # Extract sample ID and test ID from TST format (TST{sampleID}{testID}{timestamp})
-                    # This is a simplified approach - in practice you might need more sophisticated parsing
-                    barcode_data = barcode[3:]  # Remove 'TST' prefix
-                    if len(barcode_data) >= 2:
-                        # Try to find samples with test data
-                        cursor.execute("""
-                            SELECT ts.TestSampleID, ts.GeneratedIdentifier, ts.TestID, ts.SampleID,
-                                   t.TestNo, t.TestName, s.Description, s.PartNumber, s.Status,
-                                   sl.LocationName
-                            FROM testsample ts
-                            JOIN test t ON ts.TestID = t.TestID
-                            JOIN sample s ON ts.SampleID = s.SampleID
-                            LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
-                            LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
-                            WHERE CONCAT('TST', ts.SampleID, ts.TestID) LIKE %s
-                        """, (barcode[:10] + '%',))  # Match first part of barcode
-                        
-                        result = cursor.fetchone()
-                        if result:
-                            return format_test_sample_result(result, barcode)
-                except:
-                    pass  # If parsing fails, continue to return None
         
         return None
         
@@ -146,15 +144,15 @@ def format_sample_result(result, lookup_type):
         'Description': result[3],
         'Status': result[4],
         'Amount': result[5],
-        'SerialNumber': result[9],
-        'ReceivedDate': result[10].strftime('%Y-%m-%d') if result[10] else None,
-        'TrackingNumber': result[11],
-        'SupplierName': result[12],
-        'UnitName': result[13] or 'pcs',
-        'LocationName': result[14] or 'Unknown',
-        'ContainerID': result[15],
-        'ContainerDescription': result[16],
-        'ReceivedBy': result[17]
+        'SerialNumber': result[9] if len(result) > 9 and result[9] else None,  # SerialNumber for serial lookup
+        'ReceivedDate': result[10].strftime('%Y-%m-%d') if len(result) > 10 and result[10] else None,
+        'TrackingNumber': result[11] if len(result) > 11 else None,
+        'SupplierName': result[12] if len(result) > 12 else None,
+        'UnitName': result[13] if len(result) > 13 else 'pcs',
+        'LocationName': result[14] if len(result) > 14 else 'Unknown',
+        'ContainerID': result[15] if len(result) > 15 else None,
+        'ContainerDescription': result[16] if len(result) > 16 else None,
+        'ReceivedBy': result[17] if len(result) > 17 else None
     }
 
 def format_container_result(result, barcode):
@@ -229,7 +227,7 @@ def log_scan_action(barcode, result, user_id=None):
             container_id = None
         
         cursor.execute("""
-            INSERT INTO History (SampleID, ContainerID, ActionType, Notes, UserID, Timestamp)
+            INSERT INTO history (SampleID, ContainerID, ActionType, Notes, UserID, Timestamp)
             VALUES (%s, %s, %s, %s, %s, %s)
         """, (sample_id, container_id, action_type, notes, user_id, datetime.now()))
         
@@ -302,6 +300,21 @@ def scanner_page():
     """
     return render_template('sections/scanner.html')
 
+@scanner_bp.route('/debug-scanner', methods=['GET'])
+def debug_scanner_page():
+    """
+    Debug page for testing scanner functionality
+    """
+    from flask import current_app
+    import os
+    debug_file_path = os.path.join(current_app.root_path, '..', 'debug_scanner_complete.html')
+    try:
+        with open(debug_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return content
+    except FileNotFoundError:
+        return "<h1>Debug file not found</h1><p>debug_scanner_complete.html not found</p>", 404
+
 @scanner_bp.route('/api/scanner/test', methods=['POST'])
 def test_scanner():
     """
@@ -349,7 +362,7 @@ def register_serial_number():
         # Check if sample exists and is unique
         cursor.execute("""
             SELECT SampleID, IsUnique, SerialNumber, Description
-            FROM Sample 
+            FROM sample 
             WHERE SampleID = %s
         """, (sample_id,))
         
@@ -371,7 +384,7 @@ def register_serial_number():
         # Check if serial number is already used by another sample
         cursor.execute("""
             SELECT SampleID, Description 
-            FROM Sample 
+            FROM sample 
             WHERE SerialNumber = %s AND SampleID != %s
         """, (serial_number, sample_id))
         
@@ -385,14 +398,14 @@ def register_serial_number():
         
         # Update the sample with the serial number
         cursor.execute("""
-            UPDATE Sample 
+            UPDATE sample 
             SET SerialNumber = %s
             WHERE SampleID = %s
         """, (serial_number, sample_id))
         
         # Log the action
         cursor.execute("""
-            INSERT INTO History (SampleID, ActionType, Notes, UserID, Timestamp)
+            INSERT INTO history (SampleID, ActionType, Notes, UserID, Timestamp)
             VALUES (%s, %s, %s, %s, %s)
         """, (
             sample_id,
@@ -409,7 +422,7 @@ def register_serial_number():
         cursor = mysql.connection.cursor()
         cursor.execute("""
             SELECT s.SampleID, s.Description, s.Barcode, s.PartNumber
-            FROM Sample s 
+            FROM sample s 
             WHERE s.SampleID = %s
         """, (sample_id,))
         sample_data = cursor.fetchone()
