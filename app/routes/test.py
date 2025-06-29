@@ -24,9 +24,9 @@ def init_test(blueprint, mysql):
                     COALESCE(SUM(ss.AmountRemaining), s.Amount, 1) as AmountAvailable,
                     sl.LocationName,
                     s.Status
-                FROM Sample s
-                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                FROM sample s
+                LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
                 WHERE s.Status = 'In Storage'
                 GROUP BY s.SampleID, s.Description, s.PartNumber, sl.LocationName, s.Status, s.Amount
                 HAVING AmountAvailable > 0
@@ -47,21 +47,56 @@ def init_test(blueprint, mysql):
                 })
             
             # Get users
-            cursor.execute("SELECT UserID, Name FROM User ORDER BY Name")
+            cursor.execute("SELECT UserID, Name FROM user ORDER BY Name")
             users = [dict(UserID=row[0], Name=row[1]) for row in cursor.fetchall()]
+            
+            # Get active tasks for test creation
+            cursor.execute("""
+                SELECT TaskID, TaskNumber, TaskName, Status 
+                FROM task 
+                WHERE Status IN ('Planning', 'Active', 'On Hold')
+                ORDER BY TaskNumber DESC
+            """)
+            tasks = [dict(TaskID=row[0], TaskNumber=row[1], TaskName=row[2], Status=row[3]) for row in cursor.fetchall()]
             
             cursor.close()
             
             return render_template('sections/testing.html', 
                                 active_tests=active_tests, 
                                 samples=samples,
-                                users=users)
+                                users=users,
+                                tasks=tasks)
         except Exception as e:
             print(f"Error loading testing: {e}")
             import traceback
             traceback.print_exc()
             return render_template('sections/testing.html', 
                                 error="Error loading test administration")
+    
+    @blueprint.route('/api/tests', methods=['GET'])
+    def get_tests():
+        """
+        Get tests with optional task filtering.
+        """
+        try:
+            task_filter = request.args.get('task_id')
+            if task_filter:
+                task_filter = int(task_filter)
+            
+            tests = test_service.get_active_tests(task_filter)
+            
+            return jsonify({
+                'success': True,
+                'tests': tests,
+                'count': len(tests)
+            })
+            
+        except Exception as e:
+            print(f"Error getting tests: {e}")
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
     
     @blueprint.route('/api/tests/create', methods=['POST'])
     def create_test():
@@ -241,7 +276,7 @@ def init_test(blueprint, mysql):
             # Get test info
             cursor.execute("""
                 SELECT TestID, TestNo, TestName, Description, Status, CreatedDate, UserID
-                FROM Test WHERE TestID = %s
+                FROM test WHERE TestID = %s
             """, (test_id,))
             
             test_result = cursor.fetchone()
@@ -252,7 +287,7 @@ def init_test(blueprint, mysql):
                 }), 404
             
             # Get user name
-            cursor.execute("SELECT Name FROM User WHERE UserID = %s", (test_result[6],))
+            cursor.execute("SELECT Name FROM user WHERE UserID = %s", (test_result[6],))
             user_result = cursor.fetchone()
             user_name = user_result[0] if user_result else 'Unknown'
             
@@ -282,4 +317,70 @@ def init_test(blueprint, mysql):
             return jsonify({
                 'success': False,
                 'error': f'Failed to get test details: {str(e)}'
+            }), 500
+    
+    @blueprint.route('/api/tests/<int:test_id>/assign-task', methods=['PUT'])
+    def assign_test_to_task(test_id):
+        """
+        Assign a test to a task.
+        """
+        try:
+            data = request.get_json()
+            
+            if not data or 'task_id' not in data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Task ID is required'
+                }), 400
+            
+            task_id = data['task_id']
+            
+            # Get current user
+            current_user = get_current_user()
+            user_id = current_user['UserID']
+            
+            cursor = mysql.connection.cursor()
+            
+            # Check if test exists
+            cursor.execute("SELECT TestID, TestName FROM test WHERE TestID = %s", (test_id,))
+            test_result = cursor.fetchone()
+            
+            if not test_result:
+                cursor.close()
+                return jsonify({
+                    'success': False,
+                    'error': 'Test not found'
+                }), 404
+            
+            # Check if task exists
+            cursor.execute("SELECT TaskID, TaskName FROM task WHERE TaskID = %s", (task_id,))
+            task_result = cursor.fetchone()
+            
+            if not task_result:
+                cursor.close()
+                return jsonify({
+                    'success': False,
+                    'error': 'Task not found'
+                }), 404
+            
+            # Update test to assign it to task
+            cursor.execute("""
+                UPDATE test 
+                SET TaskID = %s 
+                WHERE TestID = %s
+            """, (task_id, test_id))
+            
+            mysql.connection.commit()
+            cursor.close()
+            
+            return jsonify({
+                'success': True,
+                'message': f'Test {test_result[1]} assigned to task {task_result[1]}'
+            })
+            
+        except Exception as e:
+            print(f"Error assigning test to task: {e}")
+            return jsonify({
+                'success': False,
+                'error': str(e)
             }), 500

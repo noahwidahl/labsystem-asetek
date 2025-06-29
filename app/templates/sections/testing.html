@@ -6,29 +6,44 @@
 <section id="testing" class="content-section">
     <div class="section-header mb-4">
         <h2>Test Administration</h2>
-        <div class="section-actions">
+        <div class="section-actions d-flex gap-2">
+            <button class="btn btn-outline-info btn-sm" data-bs-toggle="collapse" data-bs-target="#testInfoCollapse">
+                <i class="fas fa-info-circle me-1"></i>About Test Administration
+            </button>
             <button class="btn btn-primary" onclick="showCreateTestModal()">
                 <i class="fas fa-plus"></i> Create New Test
             </button>
         </div>
     </div>
-
-    <!-- Test Format Info -->
-    <div class="card mb-4">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center" 
-             style="cursor: pointer;" onclick="toggleFormatInfo()">
-            <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Test ID Format</h6>
-            <i class="fas fa-chevron-down" id="formatInfoChevron"></i>
-        </div>
-        <div class="card-body d-none" id="formatInfoBody">
-            <p>Test IDs follow the format <code>T1234.1</code> where:</p>
-            <ul class="mb-0">
-                <li><code>T1234</code> is the sequential test number</li>
-                <li><code>.1</code> is the iteration number (T1234.1 → T1234.2 → T1234.3)</li>
-                <li>Samples get identifiers like <code>T1234.1_1</code>, <code>T1234.1_2</code>, etc.</li>
-            </ul>
+    
+    <!-- Collapsible Info Box -->
+    <div class="collapse mb-4" id="testInfoCollapse">
+        <div class="card border-info">
+            <div class="card-header bg-light border-info">
+                <h6 class="mb-0"><i class="fas fa-flask me-2"></i>What is Test Administration?</h6>
+            </div>
+            <div class="card-body">
+                <p class="mb-3">
+                    <strong>Test Administration</strong> handles daily execution of individual laboratory tests and sample processing. 
+                    Create and manage specific test procedures, assign samples from storage, track consumption and usage, 
+                    transfer samples between tests, and record results with complete chain of custody documentation.
+                </p>
+                <div class="alert alert-warning mb-3">
+                    <small><i class="fas fa-info-circle me-1"></i>
+                    <strong>Test ID Format:</strong> Tests use format <code>T1234.1</code> where T1234 is the sequential number 
+                    and .1 is the iteration (T1234.1 → T1234.2). Samples get identifiers like <code>T1234.1_1</code>, <code>T1234.1_2</code>.
+                    </small>
+                </div>
+                <div class="alert alert-info mb-0">
+                    <small><i class="fas fa-lightbulb me-1"></i>
+                    <strong>Usage:</strong> Create tests like "Temperature Validation", assign 5ml from storage, 
+                    execute procedures, record results, and manage sample transfers or iterations as needed.
+                    </small>
+                </div>
+            </div>
         </div>
     </div>
+
 
     <!-- Active Tests -->
     <div class="row mb-4">

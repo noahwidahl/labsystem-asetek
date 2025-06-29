@@ -41,11 +41,11 @@ class SampleService:
                     ELSE u.UnitName
                 END as UnitName,
                 COALESCE(sl.LocationName, 'Unknown') as LocationName
-            FROM Sample s
-            LEFT JOIN Reception r ON s.ReceptionID = r.ReceptionID
-            LEFT JOIN Unit u ON s.UnitID = u.UnitID
-            LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
-            LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+            FROM sample s
+            LEFT JOIN reception r ON s.ReceptionID = r.ReceptionID
+            LEFT JOIN unit u ON s.UnitID = u.UnitID
+            LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
+            LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
         """
         
         # Initialize conditions and parameters
@@ -156,8 +156,8 @@ class SampleService:
                 s.UnitID,
                 s.OwnerID,
                 s.ReceptionID
-            FROM Sample s
-            JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+            FROM sample s
+            JOIN samplestorage ss ON s.SampleID = ss.SampleID
             WHERE s.SampleID = %s
         """
         
@@ -189,7 +189,7 @@ class SampleService:
             
             # Insert reception record
             cursor.execute("""
-                INSERT INTO Reception (
+                INSERT INTO reception (
                     SupplierID, 
                     ReceivedDate, 
                     UserID, 
@@ -235,7 +235,7 @@ class SampleService:
                 
             # Insert the sample in Sample table
             cursor.execute("""
-                INSERT INTO Sample (
+                INSERT INTO sample (
                     Barcode, 
                     PartNumber,
                     IsUnique, 
@@ -246,9 +246,10 @@ class SampleService:
                     UnitID, 
                     OwnerID, 
                     ReceptionID,
+                    TaskID,
                     ExpireDate
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 base_barcode,
                 sample_data.get('partNumber', ''),
@@ -260,6 +261,7 @@ class SampleService:
                 sample_data.get('unit'),
                 sample_data.get('owner'),
                 reception_id,
+                sample_data.get('task'),  # Task assignment during registration
                 expire_date
             ))
             
@@ -269,7 +271,7 @@ class SampleService:
             location_id = sample_data.get('storageLocation')
             if not location_id:
                 # Find a valid location ID from the database
-                cursor.execute("SELECT LocationID FROM StorageLocation ORDER BY LocationID LIMIT 1")
+                cursor.execute("SELECT LocationID FROM storagelocation ORDER BY LocationID LIMIT 1")
                 location_result = cursor.fetchone()
                 if location_result and location_result[0]:
                     location_id = location_result[0]
@@ -279,7 +281,7 @@ class SampleService:
             
             # Insert to SampleStorage
             cursor.execute("""
-                INSERT INTO SampleStorage (
+                INSERT INTO samplestorage (
                     SampleID, 
                     LocationID, 
                     AmountRemaining, 
@@ -428,7 +430,7 @@ class SampleService:
             if sample_data.get('hasSerialNumbers') and sample_data.get('serialNumbers'):
                 for serial_number in sample_data.get('serialNumbers', []):
                     cursor.execute("""
-                        INSERT INTO SampleSerial (
+                        INSERT INTO sampleserial (
                             SampleID,
                             SerialNumber
                         )
@@ -437,6 +439,29 @@ class SampleService:
                         sample_id,
                         serial_number
                     ))
+            
+            # Assign sample to task if task was selected during registration
+            task_assignment_result = None
+            if sample_data.get('task'):
+                try:
+                    cursor.execute("""
+                        INSERT INTO tasksample (TaskID, SampleID, AssignedBy, Purpose)
+                        VALUES (%s, %s, %s, %s)
+                    """, (
+                        sample_data.get('task'),
+                        sample_id,
+                        user_id,
+                        f"Assigned during sample registration: {description}"
+                    ))
+                    
+                    task_assignment_result = {
+                        'task_id': sample_data.get('task'),
+                        'assignment_id': cursor.lastrowid
+                    }
+                    print(f"DEBUG: Sample {sample_id} assigned to task {sample_data.get('taskId')}")
+                except Exception as task_error:
+                    print(f"WARNING: Failed to assign sample to task: {task_error}")
+                    # Don't fail sample creation if task assignment fails
             
             # Log the activity
             cursor.execute("""
@@ -517,6 +542,10 @@ class SampleService:
             # Add print results if attempted
             if print_results:
                 response_data['print_results'] = print_results
+            
+            # Add task assignment result if successful
+            if task_assignment_result:
+                response_data['task_assignment'] = task_assignment_result
                 
             return response_data
     

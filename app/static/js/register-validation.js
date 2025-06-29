@@ -327,6 +327,7 @@ function handleFormSubmission() {
         
         // Additional fields
         owner: document.querySelector('[name="owner"]')?.value || '',
+        task: document.querySelector('[name="task"]')?.value || null,
         expireDate: document.querySelector('[name="expireDate"]')?.value || null,
         hasSerialNumbers: document.getElementById('hasSerialNumbers')?.checked || false,
         other: document.querySelector('[name="other"]')?.value || '',

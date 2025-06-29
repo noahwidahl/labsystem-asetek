@@ -51,6 +51,16 @@ def init_sample(blueprint, mysql):
             type_columns = [col[0] for col in cursor.description]
             container_types = [dict(zip(type_columns, row)) for row in cursor.fetchall()]
             
+            # Get active tasks for assignment during registration
+            cursor.execute("""
+                SELECT TaskID, TaskNumber, TaskName, Status 
+                FROM task 
+                WHERE Status IN ('Planning', 'Active', 'On Hold')
+                ORDER BY TaskNumber DESC
+            """)
+            task_columns = [col[0] for col in cursor.description]
+            tasks = [dict(zip(task_columns, row)) for row in cursor.fetchall()]
+            
             cursor.close()
             
             return render_template('sections/register.html', 
@@ -58,7 +68,8 @@ def init_sample(blueprint, mysql):
                                 users=users,
                                 units=units,
                                 locations=locations,
-                                container_types=container_types)
+                                container_types=container_types,
+                                tasks=tasks)
         except Exception as e:
             print(f"Error loading register page: {e}")
             return render_template('sections/register.html', 
@@ -594,6 +605,113 @@ def init_sample(blueprint, mysql):
             return jsonify({
                 'success': False,
                 'samples': [],
+                'error': str(e)
+            }), 500
+    
+    @blueprint.route('/api/samples/by-task/<int:task_id>')
+    def get_samples_by_task(task_id):
+        """
+        Get samples assigned to a specific task.
+        """
+        try:
+            cursor = mysql.connection.cursor()
+            
+            # Get samples assigned to task through TaskSample table
+            cursor.execute("""
+                SELECT 
+                    s.SampleID,
+                    s.Description,
+                    s.PartNumber,
+                    s.Barcode,
+                    s.Status,
+                    ss.AmountRemaining,
+                    sl.LocationName,
+                    CASE
+                        WHEN un.UnitName IS NULL THEN 'pcs'
+                        WHEN LOWER(un.UnitName) = 'stk' THEN 'pcs'
+                        ELSE un.UnitName
+                    END as Unit,
+                    ts.Purpose,
+                    ts.AssignmentStatus,
+                    ts.AssignedDate
+                FROM taskSample ts
+                JOIN Sample s ON ts.SampleID = s.SampleID
+                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                LEFT JOIN Unit un ON s.UnitID = un.UnitID
+                WHERE ts.TaskID = %s
+                AND s.Status = 'In Storage'
+                ORDER BY ts.AssignedDate DESC
+            """, (task_id,))
+            
+            samples_result = cursor.fetchall()
+            
+            # Also get samples that were registered directly to the task
+            cursor.execute("""
+                SELECT 
+                    s.SampleID,
+                    s.Description,
+                    s.PartNumber,
+                    s.Barcode,
+                    s.Status,
+                    ss.AmountRemaining,
+                    sl.LocationName,
+                    CASE
+                        WHEN un.UnitName IS NULL THEN 'pcs'
+                        WHEN LOWER(un.UnitName) = 'stk' THEN 'pcs'
+                        ELSE un.UnitName
+                    END as Unit,
+                    'Registered to task' as Purpose,
+                    'Assigned' as AssignmentStatus,
+                    s.CreatedDate as AssignedDate
+                FROM Sample s
+                LEFT JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+                LEFT JOIN StorageLocation sl ON ss.LocationID = sl.LocationID
+                LEFT JOIN Unit un ON s.UnitID = un.UnitID
+                WHERE s.TaskID = %s
+                AND s.Status = 'In Storage'
+                AND s.SampleID NOT IN (
+                    SELECT SampleID FROM tasksample WHERE TaskID = %s
+                )
+                ORDER BY s.CreatedDate DESC
+            """, (task_id, task_id))
+            
+            direct_samples_result = cursor.fetchall()
+            cursor.close()
+            
+            # Combine results
+            all_samples_result = list(samples_result) + list(direct_samples_result)
+            
+            samples = []
+            for row in all_samples_result:
+                sample_dict = {
+                    'SampleID': row[0],
+                    'SampleIDFormatted': f"SMP-{row[0]}",
+                    'Description': row[1] or '',
+                    'PartNumber': row[2] or '',
+                    'Barcode': row[3] or '',
+                    'Status': row[4],
+                    'AmountRemaining': row[5] or 1,
+                    'LocationName': row[6] or 'Unknown',
+                    'Unit': row[7],
+                    'Purpose': row[8] or '',
+                    'AssignmentStatus': row[9],
+                    'AssignedDate': row[10].strftime('%Y-%m-%d %H:%M:%S') if row[10] else None
+                }
+                samples.append(sample_dict)
+            
+            return jsonify({
+                'success': True,
+                'samples': samples,
+                'count': len(samples)
+            })
+            
+        except Exception as e:
+            print(f"Error getting samples by task: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
                 'error': str(e)
             }), 500
     

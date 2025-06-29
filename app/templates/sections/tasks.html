@@ -1,0 +1,951 @@
+{% extends "base.html" %}
+
+{% block title %}Task Management - Laboratory System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">Task Management</h1>
+                    <p class="text-muted">Organize and track laboratory projects and tasks</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-info btn-sm" data-bs-toggle="collapse" data-bs-target="#taskInfoCollapse">
+                        <i class="fas fa-info-circle me-1"></i>About Task Management
+                    </button>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createTaskModal">
+                        <i class="fas fa-plus me-2"></i>Create New Task
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Collapsible Info Box -->
+            <div class="collapse mb-4" id="taskInfoCollapse">
+                <div class="card border-info">
+                    <div class="card-header bg-light border-info">
+                        <h6 class="mb-0"><i class="fas fa-tasks me-2"></i>What is Task Management?</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-3">
+                            <strong>Task Management</strong> organizes laboratory work into structured projects that group related samples and tests together. 
+                            Create tasks to manage multi-week validation projects, automatically generate test numbers within each task, 
+                            and track overall progress with team coordination and deadline management.
+                        </p>
+                        <div class="alert alert-info mb-0">
+                            <small><i class="fas fa-lightbulb me-1"></i>
+                            <strong>Usage:</strong> Create a task like "Product Validation Phase 2", assign samples during registration, 
+                            create tests that get automatic numbers (PVP2-01, PVP2-02), and monitor project-wide completion status.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Overview Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="stats-icon">
+                                <i class="fas fa-tasks"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="stats-number" id="totalTasks">0</div>
+                            <div class="stats-label">Total Tasks</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="stats-icon">
+                                <i class="fas fa-play"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="stats-number" id="activeTasks">0</div>
+                            <div class="stats-label">Active Tasks</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="stats-icon">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="stats-number" id="pendingTasks">0</div>
+                            <div class="stats-label">Planning Tasks</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="stats-icon">
+                                <i class="fas fa-check"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="stats-number" id="completedTasks">0</div>
+                            <div class="stats-label">Completed</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tasks Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <h5 class="card-title mb-0">Project Tasks</h5>
+                        </div>
+                        <div class="col-auto">
+                            <div class="d-flex gap-2">
+                                <select class="form-select form-select-sm" id="statusFilter">
+                                    <option value="">All Status</option>
+                                    <option value="Planning">Planning</option>
+                                    <option value="Active">Active</option>
+                                    <option value="On Hold">On Hold</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                </select>
+                                <select class="form-select form-select-sm" id="priorityFilter">
+                                    <option value="">All Priority</option>
+                                    <option value="Critical">Critical</option>
+                                    <option value="High">High</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="Low">Low</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="tasksTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Task Number</th>
+                                    <th>Task Name</th>
+                                    <th>Status</th>
+                                    <th>Priority</th>
+                                    <th>Assigned To</th>
+                                    <th>Progress</th>
+                                    <th>Samples</th>
+                                    <th>Tests</th>
+                                    <th>Due Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tasksTableBody">
+                                <!-- Tasks will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Task Modal -->
+<div class="modal fade" id="createTaskModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create New Task</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createTaskForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="taskName" class="form-label">Task Name *</label>
+                                <input type="text" class="form-control" id="taskName" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="projectCode" class="form-label">Project Code</label>
+                                <input type="text" class="form-control" id="projectCode" placeholder="e.g. Emma-V2">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="taskDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="taskDescription" rows="3"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="taskPriority" class="form-label">Priority</label>
+                                <select class="form-select" id="taskPriority">
+                                    <option value="Low">Low</option>
+                                    <option value="Medium" selected>Medium</option>
+                                    <option value="High">High</option>
+                                    <option value="Critical">Critical</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="startDate" class="form-label">Start Date</label>
+                                <input type="date" class="form-control" id="startDate">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="endDate" class="form-label">Due Date</label>
+                                <input type="date" class="form-control" id="endDate">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="mb-3">
+                                <label for="assignedTo" class="form-label">Assigned To</label>
+                                <select class="form-select" id="assignedTo">
+                                    <option value="">Select user...</option>
+                                    {% for user in users %}
+                                    <option value="{{ user.UserID }}">{{ user.Name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="taskNotes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="taskNotes" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createTask()">Create Task</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Details Modal -->
+<div class="modal fade" id="taskDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="taskDetailsTitle">Task Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="taskDetailsContent">
+                <!-- Task details will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assign Sample Modal -->
+<div class="modal fade" id="assignSampleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assign Sample to Task</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="sampleSearch" class="form-label">Search Samples</label>
+                    <input type="text" class="form-control" id="sampleSearch" placeholder="Search by Sample ID, description, or part number...">
+                </div>
+                <div class="mb-3">
+                    <label for="assignmentPurpose" class="form-label">Purpose (Optional)</label>
+                    <input type="text" class="form-control" id="assignmentPurpose" placeholder="Why is this sample being assigned to this task?">
+                </div>
+                <div class="table-responsive" style="max-height: 400px;">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Select</th>
+                                <th>Sample ID</th>
+                                <th>Description</th>
+                                <th>Part Number</th>
+                                <th>Status</th>
+                                <th>Location</th>
+                            </tr>
+                        </thead>
+                        <tbody id="availableSamplesTable">
+                            <!-- Samples will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="assignSelectedSamples()" id="assignSamplesBtn" disabled>Assign Selected</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assign Test Modal -->
+<div class="modal fade" id="assignTestModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assign Test to Task</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="testSearch" class="form-label">Search Tests</label>
+                    <input type="text" class="form-control" id="testSearch" placeholder="Search by Test ID, name, or description...">
+                </div>
+                <div class="table-responsive" style="max-height: 400px;">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Select</th>
+                                <th>Test ID</th>
+                                <th>Test Name</th>
+                                <th>Description</th>
+                                <th>Status</th>
+                                <th>Created By</th>
+                            </tr>
+                        </thead>
+                        <tbody id="availableTestsTable">
+                            <!-- Tests will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="assignSelectedTests()" id="assignTestsBtn" disabled>Assign Selected</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadTasks();
+    loadTaskStats();
+    
+    // Set default dates
+    const today = new Date();
+    const startDateField = document.getElementById('startDate');
+    const endDateField = document.getElementById('endDate');
+    
+    // Set start date to today
+    startDateField.value = today.toISOString().split('T')[0];
+    
+    // Set end date to 7 days from today (skip weekends)
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + 7);
+    endDateField.value = endDate.toISOString().split('T')[0];
+    
+    // Filter handlers
+    document.getElementById('statusFilter').addEventListener('change', loadTasks);
+    document.getElementById('priorityFilter').addEventListener('change', loadTasks);
+    
+    // Reset modal when closed
+    document.getElementById('createTaskModal').addEventListener('hidden.bs.modal', function () {
+        resetTaskModal();
+    });
+});
+
+async function loadTasks() {
+    try {
+        const statusFilter = document.getElementById('statusFilter').value;
+        const priorityFilter = document.getElementById('priorityFilter').value;
+        
+        let url = '/api/tasks';
+        const params = new URLSearchParams();
+        if (statusFilter) params.append('status', statusFilter);
+        if (priorityFilter) params.append('priority', priorityFilter);
+        if (params.toString()) url += '?' + params.toString();
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            displayTasks(data.tasks);
+        } else {
+            console.error('Error loading tasks:', data.error);
+        }
+    } catch (error) {
+        console.error('Error loading tasks:', error);
+    }
+}
+
+async function loadTaskStats() {
+    try {
+        const response = await fetch('/api/tasks/stats');
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('totalTasks').textContent = data.stats.total || 0;
+            document.getElementById('activeTasks').textContent = data.stats.active || 0;
+            document.getElementById('pendingTasks').textContent = data.stats.planning || 0;
+            document.getElementById('completedTasks').textContent = data.stats.completed || 0;
+        }
+    } catch (error) {
+        console.error('Error loading task stats:', error);
+    }
+}
+
+function displayTasks(tasks) {
+    const tbody = document.getElementById('tasksTableBody');
+    tbody.innerHTML = '';
+    
+    tasks.forEach(task => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><strong>${task.task_number}</strong></td>
+            <td>
+                <div class="fw-medium">${task.task_name}</div>
+                <small class="text-muted">${task.description || ''}</small>
+            </td>
+            <td><span class="badge bg-${getStatusColor(task.status)}">${task.status}</span></td>
+            <td><span class="badge bg-${getPriorityColor(task.priority)}">${task.priority}</span></td>
+            <td>${task.assigned_to_name || 'Unassigned'}</td>
+            <td>
+                <div class="progress" style="height: 6px;">
+                    <div class="progress-bar" role="progressbar" style="width: ${task.completion_percentage || 0}%"></div>
+                </div>
+                <small class="text-muted">${task.completion_percentage || 0}%</small>
+            </td>
+            <td>
+                <span class="badge bg-info">${task.total_samples || 0}</span>
+                <small class="text-muted">samples</small>
+            </td>
+            <td>
+                <span class="badge bg-primary">${task.total_tests || 0}</span>
+                <small class="text-muted">tests</small>
+            </td>
+            <td>${task.end_date ? new Date(task.end_date).toLocaleDateString() : '-'}</td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" onclick="viewTaskDetails(${task.task_id})">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="editTask(${task.task_id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'Planning': 'warning',
+        'Active': 'success',
+        'On Hold': 'secondary',
+        'Completed': 'primary',
+        'Cancelled': 'danger'
+    };
+    return colors[status] || 'secondary';
+}
+
+function getPriorityColor(priority) {
+    const colors = {
+        'Low': 'success',
+        'Medium': 'primary',
+        'High': 'warning',
+        'Critical': 'danger'
+    };
+    return colors[priority] || 'secondary';
+}
+
+async function createTask() {
+    try {
+        const formData = {
+            task_name: document.getElementById('taskName').value,
+            project_code: document.getElementById('projectCode').value,
+            description: document.getElementById('taskDescription').value,
+            priority: document.getElementById('taskPriority').value,
+            start_date: document.getElementById('startDate').value,
+            end_date: document.getElementById('endDate').value,
+            assigned_to: document.getElementById('assignedTo').value || null,
+            notes: document.getElementById('taskNotes').value
+        };
+        
+        const response = await fetch('/api/tasks', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('createTaskModal')).hide();
+            document.getElementById('createTaskForm').reset();
+            loadTasks();
+            loadTaskStats();
+            
+            // Show success message
+            showAlert('success', 'Task created successfully!');
+        } else {
+            showAlert('danger', 'Error creating task: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error creating task:', error);
+        showAlert('danger', 'Error creating task');
+    }
+}
+
+async function viewTaskDetails(taskId) {
+    try {
+        const response = await fetch(`/api/tasks/${taskId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('taskDetailsTitle').textContent = `${data.task.task_number} - ${data.task.task_name}`;
+            document.getElementById('taskDetailsContent').innerHTML = generateTaskDetailsHTML(data.task, data.samples, data.tests);
+            new bootstrap.Modal(document.getElementById('taskDetailsModal')).show();
+        } else {
+            showAlert('danger', 'Error loading task details: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error loading task details:', error);
+        showAlert('danger', 'Error loading task details');
+    }
+}
+
+function generateTaskDetailsHTML(task, samples, tests) {
+    return `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Task Information</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Task Number:</strong></td><td>${task.task_number}</td></tr>
+                    <tr><td><strong>Status:</strong></td><td><span class="badge bg-${getStatusColor(task.status)}">${task.status}</span></td></tr>
+                    <tr><td><strong>Priority:</strong></td><td><span class="badge bg-${getPriorityColor(task.priority)}">${task.priority}</span></td></tr>
+                    <tr><td><strong>Created:</strong></td><td>${new Date(task.created_date).toLocaleDateString()}</td></tr>
+                    <tr><td><strong>Due Date:</strong></td><td>${task.end_date ? new Date(task.end_date).toLocaleDateString() : '-'}</td></tr>
+                    <tr><td><strong>Assigned To:</strong></td><td>${task.assigned_to_name || 'Unassigned'}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Progress</h6>
+                <div class="progress mb-3" style="height: 20px;">
+                    <div class="progress-bar" role="progressbar" style="width: ${task.completion_percentage || 0}%">
+                        ${task.completion_percentage || 0}%
+                    </div>
+                </div>
+                <p><strong>Description:</strong><br>${task.description || 'No description'}</p>
+                ${task.notes ? `<p><strong>Notes:</strong><br>${task.notes}</p>` : ''}
+            </div>
+        </div>
+        <hr>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6>Samples (${samples.length})</h6>
+                    <button class="btn btn-sm btn-outline-primary" onclick="showAssignSampleModal(${task.task_id})">
+                        <i class="fas fa-plus"></i> Assign Sample
+                    </button>
+                </div>
+                <div class="table-responsive" style="max-height: 300px;">
+                    <table class="table table-sm">
+                        <thead><tr><th>Sample ID</th><th>Description</th><th>Status</th><th>Assignment</th></tr></thead>
+                        <tbody>
+                            ${samples.map(sample => `
+                                <tr>
+                                    <td>${sample.SampleIDFormatted}</td>
+                                    <td>${sample.Description}</td>
+                                    <td><span class="badge bg-secondary">${sample.SampleStatus}</span></td>
+                                    <td><small class="text-muted">${sample.Purpose}</small></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6>Tests (${tests.length})</h6>
+                    <button class="btn btn-sm btn-outline-primary" onclick="showAssignTestModal(${task.task_id})">
+                        <i class="fas fa-plus"></i> Assign Test
+                    </button>
+                </div>
+                <div class="table-responsive" style="max-height: 300px;">
+                    <table class="table table-sm">
+                        <thead><tr><th>Test No</th><th>Test Name</th><th>Status</th></tr></thead>
+                        <tbody>
+                            ${tests.map(test => `
+                                <tr>
+                                    <td>${test.TestNo}</td>
+                                    <td>${test.TestName}</td>
+                                    <td><span class="badge bg-${getStatusColor(test.Status)}">${test.Status}</span></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function editTask(taskId) {
+    try {
+        const response = await fetch(`/api/tasks/${taskId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            // Populate edit form with current data
+            document.getElementById('taskName').value = data.task.task_name || '';
+            document.getElementById('projectCode').value = data.task.project_code || '';
+            document.getElementById('taskDescription').value = data.task.description || '';
+            document.getElementById('taskPriority').value = data.task.priority || 'Medium';
+            document.getElementById('startDate').value = data.task.start_date || '';
+            document.getElementById('endDate').value = data.task.end_date || '';
+            document.getElementById('assignedTo').value = data.task.assigned_to || '';
+            document.getElementById('taskNotes').value = data.task.notes || '';
+            
+            // Change modal title and button text
+            document.querySelector('#createTaskModal .modal-title').textContent = 'Edit Task';
+            document.querySelector('#createTaskModal .btn-primary').textContent = 'Update Task';
+            document.querySelector('#createTaskModal .btn-primary').setAttribute('onclick', `updateTask(${taskId})`);
+            
+            // Show modal
+            new bootstrap.Modal(document.getElementById('createTaskModal')).show();
+        } else {
+            showAlert('danger', 'Error loading task for editing: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error loading task for editing:', error);
+        showAlert('danger', 'Error loading task for editing');
+    }
+}
+
+async function updateTask(taskId) {
+    try {
+        const formData = {
+            task_name: document.getElementById('taskName').value,
+            project_code: document.getElementById('projectCode').value,
+            description: document.getElementById('taskDescription').value,
+            priority: document.getElementById('taskPriority').value,
+            start_date: document.getElementById('startDate').value,
+            end_date: document.getElementById('endDate').value,
+            assigned_to: document.getElementById('assignedTo').value || null,
+            notes: document.getElementById('taskNotes').value
+        };
+        
+        const response = await fetch(`/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('createTaskModal')).hide();
+            resetTaskModal();
+            loadTasks();
+            loadTaskStats();
+            
+            showAlert('success', 'Task updated successfully!');
+        } else {
+            showAlert('danger', 'Error updating task: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error updating task:', error);
+        showAlert('danger', 'Error updating task');
+    }
+}
+
+function resetTaskModal() {
+    // Reset modal to create mode
+    document.querySelector('#createTaskModal .modal-title').textContent = 'Create New Task';
+    document.querySelector('#createTaskModal .btn-primary').textContent = 'Create Task';
+    document.querySelector('#createTaskModal .btn-primary').setAttribute('onclick', 'createTask()');
+    document.getElementById('createTaskForm').reset();
+    
+    // Reset default dates
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + 7);
+    
+    document.getElementById('startDate').value = today.toISOString().split('T')[0];
+    document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+}
+
+let currentTaskIdForAssignment = null;
+
+async function showAssignSampleModal(taskId) {
+    currentTaskIdForAssignment = taskId;
+    document.getElementById('sampleSearch').value = '';
+    document.getElementById('assignmentPurpose').value = '';
+    
+    // Load available samples
+    await loadAvailableSamples();
+    
+    new bootstrap.Modal(document.getElementById('assignSampleModal')).show();
+}
+
+async function showAssignTestModal(taskId) {
+    currentTaskIdForAssignment = taskId;
+    document.getElementById('testSearch').value = '';
+    
+    // Load available tests
+    await loadAvailableTests();
+    
+    new bootstrap.Modal(document.getElementById('assignTestModal')).show();
+}
+
+async function loadAvailableSamples(searchTerm = '') {
+    try {
+        let url = `/api/samples/available-for-task?task_id=${currentTaskIdForAssignment}`;
+        if (searchTerm) {
+            url += `&search=${encodeURIComponent(searchTerm)}`;
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            displayAvailableSamples(data.samples);
+        } else {
+            console.error('Error loading samples:', data.error);
+        }
+    } catch (error) {
+        console.error('Error loading samples:', error);
+    }
+}
+
+async function loadAvailableTests(searchTerm = '') {
+    try {
+        let url = '/api/tests';
+        if (searchTerm) {
+            url += `?search=${encodeURIComponent(searchTerm)}`;
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            displayAvailableTests(data.tests);
+        } else {
+            console.error('Error loading tests:', data.error);
+        }
+    } catch (error) {
+        console.error('Error loading tests:', error);
+    }
+}
+
+function displayAvailableSamples(samples) {
+    const tbody = document.getElementById('availableSamplesTable');
+    tbody.innerHTML = '';
+    
+    samples.forEach(sample => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <input type="checkbox" class="form-check-input sample-checkbox" value="${sample.SampleID}" onchange="updateAssignSamplesButton()">
+            </td>
+            <td>${sample.SampleIDFormatted}</td>
+            <td>${sample.Description}</td>
+            <td>${sample.PartNumber || '-'}</td>
+            <td><span class="badge bg-success">In Storage</span></td>
+            <td>${sample.LocationName || 'Unknown'}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function displayAvailableTests(tests) {
+    const tbody = document.getElementById('availableTestsTable');
+    tbody.innerHTML = '';
+    
+    tests.forEach(test => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <input type="checkbox" class="form-check-input test-checkbox" value="${test.TestID}" onchange="updateAssignTestsButton()">
+            </td>
+            <td>${test.TestNo}</td>
+            <td>${test.TestName}</td>
+            <td>${test.Description || '-'}</td>
+            <td><span class="badge bg-${getStatusColor(test.Status)}">${test.Status}</span></td>
+            <td>${test.CreatedBy}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function updateAssignSamplesButton() {
+    const checkedSamples = document.querySelectorAll('.sample-checkbox:checked');
+    document.getElementById('assignSamplesBtn').disabled = checkedSamples.length === 0;
+}
+
+function updateAssignTestsButton() {
+    const checkedTests = document.querySelectorAll('.test-checkbox:checked');
+    document.getElementById('assignTestsBtn').disabled = checkedTests.length === 0;
+}
+
+async function assignSelectedSamples() {
+    const checkedSamples = document.querySelectorAll('.sample-checkbox:checked');
+    const purpose = document.getElementById('assignmentPurpose').value;
+    
+    if (checkedSamples.length === 0) {
+        showAlert('warning', 'Please select at least one sample');
+        return;
+    }
+    
+    try {
+        for (const checkbox of checkedSamples) {
+            const sampleId = checkbox.value;
+            
+            const response = await fetch(`/api/tasks/${currentTaskIdForAssignment}/assign-sample`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sample_id: sampleId,
+                    purpose: purpose
+                })
+            });
+            
+            const data = await response.json();
+            if (!data.success) {
+                console.error(`Error assigning sample ${sampleId}:`, data.error);
+            }
+        }
+        
+        bootstrap.Modal.getInstance(document.getElementById('assignSampleModal')).hide();
+        showAlert('success', `Assigned ${checkedSamples.length} sample(s) to task`);
+        
+        // Refresh task details if open
+        if (document.getElementById('taskDetailsModal').classList.contains('show')) {
+            viewTaskDetails(currentTaskIdForAssignment);
+        }
+        
+    } catch (error) {
+        console.error('Error assigning samples:', error);
+        showAlert('danger', 'Error assigning samples');
+    }
+}
+
+async function assignSelectedTests() {
+    const checkedTests = document.querySelectorAll('.test-checkbox:checked');
+    
+    if (checkedTests.length === 0) {
+        showAlert('warning', 'Please select at least one test');
+        return;
+    }
+    
+    try {
+        for (const checkbox of checkedTests) {
+            const testId = checkbox.value;
+            
+            const response = await fetch(`/api/tests/${testId}/assign-task`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    task_id: currentTaskIdForAssignment
+                })
+            });
+            
+            const data = await response.json();
+            if (!data.success) {
+                console.error(`Error assigning test ${testId}:`, data.error);
+            }
+        }
+        
+        bootstrap.Modal.getInstance(document.getElementById('assignTestModal')).hide();
+        showAlert('success', `Assigned ${checkedTests.length} test(s) to task`);
+        
+        // Refresh task details if open
+        if (document.getElementById('taskDetailsModal').classList.contains('show')) {
+            viewTaskDetails(currentTaskIdForAssignment);
+        }
+        
+    } catch (error) {
+        console.error('Error assigning tests:', error);
+        showAlert('danger', 'Error assigning tests');
+    }
+}
+
+// Search functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Add search listeners
+    let sampleSearchTimeout;
+    document.getElementById('sampleSearch').addEventListener('input', function() {
+        clearTimeout(sampleSearchTimeout);
+        sampleSearchTimeout = setTimeout(() => {
+            loadAvailableSamples(this.value);
+        }, 300);
+    });
+    
+    let testSearchTimeout;
+    document.getElementById('testSearch').addEventListener('input', function() {
+        clearTimeout(testSearchTimeout);
+        testSearchTimeout = setTimeout(() => {
+            loadAvailableTests(this.value);
+        }, 300);
+    });
+});
+
+function showAlert(type, message) {
+    // Create and show bootstrap alert
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(alertDiv);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

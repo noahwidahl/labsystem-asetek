@@ -329,6 +329,17 @@
                 </div>
                 
                 <div class="form-group">
+                    <label>Assign to Task (Optional)</label>
+                    <select class="form-control" name="task" id="taskSelect">
+                        <option value="">No task assignment</option>
+                        {% for task in tasks %}
+                        <option value="{{ task.TaskID }}">{{ task.TaskNumber }} - {{ task.TaskName }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Select a task to organize this sample under a project</small>
+                </div>
+                
+                <div class="form-group">
                     <label>Other</label>
                     <textarea class="form-control" name="other" rows="3" placeholder="Enter any remarks or other details"></textarea>
                 </div>

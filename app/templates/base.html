@@ -60,6 +60,10 @@
                 <i class="fas fa-flask"></i>
                 <span>Test Administration</span>
             </a>
+            <a href="{{ url_for('task.tasks_page') }}" class="nav-item {% if request.path == url_for('task.tasks_page') %}active{% endif %}">
+                <i class="fas fa-tasks"></i>
+                <span>Task Management</span>
+            </a>
             <a href="{{ url_for('container.containers') }}" class="nav-item {% if request.path == url_for('container.containers') %}active{% endif %}">
                 <i class="fas fa-box-open"></i>
                 <span>Containers</span>

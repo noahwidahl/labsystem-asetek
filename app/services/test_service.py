@@ -6,34 +6,44 @@ class TestService:
         self.mysql = mysql
         self.db = DatabaseManager(mysql)
     
-    def get_active_tests(self):
-        """Get all active tests with sample information"""
+    def get_active_tests(self, task_filter=None):
+        """Get all active tests with sample information, optionally filtered by task"""
         query = """
             SELECT 
                 t.TestID,
                 t.TestNo,
                 t.TestName,
+                t.TaskID,
+                task.TaskNumber,
+                task.TaskName as TaskName,
                 t.Description,
                 t.Status,
                 t.CreatedDate,
                 u.Name as UserName,
                 COALESCE(sample_counts.total_samples, 0) as sample_count,
                 COALESCE(sample_counts.active_samples, 0) as active_sample_count
-            FROM Test t
-            LEFT JOIN User u ON t.UserID = u.UserID
+            FROM test t
+            LEFT JOIN user u ON t.UserID = u.UserID
+            LEFT JOIN task task ON t.TaskID = task.TaskID
             LEFT JOIN (
                 SELECT 
                     TestID,
                     COUNT(*) as total_samples,
                     SUM(CASE WHEN Status IN ('Allocated', 'Active') THEN 1 ELSE 0 END) as active_samples
-                FROM TestSampleUsage 
+                FROM testsampleusage 
                 GROUP BY TestID
             ) sample_counts ON t.TestID = sample_counts.TestID
             WHERE t.Status IN ('Created', 'In Progress')
-            ORDER BY t.CreatedDate DESC
         """
         
-        result, _ = self.db.execute_query(query, ())
+        params = []
+        if task_filter:
+            query += " AND t.TaskID = %s"
+            params.append(task_filter)
+        
+        query += " ORDER BY t.CreatedDate DESC"
+        
+        result, _ = self.db.execute_query(query, params)
         
         tests = []
         for row in result:
@@ -41,31 +51,49 @@ class TestService:
                 'id': row[0],
                 'test_no': row[1],
                 'test_name': row[2],
-                'description': row[3],
-                'status': row[4],
-                'created_date': row[5],
-                'user_name': row[6],
-                'sample_count': row[7] or 0,
-                'active_sample_count': row[8] or 0
+                'task_id': row[3],
+                'task_number': row[4],
+                'task_name': row[5],
+                'description': row[6],
+                'status': row[7],
+                'created_date': row[8],
+                'user_name': row[9],
+                'sample_count': row[10] or 0,
+                'active_sample_count': row[11] or 0
             })
         
         return tests
     
     def create_test(self, test_data, user_id):
-        """Create a new test"""
+        """Create a new test, optionally linked to a task"""
         try:
             with self.db.transaction() as cursor:
-                # Generate test number
-                cursor.execute("SELECT GetNextTestNumber()")
-                test_no = cursor.fetchone()[0]
+                # Generate test number based on task or use general numbering
+                task_id = test_data.get('taskId')
                 
-                # Insert test
+                if task_id:
+                    # Use task-specific test numbering
+                    cursor.execute("SELECT GetNextTaskTestNumber(%s)", (task_id,))
+                    test_no_result = cursor.fetchone()
+                    test_no = test_no_result[0] if test_no_result and test_no_result[0] else None
+                    
+                    if not test_no:
+                        # Fallback to regular numbering if task function fails
+                        cursor.execute("SELECT GetNextTestNumber()")
+                        test_no = cursor.fetchone()[0]
+                else:
+                    # Use general test numbering
+                    cursor.execute("SELECT GetNextTestNumber()")
+                    test_no = cursor.fetchone()[0]
+                
+                # Insert test with optional task link
                 cursor.execute("""
-                    INSERT INTO Test (TestNo, TestName, Description, Status, CreatedDate, UserID)
-                    VALUES (%s, %s, %s, 'Created', %s, %s)
+                    INSERT INTO test (TestNo, TestName, TaskID, Description, Status, CreatedDate, UserID)
+                    VALUES (%s, %s, %s, %s, 'Created', %s, %s)
                 """, (
                     test_no,
                     test_data.get('testName'),
+                    task_id,
                     test_data.get('description', ''),
                     datetime.now(),
                     user_id
@@ -73,11 +101,17 @@ class TestService:
                 
                 test_id = cursor.lastrowid
                 
+                # Log task relationship if applicable
+                log_message = f'Test {test_no} created successfully'
+                if task_id:
+                    log_message += f' (linked to Task ID {task_id})'
+                
                 return {
                     'success': True,
                     'test_id': test_id,
                     'test_no': test_no,
-                    'message': f'Test {test_no} created successfully'
+                    'task_id': task_id,
+                    'message': log_message
                 }
                 
         except Exception as e:
@@ -96,7 +130,7 @@ class TestService:
                 
                 # Insert test
                 cursor.execute("""
-                    INSERT INTO Test (TestNo, TestName, Description, Status, CreatedDate, UserID)
+                    INSERT INTO test (TestNo, TestName, Description, Status, CreatedDate, UserID)
                     VALUES (%s, %s, %s, 'Created', %s, %s)
                 """, (
                     test_no,
@@ -126,7 +160,7 @@ class TestService:
         try:
             with self.db.transaction() as cursor:
                 # Get test info
-                cursor.execute("SELECT TestNo FROM Test WHERE TestID = %s", (test_id,))
+                cursor.execute("SELECT TestNo FROM test WHERE TestID = %s", (test_id,))
                 test_result = cursor.fetchone()
                 if not test_result:
                     return {'success': False, 'error': 'Test not found'}
@@ -135,7 +169,7 @@ class TestService:
                 
                 # Get existing sample count for identifier generation
                 cursor.execute("""
-                    SELECT COUNT(*) FROM TestSampleUsage WHERE TestID = %s
+                    SELECT COUNT(*) FROM testsampleusage WHERE TestID = %s
                 """, (test_id,))
                 existing_count = cursor.fetchone()[0] or 0
                 
@@ -152,7 +186,7 @@ class TestService:
                     # Check available amount
                     cursor.execute("""
                         SELECT COALESCE(SUM(AmountRemaining), 0) 
-                        FROM SampleStorage 
+                        FROM samplestorage 
                         WHERE SampleID = %s
                     """, (sample_id,))
                     available = cursor.fetchone()[0] or 0
@@ -165,7 +199,7 @@ class TestService:
                     
                     # Add to test
                     cursor.execute("""
-                        INSERT INTO TestSampleUsage 
+                        INSERT INTO testsampleusage 
                         (SampleID, TestID, SampleIdentifier, AmountAllocated, Status, Notes, CreatedDate, CreatedBy)
                         VALUES (%s, %s, %s, %s, 'Allocated', %s, %s, %s)
                     """, (
@@ -175,7 +209,7 @@ class TestService:
                     
                     # Reduce available amount in storage
                     cursor.execute("""
-                        UPDATE SampleStorage 
+                        UPDATE samplestorage 
                         SET AmountRemaining = AmountRemaining - %s
                         WHERE SampleID = %s AND AmountRemaining >= %s
                         ORDER BY StorageID LIMIT 1
@@ -183,7 +217,7 @@ class TestService:
                     
                     # Update sample status to 'In Test'
                     cursor.execute("""
-                        UPDATE Sample SET Status = 'In Test' WHERE SampleID = %s
+                        UPDATE sample SET Status = 'In Test' WHERE SampleID = %s
                     """, (sample_id,))
                     
                     # Log history
@@ -228,8 +262,8 @@ class TestService:
                 tsu.Status,
                 tsu.Notes,
                 tsu.CreatedDate
-            FROM TestSampleUsage tsu
-            JOIN Sample s ON tsu.SampleID = s.SampleID
+            FROM testsampleusage tsu
+            JOIN sample s ON tsu.SampleID = s.SampleID
             WHERE tsu.TestID = %s
             ORDER BY tsu.CreatedDate
         """
@@ -262,8 +296,8 @@ class TestService:
                 cursor.execute("""
                     SELECT tsu.SampleID, tsu.TestID, tsu.AmountAllocated, tsu.AmountUsed, 
                            tsu.SampleIdentifier, t.TestNo
-                    FROM TestSampleUsage tsu
-                    JOIN Test t ON tsu.TestID = t.TestID
+                    FROM testsampleusage tsu
+                    JOIN test t ON tsu.TestID = t.TestID
                     WHERE tsu.UsageID = %s
                 """, (usage_id,))
                 
@@ -283,7 +317,7 @@ class TestService:
                 if action == 'return':
                     # Return to storage
                     cursor.execute("""
-                        UPDATE SampleStorage 
+                        UPDATE samplestorage 
                         SET AmountRemaining = AmountRemaining + %s
                         WHERE SampleID = %s
                         ORDER BY StorageID LIMIT 1
@@ -291,7 +325,7 @@ class TestService:
                     
                     # Update usage record
                     cursor.execute("""
-                        UPDATE TestSampleUsage 
+                        UPDATE testsampleusage 
                         SET AmountReturned = AmountReturned + %s, Status = 'Returned'
                         WHERE UsageID = %s
                     """, (amount, usage_id))
@@ -318,21 +352,21 @@ class TestService:
                     
                     # Update original usage
                     cursor.execute("""
-                        UPDATE TestSampleUsage 
+                        UPDATE testsampleusage 
                         SET Status = 'Transferred'
                         WHERE UsageID = %s
                     """, (usage_id,))
                 
                 # Check if sample should be removed from 'In Test' status
                 cursor.execute("""
-                    SELECT COUNT(*) FROM TestSampleUsage 
+                    SELECT COUNT(*) FROM testsampleusage 
                     WHERE SampleID = %s AND Status IN ('Allocated', 'Active')
                 """, (sample_id,))
                 
                 active_tests = cursor.fetchone()[0]
                 if active_tests == 0:
                     cursor.execute("""
-                        UPDATE Sample SET Status = 'In Storage' WHERE SampleID = %s
+                        UPDATE sample SET Status = 'In Storage' WHERE SampleID = %s
                     """, (sample_id,))
                 
                 return {
@@ -351,7 +385,7 @@ class TestService:
         try:
             with self.db.transaction() as cursor:
                 cursor.execute("""
-                    UPDATE Test SET Status = %s WHERE TestID = %s
+                    UPDATE test SET Status = %s WHERE TestID = %s
                 """, (new_status, test_id))
                 
                 # Log in history
@@ -376,7 +410,7 @@ class TestService:
         try:
             with self.db.transaction() as cursor:
                 # Get test info
-                cursor.execute("SELECT TestNo FROM Test WHERE TestID = %s", (test_id,))
+                cursor.execute("SELECT TestNo FROM test WHERE TestID = %s", (test_id,))
                 test_result = cursor.fetchone()
                 if not test_result:
                     return {'success': False, 'error': 'Test not found'}
@@ -391,7 +425,7 @@ class TestService:
                     
                     # Update usage record
                     cursor.execute("""
-                        UPDATE TestSampleUsage 
+                        UPDATE testsampleusage 
                         SET AmountUsed = %s, AmountReturned = %s, 
                             Status = CASE WHEN %s > 0 THEN 'Returned' ELSE 'Consumed' END,
                             CompletedDate = %s, Notes = CONCAT(COALESCE(Notes, ''), ' ', %s)
@@ -404,12 +438,12 @@ class TestService:
                     # Return amount to storage if applicable
                     if amount_returned > 0:
                         cursor.execute("""
-                            SELECT SampleID FROM TestSampleUsage WHERE UsageID = %s
+                            SELECT SampleID FROM testsampleusage WHERE UsageID = %s
                         """, (usage_id,))
                         sample_id = cursor.fetchone()[0]
                         
                         cursor.execute("""
-                            UPDATE SampleStorage 
+                            UPDATE samplestorage 
                             SET AmountRemaining = AmountRemaining + %s
                             WHERE SampleID = %s
                             ORDER BY StorageID LIMIT 1
@@ -417,7 +451,7 @@ class TestService:
                 
                 # Update test status
                 cursor.execute("""
-                    UPDATE Test SET Status = 'Completed' WHERE TestID = %s
+                    UPDATE test SET Status = 'Completed' WHERE TestID = %s
                 """, (test_id,))
                 
                 # Update sample statuses
@@ -425,19 +459,19 @@ class TestService:
                     UPDATE Sample s
                     SET Status = CASE 
                         WHEN EXISTS (
-                            SELECT 1 FROM TestSampleUsage tsu 
+                            SELECT 1 FROM testsampleusage tsu 
                             WHERE tsu.SampleID = s.SampleID 
                             AND tsu.Status IN ('Allocated', 'Active')
                         ) THEN 'In Test'
                         WHEN EXISTS (
-                            SELECT 1 FROM SampleStorage ss 
+                            SELECT 1 FROM samplestorage ss 
                             WHERE ss.SampleID = s.SampleID 
                             AND ss.AmountRemaining > 0
                         ) THEN 'In Storage'
                         ELSE 'Consumed'
                     END
                     WHERE s.SampleID IN (
-                        SELECT DISTINCT SampleID FROM TestSampleUsage WHERE TestID = %s
+                        SELECT DISTINCT SampleID FROM testsampleusage WHERE TestID = %s
                     )
                 """, (test_id,))
                 
@@ -458,7 +492,7 @@ class TestService:
             SELECT 
                 TestNo, TestName, SampleIdentifier, AmountAllocated,
                 AmountUsed, AmountReturned, Status, CreatedDate, CompletedDate
-            FROM SampleTestHistoryView
+            FROM sampletesthistoryview
             WHERE SampleID = %s
             ORDER BY CreatedDate
         """
