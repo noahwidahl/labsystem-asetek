@@ -24,6 +24,9 @@
                 <div class="step">
                     <span>Location</span>
                 </div>
+                <div class="step">
+                    <span>Print</span>
+                </div>
             </div>
             <div class="progress mt-3">
                 <div class="progress-bar" role="progressbar" style="width: 0%"></div>
@@ -421,6 +424,51 @@
                 </div>
             </div>
 
+            <!-- Step 5: Print Confirmation -->
+            <div class="form-step" id="step5">
+                <h3>Print Sample Label</h3>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> 
+                    Your sample has been successfully registered! Would you like to print a label for it now?
+                </div>
+                
+                <div class="print-preview card">
+                    <div class="card-header">
+                        <h5>Sample Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Sample ID:</strong> <span id="print-sample-id">-</span></p>
+                                <p><strong>Description:</strong> <span id="print-description">-</span></p>
+                                <p><strong>Barcode:</strong> <span id="print-barcode">-</span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Amount:</strong> <span id="print-amount">-</span></p>
+                                <p><strong>Location:</strong> <span id="print-location">-</span></p>
+                                <p><strong>Serial Number:</strong> <span id="print-serial">-</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="print-options mt-4">
+                    <h5>Print Options</h5>
+                    <div class="btn-group-vertical w-100">
+                        <button type="button" class="btn btn-primary btn-lg mb-2" id="printNowBtn">
+                            <i class="fas fa-print me-2"></i>Print Label Now
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-lg" id="skipPrintBtn">
+                            <i class="fas fa-times me-2"></i>Skip Printing
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="printStatus" class="mt-3 d-none">
+                    <!-- Print status messages will appear here -->
+                </div>
+            </div>
+
             <!-- Navigation Buttons -->
             <div class="form-navigation mt-4">
                 <div class="form-nav-buttons">
@@ -450,6 +498,9 @@
 window.suppliers = {{ suppliers|tojson }};
 </script>
 
+<!-- Load scanner functions for print confirmation -->
+<script src="{{ url_for('static', filename='js/scanner-functions.js') }}"></script>
+
 <!-- Load register module scripts -->
 <script src="{{ url_for('static', filename='js/register-suppliers.js') }}"></script>
 <script src="{{ url_for('static', filename='js/register.js') }}"></script>
@@ -460,4 +511,5 @@ window.suppliers = {{ suppliers|tojson }};
 <script src="{{ url_for('static', filename='js/register-containers.js') }}"></script>
 <script src="{{ url_for('static', filename='js/register-identification.js') }}"></script>
 <script src="{{ url_for('static', filename='js/storage-locations.js') }}"></script>
+<script src="{{ url_for('static', filename='js/register-print.js') }}"></script>
 {% endblock %}

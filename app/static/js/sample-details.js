@@ -38,6 +38,7 @@ window.loadSampleDetails = function(sampleId) {
     document.getElementById('sample-tracking-number').textContent = '-';
     document.getElementById('sample-supplier').textContent = '-';
     document.getElementById('sample-units').textContent = '-';
+    document.getElementById('sample-serial-numbers').textContent = '-';
     document.getElementById('sample-comments').textContent = '-';
     document.getElementById('sample-properties').innerHTML = '<p class="text-center text-muted">Loading properties...</p>';
     document.getElementById('sample-history-list').innerHTML = '<p class="text-center text-muted">Loading history...</p>';
@@ -81,6 +82,13 @@ window.loadSampleDetails = function(sampleId) {
                 document.getElementById('sample-tracking-number').textContent = sample.TrackingNumber || '-';
                 document.getElementById('sample-supplier').textContent = sample.SupplierName || '-';
                 document.getElementById('sample-units').textContent = sample.Unit || '-';
+                
+                // Update serial numbers - handle multiple serial numbers
+                let serialNumbersDisplay = 'No serial numbers';
+                if (data.serial_numbers && data.serial_numbers.length > 0) {
+                    serialNumbersDisplay = data.serial_numbers.join(', ');
+                }
+                document.getElementById('sample-serial-numbers').textContent = serialNumbersDisplay;
                 
                 // Update comments
                 document.getElementById('sample-comments').textContent = sample.Comments || 'No comments';

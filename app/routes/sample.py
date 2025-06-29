@@ -145,6 +145,10 @@ def init_sample(blueprint, mysql):
                 db_results = cursor.fetchall()
                 print(f"Found {len(db_results)} samples from database")
                 
+                # Debug: Print sample details
+                if db_results:
+                    print(f"Sample data: {db_results[:3]}")  # Show first 3 samples
+                
                 # If there are results, replace our hardcoded data
                 if db_results and len(db_results) > 0:
                     # Replace our hardcoded data with database data
@@ -1108,6 +1112,16 @@ def init_sample(blueprint, mysql):
             columns = [col[0] for col in cursor.description]
             sample = dict(zip(columns, sample_result))
             
+            # Get serial numbers for this sample
+            cursor.execute("""
+                SELECT SerialNumber 
+                FROM sampleserialnumber 
+                WHERE SampleID = %s AND IsActive = 1
+                ORDER BY CreatedDate
+            """, (sample_id,))
+            
+            serial_numbers = [row[0] for row in cursor.fetchall()]
+            
             # Convert all numeric and boolean values to appropriate types
             # Ensure SampleID is a string
             if 'SampleID' in sample and sample['SampleID'] is not None:
@@ -1172,7 +1186,8 @@ def init_sample(blueprint, mysql):
                 'success': True,
                 'sample': sample,
                 'properties': properties,
-                'history': history
+                'history': history,
+                'serial_numbers': serial_numbers
             })
         except Exception as e:
             print(f"API error getting sample details: {e}")
@@ -1565,7 +1580,7 @@ def init_sample(blueprint, mysql):
             
             # Search suppliers by name (case-insensitive partial match)
             cursor.execute("""
-                SELECT SupplierID, SupplierName, ContactEmail, ContactPhone 
+                SELECT SupplierID, SupplierName 
                 FROM supplier 
                 WHERE SupplierName LIKE %s 
                 ORDER BY SupplierName 
@@ -1576,9 +1591,7 @@ def init_sample(blueprint, mysql):
             for row in cursor.fetchall():
                 suppliers.append({
                     'id': row[0],
-                    'name': row[1],
-                    'email': row[2] if row[2] else None,
-                    'phone': row[3] if row[3] else None
+                    'name': row[1]
                 })
             
             cursor.close()

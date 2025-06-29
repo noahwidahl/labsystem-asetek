@@ -9,9 +9,10 @@
 window.registerApp = {
     // Basic variables
     currentStep: 1,
-    totalSteps: 4,
+    totalSteps: 5,
     scannedItems: [],
     selectedLocation: null,
+    selectedLocationName: null,
     selectedContainerLocation: null,
     skipLocationSelection: false,
     REGISTRATION_EXPIRY_MONTHS: 2,
@@ -28,7 +29,8 @@ window.registerApp = {
         sampleTypes: false,
         storage: false,
         containers: false,
-        identification: false
+        identification: false,
+        print: false
     },
     
     // Global functions that must be available

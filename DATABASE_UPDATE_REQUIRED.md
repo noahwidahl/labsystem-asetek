@@ -1,9 +1,29 @@
 # DATABASE UPDATE REQUIRED
 
-Before testing the new container barcode functionality, you MUST run this SQL command:
+Before testing the new functionality, you MUST run these SQL commands:
 
+## 1. Container Barcode Support:
 ```sql
 ALTER TABLE container ADD COLUMN Barcode VARCHAR(100) UNIQUE AFTER ContainerID;
+```
+
+## 2. Sample Serial Number Support:
+```sql
+-- Create proper serial number table for multiple serial numbers per sample
+CREATE TABLE IF NOT EXISTS sampleserialnumber (
+    SerialNumberID INT AUTO_INCREMENT PRIMARY KEY,
+    SampleID INT NOT NULL,
+    SerialNumber VARCHAR(255) NOT NULL,
+    CreatedDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+    IsActive BOOLEAN DEFAULT TRUE,
+    INDEX idx_sample_serial (SampleID),
+    INDEX idx_serial_number (SerialNumber),
+    FOREIGN KEY (SampleID) REFERENCES sample(SampleID) ON DELETE CASCADE,
+    UNIQUE KEY unique_serial_number (SerialNumber)
+);
+
+-- Remove incorrect single SerialNumber column if it exists
+ALTER TABLE sample DROP COLUMN IF EXISTS SerialNumber;
 ```
 
 ## What this update does:

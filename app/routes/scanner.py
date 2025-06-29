@@ -405,11 +405,31 @@ def register_serial_number():
         mysql.connection.commit()
         cursor.close()
         
+        # Get sample data for print confirmation
+        cursor = mysql.connection.cursor()
+        cursor.execute("""
+            SELECT s.SampleID, s.Description, s.Barcode, s.PartNumber
+            FROM Sample s 
+            WHERE s.SampleID = %s
+        """, (sample_id,))
+        sample_data = cursor.fetchone()
+        cursor.close()
+        
+        sample_info = {
+            'SampleID': sample_data[0],
+            'SampleIDFormatted': f'SMP-{sample_data[0]}',
+            'Description': sample_data[1],
+            'Barcode': sample_data[2],
+            'PartNumber': sample_data[3] or ''
+        }
+        
         return jsonify({
             'status': 'success',
             'message': f'Serial number {serial_number} registered for sample {sample_id}',
             'sample_id': sample_id,
-            'serial_number': serial_number
+            'serial_number': serial_number,
+            'sample_data': sample_info,
+            'show_print_confirmation': True
         })
         
     except Exception as e:

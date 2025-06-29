@@ -426,19 +426,15 @@ class SampleService:
                             'error': f'Failed to create container: {error_msg}'
                         }
             
-            # Add serial numbers if provided
+            # Insert serial numbers if provided (multiple serial numbers per sample)
             if sample_data.get('hasSerialNumbers') and sample_data.get('serialNumbers'):
-                for serial_number in sample_data.get('serialNumbers', []):
-                    cursor.execute("""
-                        INSERT INTO sampleserial (
-                            SampleID,
-                            SerialNumber
-                        )
-                        VALUES (%s, %s)
-                    """, (
-                        sample_id,
-                        serial_number
-                    ))
+                serial_numbers = sample_data.get('serialNumbers', [])
+                for serial_number in serial_numbers:
+                    if serial_number and serial_number.strip():
+                        cursor.execute("""
+                            INSERT INTO sampleserialnumber (SampleID, SerialNumber) 
+                            VALUES (%s, %s)
+                        """, (sample_id, serial_number.strip()))
             
             # Log task assignment if task was selected during registration
             task_assignment_result = None
@@ -515,11 +511,30 @@ class SampleService:
                         'message': f'Sample created but label printing failed: {str(print_error)}'
                     })
             
+            # Get serial numbers if they were added
+            serial_numbers = []
+            if sample_data.get('hasSerialNumbers') and sample_data.get('serialNumbers'):
+                serial_numbers = [sn for sn in sample_data.get('serialNumbers', []) if sn and sn.strip()]
+            
             response_data = {
                 'success': True,
                 'sample_id': sample_id,
                 'storage_id': storage_id,
-                'reception_id': reception_id
+                'reception_id': reception_id,
+                'barcode': base_barcode,
+                'sample_data': {
+                    'SampleID': sample_id,
+                    'SampleIDFormatted': f'SMP-{sample_id}',
+                    'Description': description,
+                    'Barcode': base_barcode,
+                    'PartNumber': sample_data.get('partNumber', ''),
+                    'Type': sample_type,
+                    'Amount': total_amount,
+                    'UnitName': self._get_unit_name(sample_data.get('unit')),
+                    'ExpireDate': expire_date.strftime('%d-%m-%Y') if expire_date else '',
+                    'SerialNumbers': serial_numbers,
+                    'HasSerialNumbers': bool(sample_data.get('hasSerialNumbers'))
+                }
             }
             
             if create_containers and container_ids:

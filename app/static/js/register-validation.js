@@ -163,6 +163,9 @@ function validateCurrentStep() {
                 return false;
             }
             return true;
+        case 5:
+            // Print step - always valid (user can choose to print or skip)
+            return true;
         default:
             return true;
     }
@@ -186,13 +189,37 @@ function updateRegistrationSummary() {
     const description = document.querySelector('[name="description"]')?.value || 'Unnamed sample';
     const totalAmount = document.querySelector('[name="totalAmount"]')?.value || '0';
     const unitText = document.querySelector('[name="unit"] option:checked')?.textContent || '';
+    const partNumber = document.querySelector('[name="partNumber"]')?.value || '';
+    const trackingNumber = document.querySelector('[name="trackingNumber"]')?.value || '';
+    const owner = document.querySelector('[name="owner"] option:checked')?.textContent || '';
+    const expireDate = document.querySelector('[name="expireDate"]')?.value || '';
+    const taskAssignment = document.querySelector('[name="task"] option:checked')?.textContent || '';
+    const supplier = getSelectedSupplier();
     
     let summaryHtml = `
-        <div class="summary-item mb-3">
-            <div class="summary-title">Sample Information</div>
-            <div class="summary-content">
-                <p><strong>${description}</strong> - ${totalAmount} ${unitText}</p>
-                <p>Type: ${getSampleTypeText(sampleType)}</p>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="summary-item mb-3">
+                    <div class="summary-title"><i class="fas fa-flask me-2"></i>Sample Information</div>
+                    <div class="summary-content">
+                        <p><strong>${description}</strong></p>
+                        <p><i class="fas fa-cubes me-2"></i>Amount: ${totalAmount} ${unitText}</p>
+                        <p><i class="fas fa-tag me-2"></i>Type: ${getSampleTypeText(sampleType)}</p>
+                        ${partNumber ? `<p><i class="fas fa-barcode me-2"></i>Part Number: ${partNumber}</p>` : ''}
+                        ${expireDate ? `<p><i class="fas fa-calendar me-2"></i>Expire Date: ${formatDate(expireDate)}</p>` : ''}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="summary-item mb-3">
+                    <div class="summary-title"><i class="fas fa-info-circle me-2"></i>Administrative Details</div>
+                    <div class="summary-content">
+                        ${owner ? `<p><i class="fas fa-user me-2"></i>Responsible: ${owner}</p>` : ''}
+                        ${supplier ? `<p><i class="fas fa-truck me-2"></i>Supplier: ${supplier}</p>` : ''}
+                        ${trackingNumber ? `<p><i class="fas fa-shipping-fast me-2"></i>Tracking: ${trackingNumber}</p>` : ''}
+                        ${taskAssignment ? `<p><i class="fas fa-tasks me-2"></i>Task: ${taskAssignment}</p>` : ''}
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -201,9 +228,9 @@ function updateRegistrationSummary() {
     // Add storage info
     summaryHtml += `
         <div class="summary-item mb-3">
-            <div class="summary-title">Storage Details</div>
+            <div class="summary-title"><i class="fas fa-warehouse me-2"></i>Storage Details</div>
             <div class="summary-content">
-                <p>Storage Type: ${storageOption === 'direct' ? 'Direct storage on shelf' : 'Storage in container'}</p>
+                <p><i class="fas fa-box me-2"></i>Storage Type: ${storageOption === 'direct' ? 'Direct storage on shelf' : 'Storage in container'}</p>
     `;
     
     // Add container details if applicable
@@ -235,11 +262,13 @@ function updateRegistrationSummary() {
     
     // Add serial number info if applicable
     if (document.getElementById('hasSerialNumbers')?.checked) {
+        const serialNumbers = registerApp.scannedItems || [];
         summaryHtml += `
             <div class="summary-item">
-                <div class="summary-title">Identification</div>
+                <div class="summary-title"><i class="fas fa-qrcode me-2"></i>Identification</div>
                 <div class="summary-content">
-                    <p>${registerApp.scannedItems.length} serial numbers recorded</p>
+                    <p><i class="fas fa-list me-2"></i>${serialNumbers.length} serial numbers recorded</p>
+                    ${serialNumbers.length > 0 ? `<div class="small text-muted mt-2">Serial numbers: ${serialNumbers.join(', ')}</div>` : ''}
                 </div>
             </div>
         `;
@@ -268,6 +297,30 @@ function updateRegistrationSummary() {
         }
         
         return '';
+    }
+    
+    // Helper function to get selected supplier
+    function getSelectedSupplier() {
+        const selectedSupplierName = document.getElementById('selectedSupplierName');
+        if (selectedSupplierName && selectedSupplierName.textContent !== 'No supplier selected') {
+            return selectedSupplierName.textContent;
+        }
+        return '';
+    }
+    
+    // Helper function to format date
+    function formatDate(dateString) {
+        if (!dateString) return '';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('da-DK', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+        } catch (e) {
+            return dateString;
+        }
     }
 }
 
@@ -420,15 +473,27 @@ function handleFormSubmission() {
                 successMessage += ` ${data.container_ids.length} containers were created.`;
             }
             
-            showSuccessMessage(successMessage);
+            // Don't show success message yet - wait until print/skip step
+            // Store success message for later
+            window.registrationSuccessMessage = successMessage;
             
-            // Reset the form and go back to step 1 after a short pause
-            setTimeout(() => {
-                resetForm();
+            // Populate print step with sample data and go to print step (step 5)
+            if (data.sample_data && typeof window.populatePrintStep === 'function') {
+                console.log('Moving to print step with sample data:', data.sample_data);
                 
-                // Redirect user back to dashboard
-                window.location.href = '/dashboard';
-            }, 2000);
+                // Populate the print step with sample data
+                window.populatePrintStep(data.sample_data);
+                
+                // Go to step 5 (print step)
+                registerApp.currentStep = 5;
+                showStep(5);
+            } else {
+                console.log('Sample data not available or print function not loaded - redirecting to dashboard');
+                // If print step is not available, redirect to dashboard
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 2000);
+            }
         } else {
             showErrorMessage(`Error during registration: ${data.error}`);
         }

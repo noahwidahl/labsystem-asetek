@@ -173,6 +173,16 @@ function performScan(barcode) {
             
             updateScannerStatus(message, 'success');
             displayScanResults(data);
+            
+            // Check if response includes print confirmation trigger
+            if (data.show_print_confirmation && data.sample_data) {
+                // Trigger print confirmation after a short delay
+                setTimeout(() => {
+                    if (typeof window.showPrintConfirmation === 'function') {
+                        window.showPrintConfirmation(data.sample_data);
+                    }
+                }, 1000); // 1 second delay to allow success message to be seen
+            }
         } else if (data.status === 'not_found') {
             updateScannerStatus(`Stregkode ikke fundet: ${barcode}`, 'warning');
             hideScanResults();
@@ -519,3 +529,20 @@ function hideScanResults() {
     document.getElementById('scanResults').classList.add('d-none');
     document.getElementById('noResults').classList.remove('d-none');
 }
+
+/**
+ * Hook for sample registration completion to trigger print confirmation
+ * This function is called when sample location is saved successfully
+ */
+function handleSampleRegistrationComplete(sampleData) {
+    // Check if we're on scanner page and print confirmation is available
+    if (typeof window.showPrintConfirmation === 'function') {
+        // Show print confirmation dialog
+        setTimeout(() => {
+            window.showPrintConfirmation(sampleData);
+        }, 500); // Small delay to allow registration success message to show
+    }
+}
+
+// Make function globally available
+window.handleSampleRegistrationComplete = handleSampleRegistrationComplete;

@@ -26,9 +26,9 @@ document.addEventListener('DOMContentLoaded', function() {
             window.getComputedStyle(nextButton).display;
         }
         
-        // Also check fixed button in step 4
+        // Also check fixed button in step 4 only (NOT step 5)
         const fixedNextButton = document.getElementById('fixedNextButton');
-        if (fixedNextButton && registerApp.currentStep >= 4) {
+        if (fixedNextButton && registerApp.currentStep === 4) {
             if (fixedNextButton.style.display !== 'block') {
                 console.log("INTERVAL FIX: Fixed next button was hidden, forcing visible");
                 fixedNextButton.style.display = 'block';
@@ -37,12 +37,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.getComputedStyle(fixedNextButton).display;
             }
             
-            // Set the correct text based on current step
-            if (registerApp.currentStep === registerApp.totalSteps) {
-                fixedNextButton.textContent = 'Save';
-                fixedNextButton.classList.add('btn-success');
-                fixedNextButton.classList.remove('btn-primary');
-            }
+            fixedNextButton.textContent = 'Next';
+            fixedNextButton.classList.add('btn-primary');
+            fixedNextButton.classList.remove('btn-success');
+        } else if (fixedNextButton && registerApp.currentStep === 5) {
+            // FORCE HIDE fixed button on step 5 (print step)
+            fixedNextButton.style.display = 'none';
+            console.log("FORCING fixed button hidden on step 5");
         }
         
         // Check Previous button too for completeness
@@ -104,6 +105,11 @@ function showStep(step) {
     setTimeout(() => { _previousRenderStep = null; }, 500);
     
     console.log(`Showing step ${step} (current: ${registerApp.currentStep})`);
+    
+    // Emit step changed event for other modules to listen to
+    document.dispatchEvent(new CustomEvent('stepChanged', {
+        detail: { step: step, previousStep: registerApp.currentStep }
+    }));
     
     // Ensure step is a valid integer
     step = parseInt(step) || 1;
@@ -206,7 +212,12 @@ function showStep(step) {
         const fixedNextButton = document.getElementById('fixedNextButton');
         if (fixedNextButton && step === 4) {
             fixedNextButton.style.display = 'block';
-            fixedNextButton.textContent = 'Save';
+            fixedNextButton.textContent = 'Next';
+            fixedNextButton.classList.add('btn-primary');
+            fixedNextButton.classList.remove('btn-success');
+        } else if (fixedNextButton && step === 5) {
+            // Hide fixed button on step 5 (print step)
+            fixedNextButton.style.display = 'none';
             
             // Force the computed style to take effect
             window.getComputedStyle(fixedNextButton).display;
@@ -245,22 +256,31 @@ function updateNavigationButtons(step) {
     const nextButton = document.getElementById('nextButton');
 
     if (prevButton) {
-        prevButton.style.display = step === 1 ? 'none' : 'block';
+        // Hide Previous button on step 5 (print step) and step 1
+        if (step === 1 || step === 5) {
+            prevButton.style.display = 'none';
+        } else {
+            prevButton.style.display = 'block';
+        }
     }
 
     if (nextButton) {
-        // CRITICAL: Ensure the Next/Save button is ALWAYS visible
-        nextButton.style.display = 'block';
-        
-        // Make button more prominent in final step
-        if (step === registerApp.totalSteps) {
-            nextButton.textContent = 'Save';
-            nextButton.classList.add('btn-success');
-            nextButton.classList.remove('btn-primary');
+        // Hide Next button on step 5 (print step) - use print/skip buttons instead
+        if (step === 5) {
+            nextButton.style.display = 'none';
         } else {
-            nextButton.textContent = 'Next';
-            nextButton.classList.add('btn-primary');
-            nextButton.classList.remove('btn-success');
+            nextButton.style.display = 'block';
+            
+            // Make button more prominent in final step
+            if (step === registerApp.totalSteps) {
+                nextButton.textContent = 'Save';
+                nextButton.classList.add('btn-success');
+                nextButton.classList.remove('btn-primary');
+            } else {
+                nextButton.textContent = 'Next';
+                nextButton.classList.add('btn-primary');
+                nextButton.classList.remove('btn-success');
+            }
         }
         
         // SUPER IMPORTANT: Schedule another visibility check after a short delay
@@ -283,15 +303,21 @@ function updateNavigationButtons(step) {
     }
     
     if (fixedNextButton) {
-        fixedNextButton.style.display = 'block';
-        if (step === registerApp.totalSteps) {
-            fixedNextButton.textContent = 'Save';
-            fixedNextButton.classList.add('btn-success');
-            fixedNextButton.classList.remove('btn-primary');
+        // Hide fixed button on step 5 (print step)
+        if (step === 5) {
+            fixedNextButton.style.display = 'none';
+            console.log("updateNavigationButtons: HIDING fixed button on step 5");
         } else {
-            fixedNextButton.textContent = 'Next';
-            fixedNextButton.classList.add('btn-primary');
-            fixedNextButton.classList.remove('btn-success');
+            fixedNextButton.style.display = 'block';
+            if (step === registerApp.totalSteps) {
+                fixedNextButton.textContent = 'Save';
+                fixedNextButton.classList.add('btn-success');
+                fixedNextButton.classList.remove('btn-primary');
+            } else {
+                fixedNextButton.textContent = 'Next';
+                fixedNextButton.classList.add('btn-primary');
+                fixedNextButton.classList.remove('btn-success');
+            }
         }
     }
 }
@@ -305,82 +331,33 @@ function setupRegistrationSteps() {
         nextButton.addEventListener('click', function() {
             console.log('Next button clicked, current step:', registerApp.currentStep);
             
-            if (registerApp.currentStep === registerApp.totalSteps) {
-                console.log('Final step, calling handleFormSubmission directly');
+            // If we're in step 4 (location), save the sample and proceed to print step
+            if (registerApp.currentStep === 4) {
+                console.log('Location step complete, saving sample and proceeding to print step');
                 
-                // Check if the function exists before calling it
+                // Validate location first
+                if (typeof window.validateCurrentStep === 'function') {
+                    if (!window.validateCurrentStep()) {
+                        return; // Stop if validation fails
+                    }
+                }
+                
+                // Call handleFormSubmission to save the sample
                 if (typeof window.handleFormSubmission === 'function') {
                     window.handleFormSubmission();
                 } else {
-                    console.error("handleFormSubmission not found in register-form.js - using fallback");
-                    
-                    // Fallback - use form submission via direct API call
-                    const formData = {
-                        // Use the form data directly
-                        description: document.querySelector('[name="description"]')?.value || '',
-                        totalAmount: parseInt(document.querySelector('[name="totalAmount"]')?.value) || 1,
-                        unit: document.querySelector('[name="unit"]')?.value || '',
-                        storageLocation: registerApp.selectedLocation || '',
-                        storageOption: document.querySelector('input[name="storageOption"]:checked')?.value || 'direct',
-                        createContainers: document.querySelector('input[name="storageOption"]:checked')?.value === 'container'
-                    };
-                    
-                    // If containers are used, add container info
-                    if (formData.createContainers) {
-                        // API expects this format
-                        formData.containerDescription = document.getElementById('containerDescription')?.value || '';
-                        // Ensure containerTypeId is a number
-                        const typeId = document.getElementById('containerType')?.value;
-                        formData.containerTypeId = typeId ? parseInt(typeId) : null;
-                        // Ensure capacity is a number
-                        const capacity = document.getElementById('containerCapacity')?.value;
-                        formData.containerCapacity = capacity ? parseInt(capacity) : null;
-                        formData.containerIsMixed = document.getElementById('containerIsMixed')?.checked || false;
-                        
-                        // Container location - use either the specific select or the general location
-                        const containerLocationSelect = document.getElementById('containerLocation');
-                        if (containerLocationSelect && containerLocationSelect.value) {
-                            // Ensure locationId is a number
-                            formData.containerLocationId = parseInt(containerLocationSelect.value);
-                        } else if (registerApp.selectedLocation) {
-                            // Ensure locationId is a number
-                            formData.containerLocationId = typeof registerApp.selectedLocation === 'string' ? 
-                                parseInt(registerApp.selectedLocation) : registerApp.selectedLocation;
-                        }
-                        
-                        // For debugging
-                        console.log('Container data being sent:', {
-                            createContainers: formData.createContainers,
-                            containerDescription: formData.containerDescription,
-                            containerTypeId: formData.containerTypeId,
-                            containerIsMixed: formData.containerIsMixed,
-                            containerCapacity: formData.containerCapacity,
-                            containerLocationId: formData.containerLocationId
-                        });
-                    }
-                    
-                    // Show processing message
-                    alert('Submitting registration...');
-                    
-                    // Send data directly
-                    fetch('/api/samples', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(formData)
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert(`Success! Sample ${data.sample_id} has been registered.`);
-                            window.location.href = '/dashboard';
-                        } else {
-                            alert(`Error: ${data.error || 'Unknown error'}`);
-                        }
-                    })
-                    .catch(error => {
-                        alert(`Error: ${error.message || 'Unknown error'}`);
-                    });
+                    console.error('handleFormSubmission not available, cannot save sample');
+                    showErrorMessage('Cannot save sample. Please refresh and try again.');
                 }
+                return;
+            }
+            
+            if (registerApp.currentStep === registerApp.totalSteps) {
+                console.log('Final step (print), sample should already be saved');
+                
+                // Sample should already be saved in step 4, so just show error message
+                showErrorMessage('Sample should have been saved in previous step. Please use Print or Skip buttons.');
+                return;
             } else {
                 nextStep();
             }

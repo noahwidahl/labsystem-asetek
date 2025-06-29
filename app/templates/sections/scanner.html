@@ -8,8 +8,8 @@
         <div class="col-12">
             <div class="page-header d-flex justify-content-between align-items-center mb-4">
                 <div>
-                    <h1 class="h3 mb-0">Barcode Scanner</h1>
-                    <p class="text-muted">Scan containers, samples, and test samples</p>
+                    <h1 class="h3 mb-0">Scanner/Print</h1>
+                    <p class="text-muted">Scan containers, samples, test samples and manage print jobs</p>
                 </div>
                 <div class="d-flex gap-2">
                     <button class="btn btn-outline-info btn-sm" data-bs-toggle="collapse" data-bs-target="#scannerInfoCollapse">
@@ -117,8 +117,82 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Print Job Queue Section -->
+        <div class="col-12 mt-4">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-print me-2"></i>Print Job Queue
+                        </h5>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="refreshPrintJobs()">
+                                <i class="fas fa-sync-alt me-1"></i>Refresh
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="clearPrintHistory()">
+                                <i class="fas fa-trash me-1"></i>Clear History
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Sample ID</th>
+                                    <th>Barcode</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="printJobsBody">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        <i class="fas fa-print fa-2x mb-2"></i>
+                                        <br>No print jobs yet. Register samples to create print jobs.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- Print Confirmation Modal -->
+<div class="modal fade" id="printConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Print Sample Label</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Would you like to print the label for this sample now?</p>
+                <div class="alert alert-info">
+                    <strong>Sample:</strong> <span id="printSampleId"></span><br>
+                    <strong>Barcode:</strong> <span id="printBarcode"></span><br>
+                    <strong>Description:</strong> <span id="printDescription"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="savePrintJobForLater()">
+                    <i class="fas fa-clock me-1"></i>Save for Later
+                </button>
+                <button type="button" class="btn btn-primary" onclick="printNow()">
+                    <i class="fas fa-print me-1"></i>Print Now
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -158,8 +232,234 @@ function filterScans(type) {
     }
 }
 
+// Print Job Management Variables
+let currentPrintSample = null;
+let printJobs = JSON.parse(localStorage.getItem('printJobs') || '[]');
+
+function showPrintConfirmation(sampleData) {
+    currentPrintSample = sampleData;
+    document.getElementById('printSampleId').textContent = sampleData.SampleIDFormatted || `SMP-${sampleData.SampleID}`;
+    document.getElementById('printBarcode').textContent = sampleData.Barcode;
+    document.getElementById('printDescription').textContent = sampleData.Description;
+    
+    new bootstrap.Modal(document.getElementById('printConfirmModal')).show();
+}
+
+async function printNow() {
+    if (!currentPrintSample) return;
+    
+    try {
+        const response = await fetch(`/api/print/sample/${currentPrintSample.SampleID}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                auto_print: true
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            addPrintJob(currentPrintSample, 'printed');
+            showAlert('success', 'Label printed successfully!');
+        } else {
+            addPrintJob(currentPrintSample, 'failed');
+            // Check for specific printer not found error
+            const errorMessage = result.message || 'Print failed';
+            if (errorMessage.toLowerCase().includes('printer') && (errorMessage.toLowerCase().includes('not found') || errorMessage.toLowerCase().includes('unavailable'))) {
+                showAlert('warning', 'No printer found. Please check printer connection and try again.');
+            } else {
+                showAlert('danger', `Print failed: ${errorMessage}`);
+            }
+        }
+        
+        bootstrap.Modal.getInstance(document.getElementById('printConfirmModal')).hide();
+        currentPrintSample = null;
+        
+    } catch (error) {
+        addPrintJob(currentPrintSample, 'failed');
+        // Handle network/connection errors which often indicate no printer
+        if (error.message.includes('fetch') || error.message.includes('NetworkError')) {
+            showAlert('warning', 'No printer found or printer service unavailable');
+        } else {
+            showAlert('danger', 'Error printing label');
+        }
+        console.error('Print error:', error);
+    }
+}
+
+function savePrintJobForLater() {
+    if (!currentPrintSample) return;
+    
+    addPrintJob(currentPrintSample, 'queued');
+    showAlert('info', 'Print job saved for later');
+    
+    bootstrap.Modal.getInstance(document.getElementById('printConfirmModal')).hide();
+    currentPrintSample = null;
+}
+
+function addPrintJob(sampleData, status) {
+    const printJob = {
+        id: Date.now(),
+        timestamp: new Date().toISOString(),
+        sampleId: sampleData.SampleID,
+        sampleIdFormatted: sampleData.SampleIDFormatted || `SMP-${sampleData.SampleID}`,
+        barcode: sampleData.Barcode,
+        description: sampleData.Description,
+        status: status // 'queued', 'printed', 'failed'
+    };
+    
+    printJobs.unshift(printJob); // Add to beginning
+    
+    // Keep only last 50 jobs
+    if (printJobs.length > 50) {
+        printJobs = printJobs.slice(0, 50);
+    }
+    
+    localStorage.setItem('printJobs', JSON.stringify(printJobs));
+    loadPrintJobs();
+}
+
+function loadPrintJobs() {
+    const tbody = document.getElementById('printJobsBody');
+    
+    if (printJobs.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-muted py-4">
+                    <i class="fas fa-print fa-2x mb-2"></i>
+                    <br>No print jobs yet. Register samples to create print jobs.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = printJobs.map(job => {
+        const statusBadge = getStatusBadge(job.status);
+        const actionButton = job.status === 'queued' ? 
+            `<button class="btn btn-sm btn-primary" onclick="retryPrint(${job.id})">
+                <i class="fas fa-print"></i> Print
+            </button>` :
+            '<span class="text-muted">-</span>';
+        
+        return `
+            <tr>
+                <td>${new Date(job.timestamp).toLocaleString()}</td>
+                <td><code>${job.sampleIdFormatted}</code></td>
+                <td><code>${job.barcode}</code></td>
+                <td>${job.description}</td>
+                <td>${statusBadge}</td>
+                <td>${actionButton}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function getStatusBadge(status) {
+    switch (status) {
+        case 'queued':
+            return '<span class="badge bg-warning">Queued</span>';
+        case 'printed':
+            return '<span class="badge bg-success">Printed</span>';
+        case 'failed':
+            return '<span class="badge bg-danger">Failed</span>';
+        default:
+            return '<span class="badge bg-secondary">Unknown</span>';
+    }
+}
+
+async function retryPrint(jobId) {
+    const job = printJobs.find(j => j.id === jobId);
+    if (!job) return;
+    
+    try {
+        const response = await fetch(`/api/print/sample/${job.sampleId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                auto_print: true
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            job.status = 'printed';
+            job.timestamp = new Date().toISOString();
+            showAlert('success', 'Label printed successfully!');
+        } else {
+            job.status = 'failed';
+            // Check for specific printer not found error
+            const errorMessage = result.message || 'Print failed';
+            if (errorMessage.toLowerCase().includes('printer') && (errorMessage.toLowerCase().includes('not found') || errorMessage.toLowerCase().includes('unavailable'))) {
+                showAlert('warning', 'No printer found. Please check printer connection and try again.');
+            } else {
+                showAlert('danger', `Print failed: ${errorMessage}`);
+            }
+        }
+        
+        localStorage.setItem('printJobs', JSON.stringify(printJobs));
+        loadPrintJobs();
+        
+    } catch (error) {
+        job.status = 'failed';
+        localStorage.setItem('printJobs', JSON.stringify(printJobs));
+        loadPrintJobs();
+        // Handle network/connection errors which often indicate no printer
+        if (error.message.includes('fetch') || error.message.includes('NetworkError')) {
+            showAlert('warning', 'No printer found or printer service unavailable');
+        } else {
+            showAlert('danger', 'Error printing label');
+        }
+        console.error('Print error:', error);
+    }
+}
+
+function refreshPrintJobs() {
+    loadPrintJobs();
+    showAlert('info', 'Print jobs refreshed');
+}
+
+function clearPrintHistory() {
+    if (confirm('Are you sure you want to clear all print history?')) {
+        printJobs = [];
+        localStorage.setItem('printJobs', JSON.stringify(printJobs));
+        loadPrintJobs();
+        showAlert('info', 'Print history cleared');
+    }
+}
+
+function showAlert(type, message) {
+    // Create and show bootstrap alert
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(alertDiv);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Make function globally available for sample registration
+window.showPrintConfirmation = showPrintConfirmation;
+
 // Manual input handler and page initialization
 document.addEventListener('DOMContentLoaded', function() {
+    // Load print jobs when page loads
+    loadPrintJobs();
     const input = document.getElementById('manualBarcodeInput');
     if (input) {
         input.addEventListener('keypress', (e) => {

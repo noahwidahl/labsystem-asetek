@@ -12,6 +12,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup supplier search functionality
     setupSupplierSearch();
     
+    // Add listener for when step 3 (identification) becomes active
+    document.addEventListener('stepChanged', function(event) {
+        if (event.detail && event.detail.step === 3) {
+            initializeIdentificationStep();
+        }
+    });
+    
     // Mark this module as loaded in the global state
     if (window.registerApp) {
         window.registerApp.modulesLoaded.identification = true;
@@ -20,6 +27,45 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('registerApp not found - identification module cannot register');
     }
 });
+
+// Initialize identification step when it becomes active
+function initializeIdentificationStep() {
+    console.log('Initializing identification step');
+    
+    // Check if serial numbers are required
+    const hasSerialNumbers = document.getElementById('hasSerialNumbers')?.checked;
+    if (!hasSerialNumbers) {
+        console.log('Serial numbers not required, skipping initialization');
+        return;
+    }
+    
+    // Get expected amount and current scanned items
+    const expectedAmount = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
+    const currentScanned = registerApp.scannedItems.length;
+    
+    console.log(`Expected: ${expectedAmount}, Currently scanned: ${currentScanned}`);
+    
+    // Update UI immediately
+    updateScanUI();
+    
+    // Show helpful message about scanning requirement
+    const alertDiv = document.querySelector('#step3 .alert');
+    if (alertDiv && expectedAmount > 0) {
+        alertDiv.innerHTML = `
+            <i class="fas fa-info-circle"></i> 
+            You need to scan or enter <strong>${expectedAmount}</strong> unique serial numbers for your samples. 
+            Currently scanned: <strong>${currentScanned}</strong>
+        `;
+    }
+    
+    // Auto-focus barcode input if no items scanned yet
+    if (currentScanned === 0) {
+        const barcodeInput = document.getElementById('barcodeInput');
+        if (barcodeInput) {
+            setTimeout(() => barcodeInput.focus(), 100);
+        }
+    }
+}
 
 // Setup supplier search functionality
 function setupSupplierSearch() {
