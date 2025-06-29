@@ -1673,3 +1673,145 @@ body {
     background-color: #388e3c;
     color: white;
 }
+
+/* Additional action type badge colors */
+.badge.sample-registered {
+    background-color: #007bff;
+    color: white;
+}
+
+.badge.sample-moved-to-container {
+    background-color: #6f42c1;
+    color: white;
+}
+
+.badge.sample-moved {
+    background-color: #6f42c1;
+    color: white;
+}
+
+.badge.test-created {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.badge.test-completed {
+    background-color: #28a745;
+    color: white;
+}
+
+.badge.test-updated {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.badge.sample-updated {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.badge.reception-created {
+    background-color: #6c757d;
+    color: white;
+}
+
+.badge.location-updated {
+    background-color: #fd7e14;
+    color: white;
+}
+
+.badge.amount-updated {
+    background-color: #20c997;
+    color: white;
+}
+
+.badge.user-action {
+    background-color: #495057;
+    color: white;
+}
+
+.badge.system-action {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* Default badge style for any action type badges that don't have specific colors */
+.custody-type.badge {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* Specific badge colors with higher specificity */
+.custody-type.badge.received {
+    background-color: #1976d2 !important;
+    color: white !important;
+}
+
+.custody-type.badge.test {
+    background-color: #388e3c !important;
+    color: white !important;
+}
+
+.custody-type.badge.disposed {
+    background-color: #d32f2f !important;
+    color: white !important;
+}
+
+.custody-type.badge.storage {
+    background-color: #fbc02d !important;
+    color: #212529 !important;
+}
+
+.custody-type.badge.transfer {
+    background-color: #3f51b5 !important;
+    color: white !important;
+}
+
+.custody-type.badge.container-created,
+.custody-type.badge.container-updated,
+.custody-type.badge.container-deleted {
+    background-color: #388e3c !important;
+    color: white !important;
+}
+
+.custody-type.badge.sample-registered {
+    background-color: #007bff !important;
+    color: white !important;
+}
+
+.custody-type.badge.sample-moved-to-container,
+.custody-type.badge.sample-moved {
+    background-color: #6f42c1 !important;
+    color: white !important;
+}
+
+.custody-type.badge.test-created,
+.custody-type.badge.test-updated {
+    background-color: #17a2b8 !important;
+    color: white !important;
+}
+
+.custody-type.badge.test-completed {
+    background-color: #28a745 !important;
+    color: white !important;
+}
+
+.custody-type.badge.sample-updated {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+}
+
+.custody-type.badge.reception-created {
+    background-color: #6c757d !important;
+    color: white !important;
+}
+
+.custody-type.badge.location-updated {
+    background-color: #fd7e14 !important;
+    color: white !important;
+}
+
+.custody-type.badge.amount-updated {
+    background-color: #20c997 !important;
+    color: white !important;
+}
