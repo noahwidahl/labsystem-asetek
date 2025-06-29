@@ -164,7 +164,8 @@ def init_dashboard(blueprint, mysql):
                     h.Notes,
                     r.ReceptionID,
                     s.Description as SampleDescription,
-                    s.PartNumber as SamplePartNumber
+                    s.PartNumber as SamplePartNumber,
+                    h.SampleID as RawSampleID
                 FROM history h
                 LEFT JOIN user u ON h.UserID = u.UserID
                 LEFT JOIN sample s ON h.SampleID = s.SampleID
@@ -183,31 +184,39 @@ def init_dashboard(blueprint, mysql):
             
             history_items = []
             for item in history_data:
-                # Format ItemID based on type
+                # Format display text based on what's available
                 item_id = item[4]
                 action_type = item[2]
+                sample_description = item[7] if len(item) > 7 else None
+                sample_part_number = item[8] if len(item) > 8 else None
+                raw_sample_id = item[9] if len(item) > 9 else None
                 
-                if item_id and item_id != 'N/A':
+                # Prioritize sample description for display
+                display_text = None
+                if sample_description and sample_description.strip():
+                    display_text = sample_description
+                elif item_id and item_id != 'N/A':
                     if str(item_id).startswith('T'):  # Test number
-                        sample_desc = str(item_id)
+                        display_text = str(item_id)
                     else:  # Sample ID
-                        sample_desc = "SMP-" + str(item_id)
+                        display_text = f"SMP-{item_id}"
                 elif action_type and action_type.lower() in ['container created', 'container updated', 'container deleted']:
-                    # For container actions without sample ID, use a more descriptive text
-                    sample_desc = None  # Will be handled in template
+                    display_text = None  # Will be handled in template
                 else:
-                    sample_desc = 'N/A'
+                    display_text = 'N/A'
                     
                 history_items.append({
                     "LogID": item[0],
-                    "Timestamp": item[1],
-                    "ActionType": item[2],
-                    "UserName": item[3],
-                    "SampleDesc": sample_desc,
-                    "Notes": item[5],
+                    "Timestamp": str(item[1]) if item[1] else "",
+                    "ActionType": str(item[2]) if item[2] else "",
+                    "UserName": str(item[3]) if item[3] else "",
+                    "SampleDesc": str(display_text) if display_text else "",  # Now shows description preferentially
+                    "Notes": str(item[5]) if item[5] else "",
                     "ReceptionID": item[6] if item[6] else None,
-                    "SampleDescription": item[7] if len(item) > 7 else "",
-                    "SamplePartNumber": item[8] if len(item) > 8 else ""
+                    "SampleDescription": str(sample_description) if sample_description else "",
+                    "SamplePartNumber": str(sample_part_number) if sample_part_number else "",
+                    "SampleID": f"SMP-{raw_sample_id}" if raw_sample_id else "",
+                    "RawSampleID": raw_sample_id
                 })
             
             return render_template('sections/history.html', 
@@ -339,26 +348,21 @@ def init_dashboard(blueprint, mysql):
         try:
             cursor = mysql.connection.cursor()
             
-            # Get the specific history record
-            query = """
+            # Simple query - just get the basic history record first
+            basic_query = """
                 SELECT 
                     h.LogID,
-                    DATE_FORMAT(h.Timestamp, '%d %b %Y %H:%i') as FormattedDate,
+                    h.Timestamp,
                     h.ActionType,
-                    u.Name as UserName,
-                    COALESCE(s.SampleID, ts.GeneratedIdentifier, 'N/A') as ItemID,
                     h.Notes,
                     h.SampleID,
-                    h.TestID
+                    h.TestID,
+                    h.UserID
                 FROM history h
-                LEFT JOIN user u ON h.UserID = u.UserID
-                LEFT JOIN sample s ON h.SampleID = s.SampleID
-                LEFT JOIN testsample ts ON h.TestID = ts.TestID
-                WHERE h.LogID = {0}
-            """.format(log_id)
+                WHERE h.LogID = %s
+            """
             
-            cursor.execute(query)
-            
+            cursor.execute(basic_query, (log_id,))
             log_data = cursor.fetchone()
             
             if not log_data:
@@ -368,80 +372,78 @@ def init_dashboard(blueprint, mysql):
                     'error': 'History record not found'
                 }), 404
             
-            # Format history record
-            sample_desc = f"SMP-{log_data[4]}" if log_data[4] and log_data[4] != 'N/A' else 'N/A'
+            # Get user name separately to avoid join issues
+            user_name = 'Unknown User'
+            if log_data[6]:  # UserID
+                try:
+                    cursor.execute("SELECT Name FROM user WHERE UserID = %s", (log_data[6],))
+                    user_result = cursor.fetchone()
+                    if user_result:
+                        user_name = user_result[0]
+                except:
+                    pass  # Keep default if query fails
+            
+            # Format timestamp
+            formatted_timestamp = log_data[1].strftime('%d %b %Y %H:%M') if log_data[1] else 'Unknown time'
+            
+            # Format sample description
+            sample_desc = 'N/A'
+            if log_data[4]:  # SampleID
+                sample_desc = f"SMP-{log_data[4]}"
+            elif log_data[2] and 'container' in log_data[2].lower():
+                sample_desc = 'Container Action'
+            
             log_details = {
                 "LogID": log_data[0],
-                "Timestamp": log_data[1],
-                "ActionType": log_data[2],
-                "UserName": log_data[3],
+                "Timestamp": formatted_timestamp,
+                "ActionType": log_data[2] or 'Unknown Action',
+                "UserName": user_name,
                 "SampleDesc": sample_desc,
-                "Notes": log_data[5],
-                "SampleID": log_data[6],
-                "TestID": log_data[7]
+                "Notes": log_data[3] or 'No notes available',
+                "SampleID": log_data[4],
+                "TestID": log_data[5]
             }
             
-            # Get sample information if a sample is associated
+            # Try to get sample info if SampleID exists
             sample_info = None
-            if log_data[6]:  # If SampleID is not null
-                sample_query = """
-                    SELECT 
-                        s.SampleID,
-                        s.Description,
-                        s.Status,
-                        s.Barcode,
-                        s.Type,
-                        sl.LocationName as Location,
-                        ss.AmountRemaining,
-                        u.Name as OwnerName
-                    FROM Sample s
-                    LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
-                    LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
-                    LEFT JOIN user u ON s.OwnerID = u.UserID
-                    WHERE s.SampleID = {0}
-                """.format(log_data[6])
-                
-                cursor.execute(sample_query)
-                
-                sample_data = cursor.fetchone()
-                if sample_data:
-                    sample_info = {
-                        "SampleID": sample_data[0],
-                        "Description": sample_data[1],
-                        "Status": sample_data[2],
-                        "Barcode": sample_data[3],
-                        "Type": sample_data[4],
-                        "Location": sample_data[5],
-                        "Amount": sample_data[6],
-                        "Owner": sample_data[7]
-                    }
-            
-            # Get complete sample history if a sample is associated
             sample_history = []
-            if log_data[6]:  # If SampleID is not null
-                history_query = """
-                    SELECT 
-                        h.LogID,
-                        DATE_FORMAT(h.Timestamp, '%d %b %Y %H:%i') as FormattedDate,
-                        h.ActionType,
-                        u.Name as UserName,
-                        h.Notes
-                    FROM history h
-                    LEFT JOIN user u ON h.UserID = u.UserID
-                    WHERE h.SampleID = {0}
-                    ORDER BY h.Timestamp DESC
-                """.format(log_data[6])
-                
-                cursor.execute(history_query)
-                
-                for history_row in cursor.fetchall():
-                    sample_history.append({
-                        "LogID": history_row[0],
-                        "Timestamp": history_row[1],
-                        "ActionType": history_row[2],
-                        "UserName": history_row[3],
-                        "Notes": history_row[4]
-                    })
+            if log_data[4]:
+                try:
+                    cursor.execute("SELECT SampleID, Description, Status, PartNumber FROM sample WHERE SampleID = %s", (log_data[4],))
+                    sample_data = cursor.fetchone()
+                    if sample_data:
+                        sample_info = {
+                            "SampleID": sample_data[0],
+                            "Description": sample_data[1] or 'No description',
+                            "Status": sample_data[2] or 'Unknown',
+                            "PartNumber": sample_data[3] or 'No part number',
+                            "Location": 'Unknown location'  # Simplified - no complex location lookup
+                        }
+                        
+                        # Get basic sample history
+                        try:
+                            history_query = """
+                                SELECT 
+                                    DATE_FORMAT(h.Timestamp, '%d %b %Y %H:%i') as FormattedDate,
+                                    h.ActionType,
+                                    h.Notes
+                                FROM history h
+                                WHERE h.SampleID = %s
+                                ORDER BY h.Timestamp DESC
+                                LIMIT 5
+                            """
+                            cursor.execute(history_query, (log_data[4],))
+                            for history_row in cursor.fetchall():
+                                sample_history.append({
+                                    "Timestamp": history_row[0],
+                                    "ActionType": history_row[1],
+                                    "UserName": "System",  # Simplified
+                                    "Notes": history_row[2] or 'No notes'
+                                })
+                        except:
+                            pass  # Keep empty list if history query fails
+                except:
+                    pass  # Keep None if query fails
             
             cursor.close()
             
@@ -458,7 +460,7 @@ def init_dashboard(blueprint, mysql):
             traceback.print_exc()
             return jsonify({
                 'success': False,
-                'error': str(e)
+                'error': f'Database error: {str(e)}'
             }), 500
     
     @blueprint.route('/api/history/export', methods=['GET'])

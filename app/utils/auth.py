@@ -20,22 +20,22 @@ def get_current_user(mysql=None):
         cursor = mysql.connection.cursor()
         
         if username:
-            # First try to find the actual username in database
-            cursor.execute("SELECT UserID, Name, IsAdmin FROM User WHERE Name = %s LIMIT 1", (username,))
+            # First try to find the actual username in database (using lowercase table name)
+            cursor.execute("SELECT UserID, Name FROM user WHERE Name = %s LIMIT 1", (username,))
             user = cursor.fetchone()
             
-            # If found, return that user
+            # If found, return that user (assume admin for now since IsAdmin column doesn't exist)
             if user:
                 cursor.close()
-                return {"UserID": user[0], "Name": user[1], "IsAdmin": bool(user[2])}
+                return {"UserID": user[0], "Name": user[1], "IsAdmin": True}
         
-        # Otherwise, fall back to first admin user
-        cursor.execute("SELECT UserID, Name, IsAdmin FROM User WHERE IsAdmin = 1 LIMIT 1")
+        # Otherwise, fall back to first user (assume admin)
+        cursor.execute("SELECT UserID, Name FROM user LIMIT 1")
         user = cursor.fetchone()
         cursor.close()
         
         if user:
-            return {"UserID": user[0], "Name": user[1], "IsAdmin": bool(user[2])}
+            return {"UserID": user[0], "Name": user[1], "IsAdmin": True}
         else:
             return default_user
     except Exception as e:

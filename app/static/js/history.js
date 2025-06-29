@@ -105,18 +105,14 @@ class HistoryManager {
         this.filteredItems = this.allItems.filter(item => {
             let showItem = true;
             
-            // Check search term
+            // Check search term - now searches in all relevant fields
             if (searchTerm) {
-                const sampleDesc = (item.dataset.sample || '').toLowerCase();
+                const searchText = (item.dataset.searchtext || '').toLowerCase();
                 const notes = (item.dataset.notes || '').toLowerCase();
-                const description = (item.dataset.description || '').toLowerCase();
-                const partNumber = (item.dataset.partnumber || '').toLowerCase();
                 const actionType = (item.dataset.action || '').toLowerCase();
                 
-                const matchesSearch = sampleDesc.includes(searchTerm) || 
+                const matchesSearch = searchText.includes(searchTerm) || 
                                     notes.includes(searchTerm) || 
-                                    description.includes(searchTerm) || 
-                                    partNumber.includes(searchTerm) ||
                                     actionType.includes(searchTerm);
                 
                 if (!matchesSearch) {
@@ -260,17 +256,14 @@ class HistoryManager {
     }
 
     loadHistoryDetails(logId) {
-        // Show spinner in modal while loading
         const modal = document.getElementById('historyDetailsModal');
-        const modalActionType = document.getElementById('modal-action-type');
-        const modalTimestamp = document.getElementById('modal-timestamp');
-        
-        if (modalActionType) {
-            modalActionType.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
+        if (!modal) {
+            console.error('History details modal not found');
+            return;
         }
-        if (modalTimestamp) {
-            modalTimestamp.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
-        }
+
+        // Show loading spinners
+        this.showLoadingInModal();
         
         // Show the modal
         const bsModal = new bootstrap.Modal(modal);
@@ -278,7 +271,12 @@ class HistoryManager {
         
         // Make AJAX request to get detailed information
         fetch(`/api/history/details/${logId}`)
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     this.populateModalWithData(data);
@@ -288,19 +286,48 @@ class HistoryManager {
             })
             .catch(error => {
                 console.error('Error loading details:', error);
-                this.showModalError('Failed to load details');
+                this.showModalError(`Failed to load details: ${error.message}`);
             });
     }
 
+    showLoadingInModal() {
+        const loadingSpinner = '<div class="spinner-border spinner-border-sm" role="status" aria-label="Loading..."></div>';
+        const elements = [
+            'modal-action-type',
+            'modal-timestamp', 
+            'modal-user',
+            'modal-notes',
+            'modal-sample-id',
+            'modal-sample-desc',
+            'modal-sample-partnumber',
+            'modal-sample-status',
+            'modal-sample-location'
+        ];
+
+        elements.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.innerHTML = loadingSpinner;
+            }
+        });
+
+        // Clear the history table
+        const historyTable = document.getElementById('modal-sample-history');
+        if (historyTable) {
+            historyTable.innerHTML = '<tr><td colspan="4" class="text-center">Loading...</td></tr>';
+        }
+    }
+
     populateModalWithData(data) {
-        // Fill modal with data
+        // Fill modal with data - with fallbacks for missing data
         const elements = {
-            'modal-action-type': data.details.ActionType,
-            'modal-timestamp': data.details.Timestamp,
-            'modal-user': data.details.UserName,
-            'modal-notes': data.details.Notes,
-            'modal-sample-id': data.details.SampleDesc,
-            'modal-sample-desc': data.sample_info?.Description || 'N/A',
+            'modal-action-type': data.details?.ActionType || 'Unknown Action',
+            'modal-timestamp': data.details?.Timestamp || 'Unknown Time',
+            'modal-user': data.details?.UserName || 'Unknown User',
+            'modal-notes': data.details?.Notes || 'No notes available',
+            'modal-sample-id': data.sample_info?.SampleID ? `SMP-${data.sample_info.SampleID}` : 'N/A',
+            'modal-sample-desc': data.sample_info?.Description || 'No sample information available',
+            'modal-sample-partnumber': data.sample_info?.PartNumber || 'No part number',
             'modal-sample-status': data.sample_info?.Status || 'N/A',
             'modal-sample-location': data.sample_info?.Location || 'N/A'
         };
@@ -312,21 +339,14 @@ class HistoryManager {
             }
         });
 
-        // Update the View Sample button
+        // Hide the View Sample button for now since the route doesn't exist
         const viewSampleBtn = document.getElementById('viewSampleBtn');
         if (viewSampleBtn) {
-            if (data.sample_info?.SampleID) {
-                viewSampleBtn.style.display = '';
-                viewSampleBtn.onclick = () => {
-                    window.location.href = `/samples/${data.sample_info.SampleID}`;
-                };
-            } else {
-                viewSampleBtn.style.display = 'none';
-            }
+            viewSampleBtn.style.display = 'none';
         }
 
         // Fill sample history table
-        this.populateHistoryTable(data.sample_history);
+        this.populateHistoryTable(data.sample_history || []);
     }
 
     populateHistoryTable(sampleHistory) {
@@ -339,22 +359,28 @@ class HistoryManager {
             sampleHistory.forEach(historyItem => {
                 const row = document.createElement('tr');
                 
-                const cells = [
-                    historyItem.Timestamp,
-                    `<span class="badge ${historyItem.ActionType.toLowerCase()}">${historyItem.ActionType}</span>`,
-                    historyItem.UserName,
-                    historyItem.Notes
-                ];
+                // Date cell
+                const dateCell = document.createElement('td');
+                dateCell.textContent = historyItem.Timestamp;
+                row.appendChild(dateCell);
                 
-                cells.forEach((cellContent, index) => {
-                    const cell = document.createElement('td');
-                    if (index === 1) { // Action type cell with badge
-                        cell.innerHTML = cellContent;
-                    } else {
-                        cell.textContent = cellContent;
-                    }
-                    row.appendChild(cell);
-                });
+                // Action cell with badge
+                const actionCell = document.createElement('td');
+                const actionBadge = document.createElement('span');
+                actionBadge.className = `badge ${historyItem.ActionType.toLowerCase().replace(/\s+/g, '-')}`;
+                actionBadge.textContent = historyItem.ActionType;
+                actionCell.appendChild(actionBadge);
+                row.appendChild(actionCell);
+                
+                // User cell
+                const userCell = document.createElement('td');
+                userCell.textContent = historyItem.UserName;
+                row.appendChild(userCell);
+                
+                // Notes cell
+                const notesCell = document.createElement('td');
+                notesCell.textContent = historyItem.Notes;
+                row.appendChild(notesCell);
                 
                 historyTable.appendChild(row);
             });
@@ -362,19 +388,45 @@ class HistoryManager {
             const row = document.createElement('tr');
             const cell = document.createElement('td');
             cell.colSpan = 4;
-            cell.textContent = 'No history available for this sample';
-            cell.className = 'text-center';
+            cell.textContent = 'No sample history found';
+            cell.className = 'text-center text-muted';
             row.appendChild(cell);
             historyTable.appendChild(row);
         }
     }
 
     showModalError(message) {
-        const modalActionType = document.getElementById('modal-action-type');
-        const modalNotes = document.getElementById('modal-notes');
-        
-        if (modalActionType) modalActionType.textContent = 'Error';
-        if (modalNotes) modalNotes.textContent = message;
+        // Clear all fields and show error message
+        const elements = {
+            'modal-action-type': 'Error',
+            'modal-timestamp': 'N/A',
+            'modal-user': 'N/A',
+            'modal-notes': message,
+            'modal-sample-id': 'N/A',
+            'modal-sample-desc': 'Error loading information',
+            'modal-sample-partnumber': 'N/A',
+            'modal-sample-status': 'N/A',
+            'modal-sample-location': 'N/A'
+        };
+
+        Object.entries(elements).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = value;
+            }
+        });
+
+        // Hide the View Sample button
+        const viewSampleBtn = document.getElementById('viewSampleBtn');
+        if (viewSampleBtn) {
+            viewSampleBtn.style.display = 'none';
+        }
+
+        // Clear the history table
+        const historyTable = document.getElementById('modal-sample-history');
+        if (historyTable) {
+            historyTable.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading history</td></tr>';
+        }
     }
 }
 

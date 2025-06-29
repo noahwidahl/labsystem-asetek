@@ -62,7 +62,9 @@
                          data-user="{{ item.UserName | default('', true) }}"
                          data-notes="{{ item.Notes | default('', true) }}"
                          data-description="{{ item.SampleDescription | default('', true) }}"
-                         data-partnumber="{{ item.SamplePartNumber | default('', true) }}">
+                         data-partnumber="{{ item.SamplePartNumber | default('', true) }}"
+                         data-sampleid="{{ item.SampleID | default('', true) }}"
+                         data-searchtext="{{ (((item.SampleDesc | default('', true)) | string) + ' ' + ((item.SampleID | default('', true)) | string) + ' ' + ((item.SamplePartNumber | default('', true)) | string) + ' ' + ((item.SampleDescription | default('', true)) | string)) | trim }}">
                         <div class="custody-timeline">
                             <div class="timeline-icon action-{{ item.ActionType|lower }}">
                                 {% if item.ActionType == "Received" %}
@@ -172,6 +174,10 @@
                                 <tr>
                                     <th>Description:</th>
                                     <td id="modal-sample-desc"></td>
+                                </tr>
+                                <tr>
+                                    <th>Part Number:</th>
+                                    <td id="modal-sample-partnumber"></td>
                                 </tr>
                                 <tr>
                                     <th>Current Status:</th>
