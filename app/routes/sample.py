@@ -318,7 +318,7 @@ def init_sample(blueprint, mysql):
                 }), 400
             
             # Get current user
-            current_user = get_current_user()
+            current_user = get_current_user(mysql)
             user_id = current_user['UserID']
             
             # Create the sample via service
@@ -335,7 +335,7 @@ def init_sample(blueprint, mysql):
     def delete_sample(sample_id):
         try:
             # Get current user
-            current_user = get_current_user()
+            current_user = get_current_user(mysql)
             user_id = current_user['UserID']
             
             # First remove any ContainerSample links
@@ -814,7 +814,7 @@ def init_sample(blueprint, mysql):
             user_id = data.get('userId')
             if not user_id:
                 # Try to get current user
-                current_user = get_current_user()
+                current_user = get_current_user(mysql)
                 user_id = current_user['UserID']
                 
             if not user_id:
@@ -825,7 +825,7 @@ def init_sample(blueprint, mysql):
             
             try:
                 # Begin transaction
-                cursor.execute("START TRANSACTION")
+                mysql.connection.autocommit(False)
                 
                 # Get current amount from storage
                 cursor.execute("""
@@ -838,7 +838,8 @@ def init_sample(blueprint, mysql):
                 storage_result = cursor.fetchone()
                 
                 if not storage_result:
-                    cursor.execute("ROLLBACK")
+                    mysql.connection.rollback()
+                    mysql.connection.autocommit(True)
                     return jsonify({
                         'success': False,
                         'error': 'No available storage for this sample'
@@ -849,7 +850,8 @@ def init_sample(blueprint, mysql):
                 disposal_amount = int(data['amount'])
                 
                 if disposal_amount > amount_remaining:
-                    cursor.execute("ROLLBACK")
+                    mysql.connection.rollback()
+                    mysql.connection.autocommit(True)
                     return jsonify({
                         'success': False,
                         'error': f'Requested amount ({disposal_amount}) exceeds available amount ({amount_remaining})'
@@ -955,7 +957,8 @@ def init_sample(blueprint, mysql):
                 ))
                 
                 # Commit transaction
-                cursor.execute("COMMIT")
+                mysql.connection.commit()
+                mysql.connection.autocommit(True)
                 
                 return jsonify({
                     'success': True,
@@ -964,7 +967,8 @@ def init_sample(blueprint, mysql):
                 
             except Exception as tx_error:
                 # Rollback transaction on error
-                cursor.execute("ROLLBACK")
+                mysql.connection.rollback()
+                mysql.connection.autocommit(True)
                 raise tx_error
                 
             finally:
@@ -1139,7 +1143,7 @@ def init_sample(blueprint, mysql):
                 }), 400
                 
             # Get current user
-            current_user = get_current_user()
+            current_user = get_current_user(mysql)
             user_id = current_user['UserID']
             
             cursor = mysql.connection.cursor()
@@ -1167,14 +1171,14 @@ def init_sample(blueprint, mysql):
                 sample_result = cursor.fetchone()
                 
                 if not sample_result:
-                    cursor.execute("ROLLBACK")
+                    mysql.connection.rollback()
                     return jsonify({
                         'success': False,
                         'error': f'Sample with ID {sample_id} not found'
                     }), 404
                     
                 if sample_result[1] == 'Disposed':
-                    cursor.execute("ROLLBACK")
+                    mysql.connection.rollback()
                     return jsonify({
                         'success': False,
                         'error': 'Cannot move a disposed sample'
@@ -1346,7 +1350,7 @@ def init_sample(blueprint, mysql):
                 ))
                 
                 # Commit transaction
-                cursor.execute("COMMIT")
+                mysql.connection.commit()
                 
                 return jsonify({
                     'success': True,
@@ -1358,7 +1362,7 @@ def init_sample(blueprint, mysql):
                 
             except Exception as tx_error:
                 # Rollback on error
-                cursor.execute("ROLLBACK")
+                mysql.connection.rollback()
                 raise tx_error
                 
             finally:
@@ -1381,7 +1385,7 @@ def init_sample(blueprint, mysql):
         """
         try:
             # Get current user
-            current_user = get_current_user()
+            current_user = get_current_user(mysql)
             user_id = current_user['UserID']
             
             cursor = mysql.connection.cursor()
@@ -1395,14 +1399,14 @@ def init_sample(blueprint, mysql):
                 sample_result = cursor.fetchone()
                 
                 if not sample_result:
-                    cursor.execute("ROLLBACK")
+                    mysql.connection.rollback()
                     return jsonify({
                         'success': False,
                         'error': f'Sample with ID {sample_id} not found'
                     }), 404
                     
                 if sample_result[1] == 'Disposed':
-                    cursor.execute("ROLLBACK")
+                    mysql.connection.rollback()
                     return jsonify({
                         'success': False,
                         'error': 'Cannot modify a disposed sample'
@@ -1422,7 +1426,7 @@ def init_sample(blueprint, mysql):
                 container_results = cursor.fetchall()
                 
                 if not container_results:
-                    cursor.execute("ROLLBACK")
+                    mysql.connection.rollback()
                     return jsonify({
                         'success': False,
                         'error': 'Sample is not currently in any container'
@@ -1460,7 +1464,7 @@ def init_sample(blueprint, mysql):
                 ))
                 
                 # Commit transaction
-                cursor.execute("COMMIT")
+                mysql.connection.commit()
                 
                 return jsonify({
                     'success': True,
@@ -1471,7 +1475,7 @@ def init_sample(blueprint, mysql):
                 
             except Exception as tx_error:
                 # Rollback on error
-                cursor.execute("ROLLBACK")
+                mysql.connection.rollback()
                 raise tx_error
                 
             finally:
@@ -1623,7 +1627,7 @@ def init_sample(blueprint, mysql):
             supplier_notes = data.get('notes', '').strip()
             
             # Get current user for logging
-            current_user = get_current_user()
+            current_user = get_current_user(mysql)
             user_id = current_user['UserID']
             
             cursor = mysql.connection.cursor()

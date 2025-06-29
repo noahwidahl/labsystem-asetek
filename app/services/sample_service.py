@@ -170,7 +170,7 @@ class SampleService:
     
     def create_sample(self, sample_data, user_id):
         print(f"DEBUG: create_sample called with data: {sample_data}")
-        with self.db.transaction(isolation_level="REPEATABLE READ") as cursor:
+        with self.db.transaction() as cursor:
             # Handling supplier
             supplier_id = None
             if sample_data.get('supplier') and sample_data.get('supplier').strip():
