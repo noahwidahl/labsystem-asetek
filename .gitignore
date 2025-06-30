@@ -18,7 +18,13 @@ node_modules/
 .vscode/
 .DS_Store
 Thumbs.db
-package-lock.json
-package.json
-package-lock.json
-package.json
+
+# Windows batch files
+*.bat
+
+# USB-relaterede filer
+.env.usb
+
+# Backup filer
+BACKUP_*.tar.gz
+*.tar.gz
