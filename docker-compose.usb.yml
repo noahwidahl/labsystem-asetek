@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: labsystem_mysql_usb
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data_usb:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./database/usb_init.sql:/docker-entrypoint-initdb.d/usb_init.sql:ro
+    networks:
+      - labsystem_network
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password --innodb-buffer-pool-size=256M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile.usb
+    container_name: labsystem_app_usb
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=False
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=${MYSQL_DATABASE}
+      - DB_USER=${MYSQL_USER}
+      - DB_PASSWORD=${MYSQL_PASSWORD}
+      - SECRET_KEY=${SECRET_KEY}
+      - USB_DEPLOYMENT=true
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./app:/app/app:ro
+      - ./static:/app/static:ro
+      - ./templates:/app/templates:ro
+      - usb_uploads:/app/uploads
+      - usb_logs:/app/logs
+    networks:
+      - labsystem_network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      timeout: 10s
+      retries: 3
+      interval: 30s
+
+volumes:
+  mysql_data_usb:
+    driver: local
+    name: labsystem_mysql_data_usb
+  usb_uploads:
+    driver: local
+    name: labsystem_uploads_usb
+  usb_logs:
+    driver: local
+    name: labsystem_logs_usb
+
+networks:
+  labsystem_network:
+    driver: bridge
+    name: labsystem_network_usb
