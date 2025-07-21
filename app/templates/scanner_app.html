@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LabSystem Scanner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .scanner-zone {
+            background: rgba(255,255,255,0.1);
+            border: 3px dashed rgba(255,255,255,0.5);
+            border-radius: 15px;
+            padding: 40px;
+            margin: 20px 0;
+            backdrop-filter: blur(10px);
+        }
+        .scan-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            border: none;
+            border-radius: 8px;
+            text-align: center;
+            background: rgba(255,255,255,0.9);
+            color: #333;
+            margin: 20px 0;
+        }
+        .result-area {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            min-height: 100px;
+            text-align: left;
+        }
+        .scan-result {
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #4CAF50;
+        }
+        .scan-error {
+            background: rgba(255,0,0,0.2);
+            border-left: 4px solid #f44336;
+        }
+        .status {
+            font-size: 24px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .ready { color: #4CAF50; }
+        .scanning { color: #FF9800; }
+        .error { color: #f44336; }
+        
+        .buttons {
+            margin: 20px 0;
+        }
+        .btn {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.5);
+            color: white;
+            padding: 12px 24px;
+            margin: 0 10px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+        }
+        .btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 LabSystem Scanner</h1>
+        <div class="status ready" id="status">Ready to Scan</div>
+        
+        <div class="scanner-zone">
+            <h2>📱 Scan Zone</h2>
+            <p>Point scanner at barcode and pull trigger</p>
+            <input type="text" id="scanInput" class="scan-input" 
+                   placeholder="Barcode appears here..." 
+                   autocomplete="off" autofocus>
+        </div>
+        
+        <div class="buttons">
+            <button class="btn" onclick="clearResults()">🗑️ Clear</button>
+            <button class="btn" onclick="testScan()">🧪 Test</button>
+            <button class="btn" onclick="goToLabSystem()">🏠 LabSystem</button>
+        </div>
+        
+        <div class="result-area" id="results">
+            <p><em>Scan results appear here...</em></p>
+        </div>
+    </div>
+
+    <script>
+        const scanInput = document.getElementById('scanInput');
+        const results = document.getElementById('results');
+        const status = document.getElementById('status');
+        
+        let scanTimeout;
+        
+        // Keep input focused
+        function keepFocus() {
+            scanInput.focus();
+        }
+        
+        // Focus input when page loads and on clicks
+        window.addEventListener('load', keepFocus);
+        document.addEventListener('click', () => setTimeout(keepFocus, 100));
+        
+        // Handle scan input
+        scanInput.addEventListener('input', function(e) {
+            clearTimeout(scanTimeout);
+            
+            const barcode = e.target.value.trim();
+            
+            if (barcode.length > 0) {
+                setStatus('scanning', '📡 Processing...');
+                
+                // Wait for complete scan (scanner usually sends all at once)
+                scanTimeout = setTimeout(() => {
+                    processScan(barcode);
+                }, 100);
+            }
+        });
+        
+        // Handle Enter key (scanner suffix)
+        scanInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                clearTimeout(scanTimeout);
+                const barcode = e.target.value.trim();
+                if (barcode) {
+                    processScan(barcode);
+                }
+            }
+        });
+        
+        async function processScan(barcode) {
+            try {
+                addResult(`🔍 Scanning: ${barcode}`, 'info');
+                
+                // Send to LabSystem API
+                const response = await fetch('/api/scanner/data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        barcode: barcode,
+                        timestamp: new Date().toISOString(),
+                        device: 'Zebra MC330M',
+                        source: 'scanner_app'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    setStatus('ready', '✅ Found!');
+                    addResult(`✅ Success: ${result.message}`, 'success');
+                    
+                    // Show details
+                    if (result.sample) {
+                        addResult(`📦 Sample: ${result.sample.SampleIDFormatted} - ${result.sample.Description}`, 'success');
+                        addResult(`📍 Location: ${result.sample.LocationName} | Amount: ${result.sample.Amount} ${result.sample.UnitName}`, 'info');
+                    }
+                    
+                } else {
+                    setStatus('ready', '❌ Not Found');
+                    addResult(`❌ Not Found: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                setStatus('error', '⚠️ Error');
+                addResult(`⚠️ Error: ${error.message}`, 'error');
+            }
+            
+            // Clear input and focus
+            scanInput.value = '';
+            setTimeout(keepFocus, 100);
+        }
+        
+        function setStatus(type, text) {
+            status.className = `status ${type}`;
+            status.textContent = text;
+            
+            // Auto-reset to ready
+            if (type !== 'ready') {
+                setTimeout(() => setStatus('ready', 'Ready to Scan'), 3000);
+            }
+        }
+        
+        function addResult(text, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `scan-result ${type === 'error' ? 'scan-error' : ''}`;
+            resultDiv.innerHTML = `<strong>${timestamp}:</strong> ${text}`;
+            
+            results.insertBefore(resultDiv, results.firstChild);
+            
+            // Keep only last 10 results
+            while (results.children.length > 11) {
+                results.removeChild(results.lastChild);
+            }
+        }
+        
+        function clearResults() {
+            results.innerHTML = '<p><em>Scan results appear here...</em></p>';
+            scanInput.value = '';
+            keepFocus();
+        }
+        
+        function testScan() {
+            scanInput.value = 'TEST123';
+            processScan('TEST123');
+        }
+        
+        function goToLabSystem() {
+            window.location.href = '/';
+        }
+        
+        // Auto-clear old results
+        setInterval(() => {
+            if (results.children.length > 10) {
+                while (results.children.length > 6) {
+                    results.removeChild(results.lastChild);
+                }
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

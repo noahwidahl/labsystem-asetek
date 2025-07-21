@@ -509,7 +509,7 @@ def init_test(blueprint, mysql):
                                 'TestName': test_data[2],
                                 'TestBarcode': test_barcode,
                                 'SampleIdentifier': added_sample['identifier'],
-                                'show_test_print_confirmation': True
+                                'show_test_print_confirmation': False
                             }
                     finally:
                         cursor.close()

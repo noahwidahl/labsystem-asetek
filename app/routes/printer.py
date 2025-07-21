@@ -315,34 +315,28 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 def print_to_device(label_content, printer_config):
     """
-    Send label content to the configured printer device.
+    Send label content to Brother QL printer using custom utility.
     """
-    app_path = printer_config.get('app_path')
+    import os
+    from app.utils.brother_printer import print_label_simple
     
-    if not app_path:
-        return {
-            'status': 'error', 
-            'message': f'Printer ikke konfigureret. Sæt {printer_config["app_path_env"]} miljøvariabel'
-        }
-    
-    # Create temporary file with label content
-    with tempfile.NamedTemporaryFile(suffix='.txt', delete=False, mode='w', encoding='utf-8') as temp_file:
-        temp_file_path = temp_file.name
-        temp_file.write(label_content)
+    # Get printer IP from environment variable
+    printer_ip = os.getenv('BROTHER_PRINTER_IP', '192.168.1.142')
     
     try:
-        # Execute printer application
-        process = subprocess.Popen([app_path, temp_file_path], 
-                                 stdout=subprocess.PIPE, 
-                                 stderr=subprocess.PIPE)
-        stdout, stderr = process.communicate(timeout=30)
+        # Use custom printer utility
+        result = print_label_simple(label_content, printer_ip)
         
-        if process.returncode != 0:
-            error_message = stderr.decode('utf-8', errors='ignore')
-            current_app.logger.error(f"Printer fejl: {error_message}")
+        if result['status'] == 'success':
+            return {
+                'status': 'success', 
+                'message': f'Label printed successfully: {result["message"]}'
+            }
+        else:
+            current_app.logger.error(f"Printer error: {result['message']}")
             return {
                 'status': 'error', 
-                'message': f'Fejl ved udskrivning: {error_message}'
+                'message': result['message']
             }
         
         return {
@@ -742,15 +736,12 @@ def print_label():
             'message': f'Print request processing error: {str(e)}'
         }), 500
 
-@printer_bp.route('/api/print/test', methods=['POST'])
+@printer_bp.route('/api/print/test', methods=['POST', 'GET'])
 def test_print():
-    """
-    Test endpoint for printing a test label on the default printer.
-    """
+    """Test printing - will actually print to Brother QL-810W"""
     try:
         # Get printer type from request or default to sample printer
-        data = request.get_json() or {}
-        label_type = data.get('label_type', 'sample')
+        label_type = 'sample'  # Default for test
         
         test_data = {
             'label_type': label_type,
@@ -766,13 +757,16 @@ def test_print():
             }
         }
         
-        # Get printer configuration
+        # Get printer configuration - use default if not configured
         printer_config = get_printer_config(label_type)
         if not printer_config:
-            return jsonify({
-                'status': 'error', 
-                'message': f'No printer configured for test. Check environment variables.'
-            }), 500
+            # Create a basic config for testing
+            printer_config = {
+                'description': 'Brother QL-810W Test Configuration',
+                'app_path': 'enabled',
+                'printer_type': 'brother_ql810w',
+                'format': 'compact'
+            }
         
         # Generate test barcode
         test_data['data']['Barcode'] = generate_barcode('test', test_data['data'])
@@ -788,6 +782,59 @@ def test_print():
         return jsonify({
             'status': 'error', 
             'message': f'Test print error: {str(e)}'
+        }), 500
+
+@printer_bp.route('/api/print/simulate', methods=['POST', 'GET'])
+def simulate_print():
+    """Simulate printing without actually sending to printer - for testing without labels."""
+    try:
+        # Get printer type from request or default to sample printer
+        label_type = 'sample'  # Default for test
+        
+        test_data = {
+            'label_type': label_type,
+            'data': {
+                'message': 'This is a SIMULATED test label',
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'SampleIDFormatted': 'TEST-001',
+                'Description': 'Test Sample for Printer (SIMULATION)',
+                'PartNumber': 'TEST-PART-001',
+                'Type': 'Test',
+                'Amount': '1',
+                'UnitName': 'pcs'
+            }
+        }
+        
+        # Get printer configuration - use default if not configured
+        printer_config = get_printer_config(label_type)
+        if not printer_config:
+            # Create a basic config for testing
+            printer_config = {
+                'description': 'Brother QL-810W Test Configuration (SIMULATION)',
+                'app_path': 'enabled',
+                'printer_type': 'brother_ql810w',
+                'format': 'compact'
+            }
+        
+        # Generate test barcode
+        test_data['data']['Barcode'] = generate_barcode('test', test_data['data'])
+        
+        # Format label content but don't print
+        label_content = format_label_enhanced('test', test_data['data'], printer_config)
+        
+        # Simulate successful printing
+        return jsonify({
+            'status': 'success',
+            'message': 'SIMULATED: Label would be printed successfully',
+            'label_content': label_content,
+            'printer_config': printer_config['description']
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Test simulate error: {str(e)}")
+        return jsonify({
+            'status': 'error', 
+            'message': f'Test simulate error: {str(e)}'
         }), 500
 
 @printer_bp.route('/api/print/config', methods=['GET'])

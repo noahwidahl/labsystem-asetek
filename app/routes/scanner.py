@@ -20,7 +20,7 @@ def lookup_sample_by_barcode(barcode):
     cursor = mysql.connection.cursor()
     
     try:
-        # First try: Direct sample barcode lookup
+        # First try: EXACT sample barcode lookup (strict matching)
         cursor.execute("""
             SELECT s.SampleID, s.Barcode, s.PartNumber, s.Description, s.Status,
                    s.Amount, s.UnitID, s.OwnerID, s.ReceptionID, 
@@ -36,7 +36,7 @@ def lookup_sample_by_barcode(barcode):
             LEFT JOIN containersample cs ON ss.StorageID = cs.SampleStorageID
             LEFT JOIN container c ON cs.ContainerID = c.ContainerID
             LEFT JOIN user receiver ON r.UserID = receiver.UserID
-            WHERE s.Barcode = %s
+            WHERE s.Barcode = %s AND s.Barcode IS NOT NULL AND s.Barcode != ''
         """, (barcode,))
         
         result = cursor.fetchone()
@@ -64,7 +64,7 @@ def lookup_sample_by_barcode(barcode):
             }
             return sample_result
         
-        # Second try: Serial number lookup (for unique samples)
+        # Second try: EXACT serial number lookup (strict matching)
         cursor.execute("""
             SELECT s.SampleID, s.Barcode, s.PartNumber, s.Description, s.Status,
                    s.Amount, s.UnitID, s.OwnerID, s.ReceptionID, sn.SerialNumber,
@@ -81,15 +81,14 @@ def lookup_sample_by_barcode(barcode):
             LEFT JOIN containersample cs ON ss.StorageID = cs.SampleStorageID
             LEFT JOIN container c ON cs.ContainerID = c.ContainerID
             LEFT JOIN user receiver ON r.UserID = receiver.UserID
-            WHERE sn.SerialNumber = %s
+            WHERE sn.SerialNumber = %s AND sn.SerialNumber IS NOT NULL AND sn.SerialNumber != ''
         """, (barcode,))
         
         result = cursor.fetchone()
         if result:
             return format_sample_result(result, 'serial_number')
         
-        # Third try: Container barcode lookup (find samples in container)
-        # Support both direct barcode match and new CNT format
+        # Third try: EXACT container barcode lookup (strict matching)
         cursor.execute("""
             SELECT c.ContainerID, c.Description, c.Barcode, c.ContainerTypeID,
                    sl.LocationName, COUNT(ss.SampleID) as SampleCount,
@@ -99,7 +98,8 @@ def lookup_sample_by_barcode(barcode):
             LEFT JOIN samplestorage ss ON cs.SampleStorageID = ss.StorageID
             LEFT JOIN storagelocation sl ON c.LocationID = sl.LocationID
             LEFT JOIN containertype ct ON c.ContainerTypeID = ct.ContainerTypeID
-            WHERE c.Barcode = %s OR c.Barcode LIKE CONCAT('CNT-', c.ContainerID) OR %s = CONCAT('CNT-', c.ContainerID)
+            WHERE (c.Barcode = %s AND c.Barcode IS NOT NULL AND c.Barcode != '') 
+               OR (%s = CONCAT('CNT-', c.ContainerID))
             GROUP BY c.ContainerID
         """, (barcode, barcode))
         
@@ -450,4 +450,185 @@ def register_serial_number():
         return jsonify({
             'status': 'error',
             'message': f'Serial number registration error: {str(e)}'
+        }), 500
+
+@scanner_bp.route('/api/scanner/simulate', methods=['POST', 'GET'])
+def simulate_scan():
+    """Simulate scanning without actual barcode - for testing scanner integration."""
+    try:
+        # Get barcode from request or use default
+        if request.method == 'POST' and request.is_json:
+            data = request.get_json() or {}
+            barcode = data.get('barcode', 'TEST123456')
+        else:
+            barcode = request.args.get('barcode', 'TEST123456')
+        
+        current_app.logger.info(f"SIMULATED scan data: {barcode}")
+        
+        # Simulate database lookup
+        simulated_result = {
+            'type': 'sample',
+            'lookup_type': 'barcode',
+            'SampleID': 123,
+            'SampleIDFormatted': 'SMP-123',
+            'Barcode': barcode,
+            'PartNumber': 'PART-456',
+            'Description': 'Simulated Test Sample',
+            'Status': 'In Storage',
+            'Amount': 5,
+            'SerialNumber': None,
+            'ReceivedDate': '2024-01-15',
+            'TrackingNumber': 'TRK-789',
+            'SupplierName': 'Test Supplier',
+            'UnitName': 'pcs',
+            'LocationName': 'Storage-A1',
+            'ContainerID': None,
+            'ContainerDescription': None,
+            'ReceivedBy': 'Test User'
+        }
+        
+        # Log simulated scan (but don't save to database)
+        current_app.logger.info(f"SIMULATED scan result: {simulated_result}")
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'SIMULATED: Sample found by barcode scan',
+            'result_type': 'sample',
+            'lookup_type': 'barcode',
+            'sample': simulated_result,
+            'barcode': barcode,
+            'simulation': True
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Scanner simulation error: {str(e)}")
+        return jsonify({
+            'status': 'error', 
+            'message': f'Scanner simulation error: {str(e)}'
+        }), 500
+
+@scanner_bp.route('/api/scanner/test-barcodes', methods=['GET'])
+def get_test_barcodes():
+    """Get some real barcodes from database for testing scanner."""
+    try:
+        cursor = mysql.connection.cursor()
+        
+        # Get some sample barcodes
+        cursor.execute("""
+            SELECT SampleID, Barcode, Description, PartNumber
+            FROM sample 
+            WHERE Barcode IS NOT NULL AND Barcode != '' 
+            LIMIT 10
+        """)
+        samples = cursor.fetchall()
+        
+        # Get some container barcodes  
+        cursor.execute("""
+            SELECT ContainerID, Barcode, Description
+            FROM container 
+            WHERE Barcode IS NOT NULL AND Barcode != ''
+            LIMIT 5
+        """)
+        containers = cursor.fetchall()
+        
+        cursor.close()
+        
+        test_barcodes = {
+            'samples': [
+                {
+                    'barcode': row[1], 
+                    'description': f"SMP-{row[0]}: {row[2]} ({row[3] or 'No Part#'})"
+                } 
+                for row in samples
+            ],
+            'containers': [
+                {
+                    'barcode': row[1], 
+                    'description': f"CNT-{row[0]}: {row[2]}"
+                } 
+                for row in containers  
+            ],
+            'test_barcodes': [
+                {'barcode': 'TEST123', 'description': 'Basic test barcode'},
+                {'barcode': '123456789', 'description': 'Numeric test barcode'},
+                {'barcode': 'ABC123DEF', 'description': 'Alphanumeric test'},
+                {'barcode': 'SMP-001', 'description': 'Sample format test'}
+            ]
+        }
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Test barcodes retrieved',
+            'barcodes': test_barcodes
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to get test barcodes: {str(e)}'
+        }), 500
+
+@scanner_bp.route('/scanner-app')
+def scanner_app():
+    """Dedicated scanner app page for Zebra devices."""
+    return render_template('scanner_app.html')
+
+@scanner_bp.route('/scanner-only')
+def scanner_only():
+    """Scanner-only interface - no access to main LabSystem features."""
+    return render_template('scanner_only.html')
+
+@scanner_bp.route('/api/scanner/webhook', methods=['POST'])
+def scanner_webhook():
+    """Webhook endpoint for external scanner apps."""
+    try:
+        # Handle different data formats from old apps
+        content_type = request.headers.get('Content-Type', '')
+        
+        if 'application/json' in content_type:
+            data = request.get_json()
+            barcode = data.get('barcode') or data.get('data') or data.get('scan_data')
+        else:
+            # Handle form data or raw text
+            data = request.form.to_dict() if request.form else {}
+            barcode = (data.get('barcode') or 
+                      data.get('data') or 
+                      request.data.decode('utf-8').strip())
+        
+        if not barcode:
+            return jsonify({
+                'status': 'error',
+                'message': 'No barcode data received'
+            }), 400
+        
+        current_app.logger.info(f"Webhook scan received: {barcode}")
+        
+        # Use the same lookup logic as main scanner endpoint
+        result = lookup_sample_by_barcode(barcode)
+        
+        if not result:
+            log_scan_action(barcode, None)
+            return jsonify({
+                'status': 'not_found',
+                'message': f'Barcode not found: {barcode}',
+                'barcode': barcode
+            }), 404
+        
+        # Log successful scan
+        log_scan_action(barcode, result)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'{result["type"].title()} found by webhook',
+            'result_type': result['type'],
+            'lookup_type': result['lookup_type'],
+            'data': result,
+            'barcode': barcode
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Webhook scanner error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Webhook scanner error: {str(e)}'
         }), 500
