@@ -28,3 +28,4 @@ Thumbs.db
 # Backup filer
 BACKUP_*.tar.gz
 *.tar.gz
+.claude/settings.local.json
