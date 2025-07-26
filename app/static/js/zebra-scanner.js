@@ -8,6 +8,7 @@ class ZebraScanner {
         this.scannerInput = null;
         this.lastScanTime = 0;
         this.scanBuffer = '';
+        this.scannerPaused = false;
         this.init();
     }
 
@@ -18,8 +19,9 @@ class ZebraScanner {
         // Listen for barcode scans
         this.setupScanListener();
         
-        // Add manual test interface
-        this.createTestInterface();
+        // Setup focus management to pause scanner when user is typing in forms
+        this.setupFocusManagement();
+        
     }
 
     createScannerInput() {
@@ -33,12 +35,20 @@ class ZebraScanner {
         
         document.body.appendChild(this.scannerInput);
         
-        // Keep input focused for scanner data
+        // Keep input focused for scanner data - but only when not paused
         this.scannerInput.focus();
         
-        // Refocus if lost
-        document.addEventListener('click', () => {
-            setTimeout(() => this.scannerInput.focus(), 100);
+        // Only refocus on specific non-form clicks
+        document.addEventListener('click', (e) => {
+            // Only refocus if clicking on body, div, span, or other non-interactive elements
+            if (!this.scannerPaused && e.target && 
+                e.target.matches('body, div, span, p, h1, h2, h3, h4, h5, h6, img, .content-section')) {
+                setTimeout(() => {
+                    if (!this.scannerPaused) {
+                        this.scannerInput.focus();
+                    }
+                }, 100);
+            }
         });
     }
 
@@ -46,6 +56,12 @@ class ZebraScanner {
         let scanTimeout;
         
         this.scannerInput.addEventListener('input', (e) => {
+            // If scanner is paused, ignore input
+            if (this.scannerPaused) {
+                e.target.value = '';
+                return;
+            }
+            
             const currentTime = Date.now();
             const inputValue = e.target.value;
             
@@ -63,7 +79,7 @@ class ZebraScanner {
             
             // Wait for end of scan (50ms after last input)
             scanTimeout = setTimeout(() => {
-                if (this.scanBuffer.trim().length > 0) {
+                if (this.scanBuffer.trim().length > 0 && !this.scannerPaused) {
                     this.processScan(this.scanBuffer.trim());
                     this.scanBuffer = '';
                     e.target.value = '';
@@ -73,7 +89,7 @@ class ZebraScanner {
 
         // Handle Enter key (common scanner suffix)
         this.scannerInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !this.scannerPaused) {
                 clearTimeout(scanTimeout);
                 if (this.scanBuffer.trim().length > 0) {
                     this.processScan(this.scanBuffer.trim());
@@ -84,109 +100,10 @@ class ZebraScanner {
         });
     }
 
-    createTestInterface() {
-        // Create test panel for manual barcode entry
-        const testPanel = document.createElement('div');
-        testPanel.innerHTML = `
-            <div id="scanner-test-panel" style="
-                position: fixed;
-                top: 10px;
-                right: 10px;
-                background: white;
-                border: 2px solid #007bff;
-                border-radius: 8px;
-                padding: 15px;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                z-index: 1000;
-                font-family: Arial, sans-serif;
-                max-width: 300px;
-            ">
-                <h4 style="margin: 0 0 10px 0; color: #007bff;">🔍 Scanner Test</h4>
-                <input type="text" id="manual-barcode" placeholder="Enter barcode to test" style="
-                    width: 100%;
-                    padding: 8px;
-                    border: 1px solid #ccc;
-                    border-radius: 4px;
-                    margin-bottom: 10px;
-                    font-size: 14px;
-                ">
-                <button id="test-scan-btn" style="
-                    width: 100%;
-                    padding: 8px;
-                    background: #007bff;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    font-size: 14px;
-                ">Test Scan</button>
-                <div id="scan-result" style="
-                    margin-top: 10px;
-                    padding: 8px;
-                    background: #f8f9fa;
-                    border-radius: 4px;
-                    font-size: 12px;
-                    max-height: 150px;
-                    overflow-y: auto;
-                "></div>
-                <button id="toggle-panel-btn" style="
-                    position: absolute;
-                    top: 5px;
-                    right: 5px;
-                    background: none;
-                    border: none;
-                    font-size: 16px;
-                    cursor: pointer;
-                ">−</button>
-            </div>
-        `;
-        
-        document.body.appendChild(testPanel);
-        
-        // Setup test interface events
-        this.setupTestInterface();
-    }
-
-    setupTestInterface() {
-        const manualInput = document.getElementById('manual-barcode');
-        const testBtn = document.getElementById('test-scan-btn');
-        const toggleBtn = document.getElementById('toggle-panel-btn');
-        const panel = document.getElementById('scanner-test-panel');
-        
-        // Manual test scan
-        testBtn.addEventListener('click', () => {
-            const barcode = manualInput.value.trim();
-            if (barcode) {
-                this.processScan(barcode);
-                manualInput.value = '';
-            }
-        });
-        
-        // Enter key in manual input
-        manualInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                testBtn.click();
-            }
-        });
-        
-        // Toggle panel
-        let isMinimized = false;
-        toggleBtn.addEventListener('click', () => {
-            isMinimized = !isMinimized;
-            const content = panel.children;
-            for (let i = 1; i < content.length - 1; i++) {
-                content[i].style.display = isMinimized ? 'none' : 'block';
-            }
-            toggleBtn.textContent = isMinimized ? '+' : '−';
-            panel.style.height = isMinimized ? 'auto' : 'auto';
-        });
-    }
 
     async processScan(barcode) {
         console.log('Scanner detected barcode:', barcode);
         
-        // Update test interface
-        this.updateTestResult(`🔍 Scanning: ${barcode}...`);
         
         try {
             // Send to your LabSystem API
@@ -204,8 +121,6 @@ class ZebraScanner {
             
             const result = await response.json();
             
-            // Update test interface
-            this.updateTestResult(`✅ Result: ${result.message}`, result);
             
             // Handle successful scan result
             if (result.status === 'success') {
@@ -216,22 +131,85 @@ class ZebraScanner {
             
         } catch (error) {
             console.error('Scanner API error:', error);
-            this.updateTestResult(`❌ Error: ${error.message}`);
         }
     }
 
-    updateTestResult(message, data = null) {
-        const resultDiv = document.getElementById('scan-result');
-        if (resultDiv) {
-            const timestamp = new Date().toLocaleTimeString();
-            const resultHtml = `
-                <div style="border-bottom: 1px solid #dee2e6; padding: 5px 0;">
-                    <strong>${timestamp}:</strong> ${message}
-                    ${data ? `<br><small><pre>${JSON.stringify(data, null, 2)}</pre></small>` : ''}
-                </div>
-            `;
-            resultDiv.innerHTML = resultHtml + resultDiv.innerHTML;
-        }
+    setupFocusManagement() {
+        // Pause scanner when user focuses on form elements
+        document.addEventListener('focusin', (e) => {
+            const target = e.target;
+            
+            // Check if the focused element is a form input (but not our scanner input)
+            if (target !== this.scannerInput && 
+                target.matches('input, textarea, select, [contenteditable]')) {
+                
+                this.scannerPaused = true;
+                console.log('Scanner paused - user is typing in form field:', target.name || target.id);
+                
+                // Clear scanner buffer when pausing
+                this.scanBuffer = '';
+                this.scannerInput.value = '';
+            }
+        });
+        
+        // Resume scanner when user leaves form elements
+        document.addEventListener('focusout', (e) => {
+            const target = e.target;
+            
+            // If leaving a form element, check if we should resume
+            if (target !== this.scannerInput && 
+                target.matches('input, textarea, select, [contenteditable]')) {
+                
+                setTimeout(() => {
+                    // Only resume if no other form element has focus
+                    const activeElement = document.activeElement;
+                    if (!activeElement || 
+                        activeElement === document.body ||
+                        activeElement === this.scannerInput ||
+                        !activeElement.matches('input, textarea, select, [contenteditable]')) {
+                        
+                        this.scannerPaused = false;
+                        console.log('Scanner resumed - user left form field');
+                        // Only refocus if user isn't actively using another form element
+                        if (activeElement !== this.scannerInput && 
+                            !activeElement.matches('input, textarea, select, [contenteditable]')) {
+                            this.scannerInput.focus();
+                        }
+                    }
+                }, 200); // Longer delay to ensure focus has settled
+            }
+        });
+        
+        // Pause during form submission
+        document.addEventListener('submit', (e) => {
+            this.scannerPaused = true;
+            console.log('Scanner paused during form submission');
+            setTimeout(() => {
+                // Only resume if not in a form field
+                const activeElement = document.activeElement;
+                if (!activeElement.matches('input, textarea, select, [contenteditable]')) {
+                    this.scannerPaused = false;
+                    this.scannerInput.focus();
+                    console.log('Scanner resumed after form submission');
+                }
+            }, 1000);
+        });
+    }
+
+    // Public methods to control scanner
+    enableScanner() {
+        this.scannerPaused = false;
+        this.scannerInput.focus();
+        console.log('Scanner manually enabled');
+    }
+    
+    disableScanner() {
+        this.scannerPaused = true;
+        console.log('Scanner manually disabled');
+    }
+    
+    isEnabled() {
+        return !this.scannerPaused;
     }
 
     handleSuccessfulScan(result) {
@@ -287,10 +265,6 @@ Amount: ${sample.Amount} ${sample.UnitName}
         alert(`Test Sample Found: ${testSample.GeneratedIdentifier} for test ${testSample.TestNo}`);
     }
 
-    // Public method to manually trigger a scan (for testing)
-    testScan(barcode) {
-        this.processScan(barcode);
-    }
 }
 
 // Initialize scanner when page loads

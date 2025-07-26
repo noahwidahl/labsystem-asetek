@@ -464,7 +464,7 @@ class SampleService:
             
             # Handle automatic label printing based on storage option
             print_results = []
-            auto_print_enabled = sample_data.get('auto_print_labels', True)
+            auto_print_enabled = sample_data.get('auto_print_labels', False)
             
             if auto_print_enabled:
                 try:

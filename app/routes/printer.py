@@ -157,14 +157,17 @@ def format_label_enhanced(label_type, data, printer_config):
 ^FO30,320^A0N,14,14^FD{datetime.now().strftime('%d-%m-%Y %H:%M')}^FS
 ^XZ"""
         elif format_type == 'compact':
-            return f"""
-╭─────────────────────────────╮
-│ SAMPLE: {data.get('SampleIDFormatted', ''):<18} │
-│ DESC: {(data.get('Description', ''))[:22]:<22} │
-│ BARCODE: {data.get('Barcode', ''):<17} │ 
-│ PART#: {data.get('PartNumber', ''):<19} │
-│ AMT: {data.get('Amount', '')} {data.get('UnitName', ''):<15} │
-╰─────────────────────────────╯
+            expire_date = data.get('ExpireDate', '')
+            location_name = data.get('LocationName', '')
+            return f"""SAMPLE LABEL
+============
+ID: {data.get('SampleIDFormatted', '')}
+Desc: {data.get('Description', '')}
+Part: {data.get('PartNumber', '')}
+Amt: {data.get('Amount', '')} {data.get('UnitName', '')}
+Exp: {expire_date}
+Loc: {location_name}
+Barcode: {data.get('Barcode', '')}
 """
         else:
             return f"""

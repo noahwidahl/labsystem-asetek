@@ -91,83 +91,33 @@ def try_brother_ql_network(image_path, printer_ip):
         return False, f"brother_ql network error: {str(e)}"
 
 def print_label_simple(text_content, printer_ip="192.168.1.142"):
-    """Simple function to print text as label to Brother printer."""
+    """Simple function to print text as label to Brother printer using brother_ql library."""
     try:
+        from brother_ql.conversion import convert
+        from brother_ql.backends.helpers import send
+        from brother_ql.raster import BrotherQLRaster
+        from PIL import Image
+        import tempfile
+        import os
+        
         # Create label image
         img = create_label_image(text_content)
         
-        # Use Windows print spooler directly - skip brother_ql due to compatibility issues
-        return print_via_windows_spooler_direct(img)
+        # Create raster data using brother_ql
+        qlr = BrotherQLRaster('QL-810W')
+        convert(qlr, [img], '62', dither=False, compress=False, red=False, rotate='0')
+        
+        # Send to printer via network
+        send(instructions=qlr.data, printer_identifier=f'tcp://{printer_ip}', backend_identifier='network', blocking=True)
+        
+        current_app.logger.info(f"Label printed successfully to Brother QL-810W at {printer_ip}")
+        return {'status': 'success', 'message': f'Label printed successfully to Brother QL-810W at {printer_ip}'}
             
+    except ImportError as e:
+        current_app.logger.error(f"Brother QL library not available: {str(e)}")
+        return {'status': 'error', 'message': f'Brother QL library not installed: {str(e)}'}
     except Exception as e:
         current_app.logger.error(f"Print error: {str(e)}")
         return {'status': 'error', 'message': f'Print error: {str(e)}'}
 
-def print_via_windows_spooler_direct(image):
-    """Print via Windows using direct printer targeting."""
-    try:
-        # Save image as temporary file
-        temp_path = tempfile.mktemp(suffix='.png')
-        image.save(temp_path, 'PNG')
-        
-        # Find Brother QL-810W printer specifically
-        import subprocess
-        result = subprocess.run(['powershell', '-Command', 'Get-Printer | Select-Object Name'], 
-                              capture_output=True, text=True)
-        
-        brother_printer = None
-        if result.returncode == 0:
-            for line in result.stdout.split('\n'):
-                if 'brother' in line.lower() and ('ql-810w' in line.lower() or 'ql810w' in line.lower()):
-                    # Extract printer name (remove "Name" header and whitespace)
-                    brother_printer = line.strip()
-                    if brother_printer != "Name" and brother_printer != "----":
-                        break
-        
-        if brother_printer:
-            # Print directly to Brother printer using PowerShell
-            print_cmd = f'''powershell -Command "
-            $printer = '{brother_printer}'
-            Add-Type -AssemblyName System.Drawing
-            Add-Type -AssemblyName System.Windows.Forms
-            
-            # Set Brother as default temporarily and print
-            $img = [System.Drawing.Image]::FromFile('{temp_path}')
-            $pd = New-Object System.Drawing.Printing.PrintDocument
-            $pd.PrinterSettings.PrinterName = $printer
-            $pd.add_PrintPage({{
-                $_.Graphics.DrawImage($img, 0, 0, $img.Width, $img.Height)
-            }})
-            $pd.Print()
-            $img.Dispose()
-            "'''
-            
-            result = subprocess.run(['powershell', '-Command', print_cmd], 
-                                  capture_output=True, text=True)
-            
-            message = f'Printed directly to {brother_printer}'
-        else:
-            # Fallback: Open image with default application and print
-            os.startfile(temp_path, "print")
-            message = 'Opened image for printing (use Ctrl+P to print to Brother)'
-        
-        # Clean up after delay
-        import threading
-        def cleanup():
-            import time
-            time.sleep(10)  # Wait longer for print to complete
-            try:
-                os.unlink(temp_path)
-            except:
-                pass
-        
-        threading.Thread(target=cleanup).start()
-        
-        return {'status': 'success', 'message': message}
-        
-    except Exception as e:
-        return {'status': 'error', 'message': f'Windows print error: {str(e)}'}
-
-def print_via_windows_spooler(image):
-    """Fallback: Original spooler method."""
-    return print_via_windows_spooler_direct(image)
+# Removed Windows spooler functions - using brother_ql library instead

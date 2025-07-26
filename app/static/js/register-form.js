@@ -114,13 +114,20 @@ function showStep(step) {
     // Ensure step is a valid integer
     step = parseInt(step) || 1;
     
-    // AGGRESSIVELY hide navigation on step 5
+    // AGGRESSIVELY hide navigation and registration summary on step 5
     if (step === 5) {
         // Hide entire navigation section on step 5
         const formNavigation = document.querySelector('.form-navigation');
         if (formNavigation) {
             formNavigation.style.display = 'none';
             console.log('FORCIBLY hiding entire form navigation on step 5');
+        }
+        
+        // Hide Registration Summary on step 5 (print step)
+        const registrationSummary = document.getElementById('registrationSummary');
+        if (registrationSummary) {
+            registrationSummary.classList.add('d-none');
+            console.log('FORCIBLY hiding Registration Summary on step 5');
         }
         
         // Also hide any buttons by ID
