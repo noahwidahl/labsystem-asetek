@@ -51,7 +51,7 @@
                                     {% endif %}
                                     </td>
                                     <td>{{ container.SampleCount|default(0) }} samples / {{ container.TotalItems|default(0) }} units</td>
-                                    <td><span class="badge bg-info">{{ container.LocationName|default('Unknown') }}</span></td>
+                                    <td>{{ container.LocationName|default('Unknown') }}</td>
                                     <td>
                                         <button class="btn btn-sm btn-secondary" data-container-id="{{ container.ContainerID }}">Details</button>
                                         <button class="btn btn-sm btn-success add-sample-btn" data-container-id="{{ container.ContainerID }}" data-bs-toggle="modal" data-bs-target="#addSampleToContainerModal">Add Sample</button>

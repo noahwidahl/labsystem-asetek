@@ -190,7 +190,7 @@ class ContainerService:
             # Get type info
             cursor.execute("""
                 SELECT TypeName 
-                FROM ContainerType 
+                FROM containertype 
                 WHERE ContainerTypeID = %s
             """, (container.container_type_id,))
             
@@ -204,7 +204,7 @@ class ContainerService:
             if hasattr(container, 'location_id') and container.location_id:
                 cursor.execute("""
                     SELECT LocationName 
-                    FROM StorageLocation 
+                    FROM storagelocation 
                     WHERE LocationID = %s
                 """, (container.location_id,))
                 
@@ -221,7 +221,7 @@ class ContainerService:
                 SELECT 
                     COUNT(*) as SampleCount,
                     IFNULL(SUM(Amount), 0) as TotalItems
-                FROM ContainerSample 
+                FROM containersample 
                 WHERE ContainerID = %s
             """, (container.id,))
             
@@ -556,7 +556,7 @@ class ContainerService:
                             'available_space': available_space
                         }
                 
-                # Check if sample exists and is available
+                # Check if sample exists and is available, and if it's currently in a container
                 cursor.execute("""
                     SELECT 
                         s.SampleID, 
@@ -571,9 +571,11 @@ class ContainerService:
                         s.OwnerID,
                         s.Amount,
                         s.Type,
-                        s.IsUnique
-                    FROM Sample s
-                    JOIN SampleStorage ss ON s.SampleID = ss.SampleID
+                        s.IsUnique,
+                        cs.ContainerID as CurrentContainerID
+                    FROM sample s
+                    JOIN samplestorage ss ON s.SampleID = ss.SampleID
+                    LEFT JOIN containersample cs ON ss.StorageID = cs.SampleStorageID
                     WHERE s.SampleID = %s AND ss.AmountRemaining >= %s
                 """, (sample_id, amount))
                 
@@ -598,6 +600,7 @@ class ContainerService:
                 sample_original_amount = sample_data[10] if sample_data[10] is not None else 0
                 sample_type = sample_data[11] or 'single'
                 sample_is_unique = sample_data[12] or 0
+                original_container_id = sample_data[13]  # Current container ID (if any)
                 
                 # Update container's location to match the sample's location if not set
                 cursor.execute("""
@@ -612,12 +615,20 @@ class ContainerService:
                     """, (sample_location_id, container_id))
                     print(f"DEBUG: Updated container {container_id} location to {sample_location_id}")
                 
-                # Check if ContainerSample table exists, create if it doesn't
-                cursor.execute("SHOW TABLES LIKE 'ContainerSample'")
-                if cursor.fetchone() is None:
-                    print("DEBUG: Creating ContainerSample table")
+                # Remove sample from original container if it exists
+                if original_container_id and original_container_id != container_id:
                     cursor.execute("""
-                        CREATE TABLE ContainerSample (
+                        DELETE FROM containersample 
+                        WHERE SampleStorageID = %s AND ContainerID = %s
+                    """, (storage_id, original_container_id))
+                    print(f"DEBUG: Removed sample from original container {original_container_id}")
+                
+                # Check if containersample table exists, create if it doesn't
+                cursor.execute("SHOW TABLES LIKE 'containersample'")
+                if cursor.fetchone() is None:
+                    print("DEBUG: Creating containersample table")
+                    cursor.execute("""
+                        CREATE TABLE containersample (
                             ContainerSampleID INT AUTO_INCREMENT PRIMARY KEY,
                             SampleStorageID INT NOT NULL,
                             ContainerID INT NOT NULL,
@@ -627,7 +638,7 @@ class ContainerService:
                 
                 # Add the sample to the container
                 cursor.execute("""
-                    INSERT INTO ContainerSample (
+                    INSERT INTO containersample (
                         SampleStorageID,
                         ContainerID,
                         Amount
@@ -648,7 +659,7 @@ class ContainerService:
                 if amount >= sample_amount_remaining:
                     # Moving ALL items - just update the location
                     cursor.execute("""
-                        UPDATE SampleStorage 
+                        UPDATE samplestorage 
                         SET LocationID = (SELECT LocationID FROM container WHERE ContainerID = %s)
                         WHERE StorageID = %s
                     """, (container_id, storage_id))
@@ -659,16 +670,16 @@ class ContainerService:
                     # First, reduce the amount in both sample and samplestorage tables
                     new_amount = sample_amount_remaining - amount
                     
-                    # Update SampleStorage.AmountRemaining
+                    # Update samplestorage.AmountRemaining
                     cursor.execute("""
-                        UPDATE SampleStorage 
+                        UPDATE samplestorage 
                         SET AmountRemaining = %s 
                         WHERE StorageID = %s
                     """, (new_amount, storage_id))
                     
-                    # Also update Sample.Amount for consistency
+                    # Also update sample.Amount for consistency
                     cursor.execute("""
-                        UPDATE Sample 
+                        UPDATE sample 
                         SET Amount = %s 
                         WHERE SampleID = %s
                     """, (new_amount, sample_id))
@@ -678,9 +689,9 @@ class ContainerService:
                     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
                     new_barcode = f"{sample_barcode}-{timestamp}" if sample_barcode else f"MOVED-{sample_id}-{timestamp}"
                     
-                    # Now create a new Sample record for the moved portion
+                    # Now create a new sample record for the moved portion
                     cursor.execute("""
-                        INSERT INTO Sample (
+                        INSERT INTO sample (
                             PartNumber,
                             Description,
                             Barcode,
@@ -714,7 +725,7 @@ class ContainerService:
                     
                     # Create storage record for the new sample
                     cursor.execute("""
-                        INSERT INTO SampleStorage (
+                        INSERT INTO samplestorage (
                             SampleID,
                             LocationID,
                             AmountRemaining
@@ -728,9 +739,9 @@ class ContainerService:
                     # Get the new storage ID
                     new_storage_id = cursor.lastrowid
                     
-                    # Update ContainerSample to point to the new storage record
+                    # Update containersample to point to the new storage record
                     cursor.execute("""
-                        UPDATE ContainerSample
+                        UPDATE containersample
                         SET SampleStorageID = %s
                         WHERE ContainerSampleID = %s
                     """, (new_storage_id, container_sample_id))
@@ -749,7 +760,7 @@ class ContainerService:
                         capacity_note = f" (Container capacity exceeded: {current_amount + amount}/{container_capacity})"
                     
                     cursor.execute("""
-                        INSERT INTO History (
+                        INSERT INTO history (
                             Timestamp, 
                             ActionType, 
                             UserID, 
@@ -764,14 +775,30 @@ class ContainerService:
                         f"Sample {sample_id} moved to Container {container_id}, amount: {amount}{capacity_note}"
                     ))
                 
+                # Check if original container still has samples
+                original_container_has_samples = False
+                if original_container_id and original_container_id != container_id:
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM containersample WHERE ContainerID = %s
+                    """, (original_container_id,))
+                    remaining_samples = cursor.fetchone()[0]
+                    original_container_has_samples = remaining_samples > 0
+                    print(f"DEBUG: Original container {original_container_id} has {remaining_samples} samples remaining, has_samples={original_container_has_samples}")
+                else:
+                    print(f"DEBUG: No original container or same container (original={original_container_id}, new={container_id})")
+                
                 # Note: Container label printing is now handled by frontend prompt
                 # This allows user to choose whether to print or skip
                 
-                return {
+                result = {
                     'success': True,
                     'container_sample_id': container_sample_id,
-                    'capacity_warning': container_capacity and current_amount + amount > container_capacity
+                    'capacity_warning': container_capacity and current_amount + amount > container_capacity,
+                    'original_container_id': original_container_id,
+                    'original_container_has_samples': original_container_has_samples
                 }
+                print(f"DEBUG: Returning move result: {result}")
+                return result
                 
         except Exception as e:
             print(f"DEBUG: Error in add_sample_to_container: {e}")

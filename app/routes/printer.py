@@ -101,7 +101,7 @@ def generate_barcode(label_type, label_data):
         return f"SMP{sample_id}{timestamp[-6:]}"
     elif label_type in ['container', 'package']:
         container_id = label_data.get('ContainerID', '')
-        return f"CNT{container_id:0>4}{timestamp[-6:]}"
+        return f"CNT-{container_id}"
     elif label_type == 'test_sample':
         sample_id = label_data.get('SampleID', '')
         test_id = label_data.get('TestID', '')
@@ -190,7 +190,7 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
         
         if use_zpl:
             # ZPL format for container labels with large scannable barcodes
-            container_barcode = data.get('Barcode', f"CNT{data.get('ContainerID', '')}")
+            container_barcode = data.get('Barcode', f"CNT-{data.get('ContainerID', '')}")
             container_id = data.get('ContainerID', '')
             
             zpl_content = f"""^XA
@@ -220,64 +220,71 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
             zpl_content += "\n^XZ"
             return zpl_content
         
-        # Create sample barcodes section
-        sample_barcodes = []
-        sample_parts = []
-        for i, sample in enumerate(samples[:6]):  # Limit to 6 samples for space
-            sample_id = sample.get('SampleID', '')
-            barcode = sample.get('Barcode', f'SMP{sample_id}')
-            part_number = sample.get('PartNumber', '')
-            sample_barcodes.append(f"│ {i+1}. {barcode:<25} │")
-            if part_number:
-                sample_parts.append(f"│    {part_number[:25]:<25} │")
+        # Create simple container label matching sample format with actual barcodes
+        current_app.logger.info(f"=== CONTAINER FORMAT DEBUG: Creating container label for {len(samples)} samples ===")
         
-        if len(samples) > 6:
-            sample_barcodes.append(f"│ ... and {len(samples)-6} more samples     │")
+        # Check if this is a multi-part label
+        label_part = data.get('label_part', '')
+        part_info = f" ({label_part})" if label_part else ""
         
-        # Create QR code placeholder (actual QR generation would need external library)
-        qr_data = f"CNT{data.get('ContainerID', '')}"
+        # Add status indicator for empty containers
+        status_info = " - EMPTY" if len(samples) == 0 else ""
         
-        label_content = f"""
-╔═══════════════════════════════════╗
-║         CONTAINER LABEL           ║
-╠═══════════════════════════════════╣
-║ Container: CNT-{data.get('ContainerID', ''):0>4}         ║
-║ Type: {data.get('Type', data.get('ContainerType', ''))[:26]:<26} ║
-║ Description: {data.get('Description', '')[:20]:<20} ║
-║ Location: {data.get('LocationName', '')[:21]:<21} ║
-║ Packing Date: {packing_date:<17} ║
-║ Samples: {len(samples):<24} ║
-╠═══════════════════════════════════╣
-║           SAMPLE BARCODES         ║
-╠═══════════════════════════════════╣"""
+        label_content = f"""CONTAINER LABEL{part_info}{status_info}
+===============
+Container: CNT-{data.get('ContainerID', ''):0>4}
+Type: {data.get('Type', data.get('ContainerType', ''))}
+Description: {data.get('Description', '')}
+Location: {data.get('LocationName', '')}
+Samples: {len(samples)} items{part_info}
+Date: {packing_date}
 
-        # Add sample barcodes
-        for barcode_line in sample_barcodes:
-            label_content += f"\n{barcode_line}"
-        
-        # Add part numbers if any
-        for part_line in sample_parts:
-            label_content += f"\n{part_line}"
-        
-        label_content += f"""
-╠═══════════════════════════════════╣
-║ Container Barcode: {data.get('Barcode', qr_data):<14} ║
-║ QR Code: {qr_data:<22} ║
-║ Created: {datetime.now().strftime('%d-%m-%Y %H:%M'):<22} ║
-╚═══════════════════════════════════╝
+SAMPLE CONTENTS:
 """
+        current_app.logger.info(f"=== CONTAINER FORMAT DEBUG: Header created{part_info}, now adding {len(samples)} sample entries ===")
+        
+        # Add sample contents or empty container message
+        if len(samples) == 0:
+            # Empty container
+            label_content += f"\n** CONTAINER IS EMPTY **\nNo samples currently stored.\n"
+            current_app.logger.info(f"=== CONTAINER FORMAT DEBUG: Container is empty ===")
+        else:
+            # Add each sample with its info and barcode for physical printing
+            for i, sample in enumerate(samples):
+                sample_id = sample.get('SampleID', '')
+                barcode = sample.get('Barcode', f'SMP{sample_id}')
+                part_number = sample.get('PartNumber', '')
+                description = sample.get('Description', '')
+                
+                current_app.logger.info(f"=== CONTAINER FORMAT DEBUG: Processing sample {i+1}: ID={sample_id}, Barcode='{barcode}' ===")
+                
+                # Add sample info without numbers
+                label_content += f"\nSample: SMP-{sample_id:0>3}"
+                if part_number:
+                    label_content += f"\nPart: {part_number}"
+                if description and len(description) <= 25:
+                    label_content += f"\nDesc: {description}"
+                
+                # Add barcode line - this will be converted to actual barcode by brother_printer.py
+                barcode_line = f"\nBarcode: {barcode}\n"
+                label_content += barcode_line
+                current_app.logger.info(f"=== CONTAINER FORMAT DEBUG: Added barcode line: '{barcode_line.strip()}' ===")
+        
+        # Add container barcode at the end for easy scanning
+        container_barcode = data.get('Barcode', f"CNT-{data.get('ContainerID', '')}")
+        container_barcode_section = f"\nCONTAINER BARCODE:\nBarcode: {container_barcode}"
+        label_content += container_barcode_section
+        current_app.logger.info(f"=== CONTAINER FORMAT DEBUG: Added container barcode section: '{container_barcode_section.strip()}' ===")
+        current_app.logger.info(f"=== CONTAINER FORMAT DEBUG: Final label content ({len(label_content)} chars):\n{label_content}")
         return label_content
     
     elif label_type == 'location':
-        return f"""
-┌─────────────────────────────┐
-│       LOCATION LABEL        │
-├─────────────────────────────┤
-│ Location: {data.get('LocationName', ''):<16} │
-│ Type: {data.get('Type', 'Storage'):<20} │
-│ Barcode: {data.get('Barcode', ''):<16} │
-│ Description: {(data.get('Description', ''))[:13]:<13} │
-└─────────────────────────────┘
+        return f"""LOCATION LABEL
+==============
+Location: {data.get('LocationName', '')}
+Type: {data.get('Type', 'Storage')}
+Description: {data.get('Description', '')}
+Barcode: {data.get('Barcode', '')}
 """
     
     elif label_type == 'test':
@@ -292,18 +299,15 @@ Printer: {printer_config.get('description', 'Unknown')}
     
     elif label_type == 'test_sample':
         # Test sample labels for individual test specimens
-        return f"""
-╭─────────────────────────────╮
-│      TEST SAMPLE LABEL      │
-├─────────────────────────────┤
-│ Sample: {data.get('SampleIDFormatted', ''):<18} │
-│ Test ID: {data.get('TestID', ''):<17} │
-│ Barcode: {data.get('TestBarcode', ''):<16} │
-│ Part#: {data.get('PartNumber', '')[:19]:<19} │
-│ Test Type: {data.get('TestType', '')[:16]:<16} │
-│ Date: {datetime.now().strftime('%d-%m-%Y'):<20} │
-│ Container: CNT-{data.get('ContainerID', ''):0>4}       │
-╰─────────────────────────────╯
+        return f"""TEST SAMPLE LABEL
+=================
+Sample: {data.get('SampleIDFormatted', '')}
+Test ID: {data.get('TestID', '')}
+Part: {data.get('PartNumber', '')}
+Test Type: {data.get('TestType', '')}
+Container: CNT-{data.get('ContainerID', ''):0>4}
+Date: {datetime.now().strftime('%d-%m-%Y')}
+Barcode: {data.get('TestBarcode', '')}
 """
     
     else:
@@ -384,17 +388,34 @@ def log_print_action(label_type, label_data, printer_config):
             if 'Barcode' in label_data:
                 notes += f" (Barcode: {label_data['Barcode']})"
             
-            cursor.execute("""
-                INSERT INTO History (SampleID, ContainerID, ActionType, Notes, UserID, Timestamp)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (
-                sample_id,
-                container_id, 
-                action_type,
-                notes,
-                1,  # Default user - should be replaced with actual user from session
-                datetime.now()
-            ))
+            # Insert into History table - check if we have sample_id or container_id
+            if sample_id:
+                cursor.execute("""
+                    INSERT INTO History (SampleID, ActionType, Notes, UserID, Timestamp)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    sample_id,
+                    action_type,
+                    notes,
+                    1,  # Default user - should be replaced with actual user from session
+                    datetime.now()
+                ))
+            elif container_id:
+                # For container labels, log against all samples in the container
+                cursor.execute("""
+                    INSERT INTO History (SampleID, ActionType, Notes, UserID, Timestamp)
+                    SELECT DISTINCT s.SampleID, %s, %s, %s, %s
+                    FROM containersample cs
+                    JOIN samplestorage ss ON cs.SampleStorageID = ss.StorageID
+                    JOIN sample s ON ss.SampleID = s.SampleID
+                    WHERE cs.ContainerID = %s
+                """, (
+                    action_type,
+                    f"{notes} (Container: CNT-{container_id:04d})",
+                    1,
+                    datetime.now(),
+                    container_id
+                ))
             
             mysql.connection.commit()
             cursor.close()
@@ -445,11 +466,12 @@ def print_sample_label(sample_data, auto_print=True):
             'message': f'Failed to print sample label: {str(e)}'
         }
 
-def print_container_label(container_id, auto_print=True):
+def print_container_label(container_id, auto_print=True, max_samples_per_label=7):
     """
     Print container label with all sample barcodes and information.
     Returns success status and message.
     """
+    current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Starting print_container_label for container {container_id} ===")
     try:
         if not mysql or not mysql.connection:
             return {
@@ -482,6 +504,7 @@ def print_container_label(container_id, auto_print=True):
             }
         
         # Get all samples in the container
+        # Note: using correct lowercase table names from database schema
         cursor.execute("""
             SELECT 
                 s.SampleID,
@@ -497,6 +520,9 @@ def print_container_label(container_id, auto_print=True):
         """, (container_id,))
         
         samples_result = cursor.fetchall()
+        current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Found {len(samples_result)} samples in container {container_id} ===")
+        for i, sample_row in enumerate(samples_result):
+            current_app.logger.info(f"Sample {i+1}: ID={sample_row[0]}, Desc='{sample_row[1]}', Part='{sample_row[2]}', Barcode='{sample_row[3]}', Amount={sample_row[4]}")
         cursor.close()
         
         # Prepare container data for label
@@ -509,19 +535,67 @@ def print_container_label(container_id, auto_print=True):
             'samples': []
         }
         
-        # Add sample information
+        # Add sample information with proper barcode generation
         for sample_row in samples_result:
+            sample_id = sample_row[0]
+            existing_barcode = sample_row[3]
+            
+            # Generate proper barcode if none exists
+            if not existing_barcode or existing_barcode.strip() == '':
+                # Generate a scannable barcode for this sample
+                timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+                generated_barcode = f"SMP{sample_id}{timestamp[-6:]}"
+                
+                # Update the database with the new barcode
+                try:
+                    update_cursor = mysql.connection.cursor()
+                    update_cursor.execute("""
+                        UPDATE sample SET Barcode = %s WHERE SampleID = %s
+                    """, (generated_barcode, sample_id))
+                    mysql.connection.commit()
+                    update_cursor.close()
+                    current_app.logger.info(f"Generated and saved barcode {generated_barcode} for sample {sample_id}")
+                    barcode_to_use = generated_barcode
+                except Exception as e:
+                    current_app.logger.error(f"Failed to update barcode for sample {sample_id}: {str(e)}")
+                    barcode_to_use = f'SMP{sample_id}'
+            else:
+                barcode_to_use = existing_barcode
+            
             sample_data = {
-                'SampleID': sample_row[0],
+                'SampleID': sample_id,
                 'Description': sample_row[1] or '',
                 'PartNumber': sample_row[2] or '',
-                'Barcode': sample_row[3] or f'SMP{sample_row[0]}',
+                'Barcode': barcode_to_use,
                 'Amount': sample_row[4] or 1
             }
             container_data['samples'].append(sample_data)
         
-        # Generate container barcode
-        container_barcode = generate_barcode('container', container_data)
+        # Get or generate container barcode
+        # First check if container already has a barcode in database
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT Barcode FROM container WHERE ContainerID = %s", (container_id,))
+        existing_barcode_result = cursor.fetchone()
+        cursor.close()
+        
+        if existing_barcode_result and existing_barcode_result[0]:
+            container_barcode = existing_barcode_result[0]
+            current_app.logger.info(f"Using existing container barcode: {container_barcode}")
+        else:
+            # Generate new barcode and save it - use consistent CNT-{id} format
+            container_barcode = f"CNT-{container_id}"
+            
+            # Update container with new barcode
+            try:
+                cursor = mysql.connection.cursor()
+                cursor.execute("UPDATE container SET Barcode = %s WHERE ContainerID = %s", (container_barcode, container_id))
+                mysql.connection.commit()
+                cursor.close()
+                current_app.logger.info(f"Generated and saved new container barcode: {container_barcode}")
+            except Exception as e:
+                current_app.logger.error(f"Failed to save container barcode: {e}")
+                # Use generated barcode anyway
+        
         container_data['Barcode'] = container_barcode
         
         if auto_print:
@@ -534,15 +608,51 @@ def print_container_label(container_id, auto_print=True):
                     'container_data': container_data
                 }
             
-            # Format and print label
-            label_content = format_label_enhanced('container', container_data, printer_config)
-            result = print_to_device(label_content, printer_config)
+            current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Container has {len(container_data['samples'])} samples, max per label: {max_samples_per_label} ===")
             
-            # Log print action
-            if result['status'] == 'success':
-                log_print_action('container', container_data, printer_config)
-            
-            return result
+            # Check if we need to split into multiple labels
+            all_samples = container_data['samples']
+            if len(all_samples) <= max_samples_per_label:
+                # Single label
+                current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Printing single label ===")
+                label_content = format_label_enhanced('container', container_data, printer_config)
+                result = print_to_device(label_content, printer_config)
+                
+                if result['status'] == 'success':
+                    log_print_action('container', container_data, printer_config)
+                
+                return result
+            else:
+                # Multiple labels needed
+                total_labels = (len(all_samples) + max_samples_per_label - 1) // max_samples_per_label
+                current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Splitting into {total_labels} labels ===")
+                
+                results = []
+                for label_num in range(total_labels):
+                    start_idx = label_num * max_samples_per_label
+                    end_idx = min(start_idx + max_samples_per_label, len(all_samples))
+                    
+                    # Create container data for this label
+                    label_container_data = container_data.copy()
+                    label_container_data['samples'] = all_samples[start_idx:end_idx]
+                    label_container_data['label_part'] = f"{label_num + 1}/{total_labels}"
+                    
+                    current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Printing label {label_num + 1}/{total_labels} with samples {start_idx+1}-{end_idx} ===")
+                    
+                    label_content = format_label_enhanced('container', label_container_data, printer_config)
+                    result = print_to_device(label_content, printer_config)
+                    results.append(result)
+                    
+                    if result['status'] == 'success':
+                        log_print_action('container', label_container_data, printer_config)
+                    
+                # Return combined result
+                success_count = sum(1 for r in results if r['status'] == 'success')
+                return {
+                    'status': 'success' if success_count == total_labels else 'partial',
+                    'message': f'Printed {success_count}/{total_labels} container labels successfully',
+                    'results': results
+                }
         else:
             return {
                 'status': 'success',

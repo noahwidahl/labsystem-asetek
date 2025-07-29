@@ -338,6 +338,7 @@ function executeContainerMove(data) {
     })
     .then(response => response.json())
     .then(responseData => {
+        console.log('🖨️ Move response received:', responseData);
         if (responseData.success) {
             showSuccessMessage('Sample moved successfully');
             
@@ -347,22 +348,99 @@ function executeContainerMove(data) {
                 modal.hide();
             }
             
-            // Show print prompt if moving to a container
-            if (data.containerId && !data.removeFromContainer) {
-                // Sample moved to container - show print prompt
+            // Handle printing based on move type
+            const originalContainerId = responseData.original_container_id;
+            const newContainerId = data.containerId;
+            console.log('🖨️ Container IDs - Original:', originalContainerId, 'New:', newContainerId, 'Original has samples:', responseData.original_container_has_samples);
+            
+            // Show print prompts for affected containers
+            if (originalContainerId && newContainerId && originalContainerId !== newContainerId) {
+                // Sample moved from one container to another - show combined prompt for both
+                console.log('🖨️ Container-to-container move detected:', {originalContainerId, newContainerId, original_has_samples: responseData.original_container_has_samples});
+                
+                // Show combined prompt for both containers
+                if (typeof showCombinedContainerPrintPrompt === 'function') {
+                    const originalStatus = responseData.original_container_has_samples ? 'updated' : 'now empty';
+                    showCombinedContainerPrintPrompt({
+                        sourceContainerId: originalContainerId,
+                        sourceStatus: originalStatus,
+                        destinationContainerId: newContainerId,
+                        destinationStatus: 'updated',
+                        sampleId: data.sampleId
+                    });
+                } else {
+                    // Fallback to old approach
+                    const printQueue = [];
+                    
+                    printQueue.push(() => {
+                        console.log('🖨️ Showing new container prompt for', newContainerId);
+                        showContainerUpdatePrintPrompt(newContainerId, {
+                            description: `New container after adding sample`,
+                            action: 'Sample added to container'
+                        });
+                    });
+                    
+                    if (originalContainerId) {
+                        printQueue.push(() => {
+                            console.log('🖨️ Showing original container prompt for', originalContainerId);
+                            const containerStatus = responseData.original_container_has_samples ? 'updated' : 'now empty';
+                            showContainerUpdatePrintPrompt(originalContainerId, {
+                                description: `Original container after sample removal (${containerStatus})`,
+                                action: 'Sample removed from container'
+                            });
+                        });
+                    }
+                    
+                    executePrintQueue(printQueue);
+                }
+            } else if (newContainerId && !data.removeFromContainer) {
+                // Sample moved to container from direct storage - show new container prompt
                 if (typeof showContainerUpdatePrintPrompt === 'function') {
-                    showContainerUpdatePrintPrompt(data.containerId, {
+                    showContainerUpdatePrintPrompt(newContainerId, {
                         description: `Container after moving sample`,
                         action: 'Sample moved to container'
                     });
                 } else {
-                    // Fallback if function not available - just reload
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                }
+            } else if (originalContainerId && data.removeFromContainer) {
+                // Sample removed from container to direct storage - show both container and sample prompts
+                if (typeof showContainerUpdatePrintPrompt === 'function') {
+                    // Create a queue of print prompts to show in sequence
+                    const printQueue = [];
+                    
+                    // Always show container prompt (whether empty or not)
+                    if (originalContainerId) {
+                        printQueue.push(() => {
+                            const containerStatus = responseData.original_container_has_samples ? 'updated' : 'now empty';
+                            showContainerUpdatePrintPrompt(originalContainerId, {
+                                description: `Container after sample removal (${containerStatus})`,
+                                action: 'Sample removed from container'
+                            });
+                        });
+                    }
+                    
+                    // Then show sample prompt for the moved sample (now in direct storage)
+                    printQueue.push(() => {
+                        if (typeof showSampleLocationPrintPrompt === 'function') {
+                            showSampleLocationPrintPrompt(data.sampleId, {
+                                description: `Sample moved to direct storage`,
+                                action: 'Sample moved to location'
+                            });
+                        }
+                    });
+                    
+                    // Execute print queue with proper delays
+                    executePrintQueue(printQueue);
+                } else {
                     setTimeout(() => {
                         window.location.reload();
                     }, 1000);
                 }
             } else {
-                // Sample removed from container or moved to location - just reload
+                // Direct location move - just reload
                 setTimeout(() => {
                     window.location.reload();
                 }, 1000);
@@ -375,6 +453,61 @@ function executeContainerMove(data) {
         console.error('Error in move sample request:', error);
         showErrorMessage('An error occurred while moving the sample');
     });
+}
+
+// Function to execute print prompts in sequence, avoiding modal conflicts
+function executePrintQueue(printQueue) {
+    console.log('🖨️ executePrintQueue called with', printQueue.length, 'items');
+    if (printQueue.length === 0) {
+        return;
+    }
+    
+    let currentIndex = 0;
+    
+    function showNextPrompt() {
+        if (currentIndex >= printQueue.length) {
+            return;
+        }
+        
+        const currentPrompt = printQueue[currentIndex];
+        currentIndex++;
+        
+        // Execute the current prompt
+        console.log('🖨️ Executing prompt', currentIndex, 'of', printQueue.length);
+        currentPrompt();
+        
+        // Wait for modal to appear then listen for its close event
+        setTimeout(() => {
+            const printModals = document.querySelectorAll('#containerUpdatePrintModal, #sampleLocationPrintModal, #containerPrintConfirmModal, [id*="Print"]');
+            console.log('🖨️ Found print modals:', Array.from(printModals).map(m => m.id));
+            
+            if (printModals.length > 0) {
+                // Listen for any of the print modals to close
+                printModals.forEach(modal => {
+                    const handleModalClose = (event) => {
+                        console.log('🖨️ Modal closed:', modal.id);
+                        modal.removeEventListener('hidden.bs.modal', handleModalClose);
+                        
+                        // Wait a bit then show next prompt
+                        setTimeout(() => {
+                            showNextPrompt();
+                        }, 500);
+                    };
+                    
+                    modal.addEventListener('hidden.bs.modal', handleModalClose, { once: true });
+                });
+            } else {
+                // No modal found, continue immediately
+                console.log('🖨️ No modal found, continuing immediately');
+                setTimeout(() => {
+                    showNextPrompt();
+                }, 500);
+            }
+        }, 200);
+    }
+    
+    // Start showing prompts
+    showNextPrompt();
 }
 
 // Function to move a sample to a location

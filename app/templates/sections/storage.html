@@ -207,11 +207,11 @@
                                     <td>{{ sample.Registered }}</td>
                                     <td>
                                         {% if sample.Status == 'Disposed' %}
-                                        <span class="badge bg-danger">{{ sample.Status }}</span>
+                                        <span class="text-danger fw-bold">{{ sample.Status }}</span>
                                         {% elif sample.Status == 'In Test' %}
-                                        <span class="badge bg-warning text-dark">{{ sample.Status }}</span>
+                                        <span class="text-warning fw-bold">{{ sample.Status }}</span>
                                         {% else %}
-                                        <span class="badge bg-primary">{{ sample.Status }}</span>
+                                        <span class="text-primary fw-bold">{{ sample.Status }}</span>
                                         {% endif %}
                                     </td>
                                     <td>
