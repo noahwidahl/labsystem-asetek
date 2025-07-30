@@ -139,23 +139,69 @@ def format_label_enhanced(label_type, data, printer_config):
     
     if label_type == 'sample':
         if use_zpl:
-            # ZPL format for Zebra printers with large scannable barcodes
+            # ZPL format for Zebra printers with dynamic height based on content
             barcode = data.get('Barcode', '')
             sample_id = data.get('SampleIDFormatted', '')
+            description = data.get('Description', '')
+            part_number = data.get('PartNumber', '')
+            amount = data.get('Amount', '')
+            unit_name = data.get('UnitName', '')
+            location = data.get('LocationName', '')
+            expire_date = data.get('ExpireDate', '')
             
-            return f"""^XA
-^LH0,0^FS
-^FO30,20^A0N,25,25^FDSAMPLE LABEL^FS
-^FO30,60^A0N,30,30^FD{sample_id}^FS
-^FO30,100^A0N,20,20^FDDesc: {(data.get('Description', ''))[:25]}^FS
-^FO30,130^A0N,18,18^FDPart: {data.get('PartNumber', '')[:20]}^FS
-^FO30,160^A0N,18,18^FDAmt: {data.get('Amount', '')} {data.get('UnitName', '')}^FS
-
-^FO30,200{generate_zpl_barcode(barcode, '128', 80, 3)}
-^FO30,290^A0N,16,16^FD{barcode}^FS
-
-^FO30,320^A0N,14,14^FD{datetime.now().strftime('%d-%m-%Y %H:%M')}^FS
-^XZ"""
+            # Start building ZPL with header
+            zpl_lines = [
+                "^XA",
+                "^LH0,0^FS",
+                "^FO30,20^A0N,25,25^FDSAMPLE LABEL^FS",
+                f"^FO30,60^A0N,30,30^FD{sample_id}^FS"
+            ]
+            
+            current_y = 100
+            
+            # Add description (always present)
+            if description:
+                zpl_lines.append(f"^FO30,{current_y}^A0N,20,20^FDDesc: {description[:25]}^FS")
+                current_y += 30
+            
+            # Add part number if present
+            if part_number:
+                zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FDPart: {part_number[:20]}^FS")
+                current_y += 25
+            
+            # Add amount
+            if amount:
+                zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FDAmt: {amount} {unit_name}^FS")
+                current_y += 25
+            
+            # Add location if present
+            if location:
+                zpl_lines.append(f"^FO30,{current_y}^A0N,16,16^FDLoc: {location[:20]}^FS")
+                current_y += 25
+            
+            # Add expire date if present
+            if expire_date:
+                zpl_lines.append(f"^FO30,{current_y}^A0N,16,16^FDExp: {expire_date}^FS")
+                current_y += 25
+            
+            # Add some space before barcode
+            current_y += 15
+            
+            # Add barcode
+            zpl_lines.append(f"^FO30,{current_y}{generate_zpl_barcode(barcode, '128', 80, 3)}")
+            current_y += 95  # Barcode height + margin
+            
+            # Add barcode text
+            zpl_lines.append(f"^FO30,{current_y}^A0N,16,16^FD{barcode}^FS")
+            current_y += 25
+            
+            # Add timestamp
+            zpl_lines.append(f"^FO30,{current_y}^A0N,14,14^FD{datetime.now().strftime('%d-%m-%Y %H:%M')}^FS")
+            
+            # Close ZPL
+            zpl_lines.append("^XZ")
+            
+            return "\n".join(zpl_lines)
         elif format_type == 'compact':
             expire_date = data.get('ExpireDate', '')
             location_name = data.get('LocationName', '')
@@ -189,36 +235,75 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
         packing_date = data.get('PackingDate', datetime.now().strftime('%d-%m-%Y'))
         
         if use_zpl:
-            # ZPL format for container labels with large scannable barcodes
+            # ZPL format for container labels with dynamic height based on content
             container_barcode = data.get('Barcode', f"CNT-{data.get('ContainerID', '')}")
             container_id = data.get('ContainerID', '')
+            container_type = data.get('Type', data.get('ContainerType', ''))
+            location = data.get('LocationName', '')
+            description = data.get('Description', '')
             
-            zpl_content = f"""^XA
-^LH0,0^FS
-^FO30,20^A0N,30,30^FDCONTAINER LABEL^FS
-^FO30,60^A0N,35,35^FDCNT-{container_id:0>4}^FS
-^FO30,110^A0N,18,18^FDType: {data.get('Type', '')[:20]}^FS
-^FO30,135^A0N,18,18^FDLocation: {data.get('LocationName', '')[:18]}^FS
-^FO30,160^A0N,18,18^FDSamples: {len(samples)}^FS
-
-^FO30,200{generate_zpl_barcode(container_barcode, '128', 100, 4)}
-^FO30,310^A0N,18,18^FD{container_barcode}^FS
-
-^FO30,350^A0N,16,16^FDSample Barcodes:^FS"""
-
-            # Sample barcodes (show first 4)
-            y_pos = 380
-            for i, sample in enumerate(samples[:4]):
-                sample_barcode = sample.get('Barcode', f"SMP{sample.get('SampleID', '')}")
-                zpl_content += f"\n^FO30,{y_pos}^A0N,16,16^FD{i+1}. {sample_barcode}^FS"
-                y_pos += 22
+            # Start building ZPL with header
+            zpl_lines = [
+                "^XA",
+                "^LH0,0^FS",
+                "^FO30,20^A0N,30,30^FDCONTAINER LABEL^FS",
+                f"^FO30,60^A0N,35,35^FDCNT-{container_id:0>4}^FS"
+            ]
             
-            if len(samples) > 4:
-                zpl_content += f"\n^FO30,{y_pos}^A0N,14,14^FD... and {len(samples)-4} more^FS"
+            current_y = 110
             
-            zpl_content += f"\n\n^FO30,{y_pos + 30}^A0N,12,12^FD{datetime.now().strftime('%d-%m-%Y %H:%M')}^FS"
-            zpl_content += "\n^XZ"
-            return zpl_content
+            # Add container info
+            if description:
+                zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FDDesc: {description[:20]}^FS")
+                current_y += 25
+            
+            if container_type:
+                zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FDType: {container_type[:20]}^FS")
+                current_y += 25
+            
+            if location:
+                zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FDLocation: {location[:18]}^FS")
+                current_y += 25
+            
+            zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FDSamples: {len(samples)}^FS")
+            current_y += 35
+            
+            # Add container barcode
+            zpl_lines.append(f"^FO30,{current_y}{generate_zpl_barcode(container_barcode, '128', 100, 4)}")
+            current_y += 115  # Barcode height + margin
+            
+            zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FD{container_barcode}^FS")
+            current_y += 35
+            
+            # Add sample information if present
+            if samples:
+                zpl_lines.append(f"^FO30,{current_y}^A0N,16,16^FDSample Contents:^FS")
+                current_y += 25
+                
+                # Show up to 7 samples to fit the requirement
+                max_samples = min(7, len(samples))
+                for i, sample in enumerate(samples[:max_samples]):
+                    sample_id = sample.get('SampleID', '')
+                    sample_desc = sample.get('Description', '')[:15]  # Truncate for space
+                    sample_barcode = sample.get('Barcode', f"SMP{sample_id}")
+                    
+                    zpl_lines.append(f"^FO30,{current_y}^A0N,14,14^FD{i+1}. SMP-{sample_id:0>3} {sample_desc}^FS")
+                    current_y += 20
+                    zpl_lines.append(f"^FO30,{current_y}^A0N,12,12^FD   {sample_barcode}^FS")
+                    current_y += 18
+                
+                if len(samples) > max_samples:
+                    zpl_lines.append(f"^FO30,{current_y}^A0N,14,14^FD... and {len(samples)-max_samples} more samples^FS")
+                    current_y += 25
+            
+            # Add timestamp
+            current_y += 10
+            zpl_lines.append(f"^FO30,{current_y}^A0N,12,12^FD{datetime.now().strftime('%d-%m-%Y %H:%M')}^FS")
+            
+            # Close ZPL
+            zpl_lines.append("^XZ")
+            
+            return "\n".join(zpl_lines)
         
         # Create simple container label matching sample format with actual barcodes
         current_app.logger.info(f"=== CONTAINER FORMAT DEBUG: Creating container label for {len(samples)} samples ===")
@@ -437,10 +522,12 @@ def print_sample_label(sample_data, auto_print=True):
             # Get printer configuration
             printer_config = get_printer_config('sample')
             if not printer_config:
-                return {
-                    'status': 'warning',
-                    'message': 'Sample label prepared but no printer configured. Set BROTHER_SAMPLE_PRINTER_PATH environment variable.',
-                    'sample_data': sample_data
+                # Create a default printer configuration for direct printing
+                printer_config = {
+                    'printer_type': 'brother_ql810w',
+                    'format': 'compact',
+                    'use_zpl': False,
+                    'description': 'Brother QL-810W (default configuration)'
                 }
             
             # Format and print label
@@ -599,13 +686,19 @@ def print_container_label(container_id, auto_print=True, max_samples_per_label=7
         container_data['Barcode'] = container_barcode
         
         if auto_print:
-            # Get printer configuration
+            # Get printer configuration - try container first, then fall back to sample printer
             printer_config = get_printer_config('container')
             if not printer_config:
-                return {
-                    'status': 'warning',
-                    'message': 'Container label prepared but no printer configured. Set BROTHER_CONTAINER_PRINTER_PATH environment variable.',
-                    'container_data': container_data
+                # Fall back to sample printer configuration
+                printer_config = get_printer_config('sample')
+            
+            if not printer_config:
+                # Create a default printer configuration for direct printing
+                printer_config = {
+                    'printer_type': 'brother_ql810w',
+                    'format': 'standard',
+                    'use_zpl': False,
+                    'description': 'Brother QL-810W (default configuration)'
                 }
             
             current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Container has {len(container_data['samples'])} samples, max per label: {max_samples_per_label} ===")

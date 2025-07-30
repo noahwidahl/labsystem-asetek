@@ -8,14 +8,47 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 from flask import current_app
 
-def create_label_image(text_content, width=696, height=1500):  # Increased height for container labels
-    """Create a label image from text content."""
+def create_label_image(text_content, width=696, max_height=1500):  # Use max_height instead of fixed height
+    """Create a label image from text content with dynamic height."""
     current_app.logger.info(f"=== BARCODE DEBUG: Starting label creation ===")
     current_app.logger.info(f"Full text content: {text_content}")
-    current_app.logger.info(f"Label dimensions: {width}x{height}")
+    current_app.logger.info(f"Label max dimensions: {width}x{max_height}")
     
-    # Create white background image
-    img = Image.new('RGB', (width, height), color='white')
+    # First pass: calculate actual height needed
+    lines = text_content.strip().split('\n')
+    estimated_height = 20  # Start with margin
+    
+    for line in lines:
+        if not line.strip():
+            estimated_height += 10
+            continue
+            
+        clean_line = line.strip().replace('│', '').replace('╭', '').replace('╰', '').replace('─', '').replace('╮', '').replace('╯', '')
+        
+        if not clean_line:
+            estimated_height += 5
+            continue
+        
+        # Estimate height based on content type
+        if 'CONTAINER LABEL' in clean_line.upper() or 'SAMPLE LABEL' in clean_line.upper():
+            estimated_height += 50
+        elif clean_line.startswith('Container: CNT-') or clean_line.startswith('Sample: SMP-'):
+            estimated_height += 35
+        elif 'Barcode:' in clean_line:
+            estimated_height += 65  # Space for barcode image + text
+        else:
+            estimated_height += 28
+    
+    # Add some margin at the bottom
+    estimated_height += 30
+    
+    # Use the smaller of estimated height or max height
+    actual_height = min(estimated_height, max_height)
+    
+    current_app.logger.info(f"=== BARCODE DEBUG: Calculated actual height: {actual_height} (estimated: {estimated_height}) ===")
+    
+    # Create white background image with calculated height
+    img = Image.new('RGB', (width, actual_height), color='white')
     draw = ImageDraw.Draw(img)
     
     # Try to load fonts - optimized sizes for better readability

@@ -44,7 +44,7 @@ window.populatePrintStep = function(sampleData) {
     document.getElementById('print-description').textContent = sampleData.Description || 'N/A';
     document.getElementById('print-barcode').textContent = sampleData.Barcode || 'N/A';
     document.getElementById('print-amount').textContent = `${sampleData.Amount || 0} ${sampleData.UnitName || 'pcs'}`;
-    document.getElementById('print-location').textContent = registerApp.selectedLocationName || 'N/A';
+    document.getElementById('print-location').textContent = sampleData.LocationName || 'N/A';
     // Handle multiple serial numbers
     let serialDisplay = 'None';
     if (sampleData.SerialNumbers && sampleData.SerialNumbers.length > 0) {

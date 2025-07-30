@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LabSystem - Desktop Scanner & Print</title>
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .header .subtitle {
+            font-size: 16px;
+            opacity: 0.8;
+        }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            padding: 20px;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        .scanner-section {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            height: fit-content;
+        }
+        
+        .scanned-items-section {
+            flex: 2;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .scanner-zone {
+            background: #f8f9fa;
+            border: 3px dashed #007bff;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .scanner-zone h3 {
+            color: #007bff;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .scan-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            text-align: center;
+            margin: 15px 0;
+            font-weight: 500;
+        }
+        
+        .scan-input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+        }
+        
+        .status {
+            font-size: 24px;
+            margin: 20px 0;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .ready { color: #28a745; }
+        .scanning { color: #ffc107; }
+        .error { color: #dc3545; }
+        .success { color: #28a745; }
+        
+        .scanned-items {
+            margin-top: 20px;
+        }
+        
+        .scanned-items h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .item-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            transition: all 0.3s ease;
+            border-left: 4px solid #007bff;
+        }
+        
+        .item-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .item-id {
+            font-size: 18px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .item-time {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .item-details {
+            margin: 10px 0;
+        }
+        
+        .item-detail {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .item-detail:last-child {
+            border-bottom: none;
+        }
+        
+        .item-detail strong {
+            color: #495057;
+        }
+        
+        .item-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #1e7e34;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+            transform: translateY(-1px);
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+        .clear-all-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .clear-all-btn:hover {
+            background: #c82333;
+        }
+        
+        .print-status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .print-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .print-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .print-status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        /* Animations */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .new-item {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        /* Icons */
+        .icon {
+            width: 16px;
+            height: 16px;
+            display: inline-block;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🖨️ Desktop Scanner & Print Station</h1>
+        <div class="subtitle">Asetek Lab - Scan barcodes and print labels</div>
+    </div>
+    
+    <div class="main-content">
+        <!-- Scanner Section -->
+        <div class="scanner-section">
+            <div class="status ready" id="status">Ready to Scan</div>
+            
+            <div class="scanner-zone">
+                <h3>📱 Scan Barcode</h3>
+                <p style="color: #6c757d; margin-bottom: 15px;">Point scanner and pull trigger</p>
+                <input type="text" id="scanInput" class="scan-input" 
+                       placeholder="Barcode will appear here..." 
+                       autocomplete="off" autofocus>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="clearAllScans()">
+                    🗑️ Clear All
+                </button>
+                <button class="btn btn-primary" onclick="testScan()">
+                    🧪 Test Scan
+                </button>
+            </div>
+        </div>
+        
+        <!-- Scanned Items Section -->
+        <div class="scanned-items-section">
+            <div class="scanned-items">
+                <h3>
+                    📋 Recent Scans
+                    <button class="clear-all-btn" onclick="clearAllScans()" style="display: none;" id="clearAllBtn">
+                        Clear All
+                    </button>
+                </h3>
+                
+                <div id="scannedItemsList">
+                    <div class="empty-state">
+                        <div style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;">📦</div>
+                        <p>No items scanned yet</p>
+                        <p style="opacity: 0.7; margin-top: 10px;">Scan a barcode to get started</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const scanInput = document.getElementById('scanInput');
+        const status = document.getElementById('status');
+        const scannedItemsList = document.getElementById('scannedItemsList');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+        
+        let scanTimeout;
+        let scannedItems = [];
+        const MAX_ITEMS = 5;
+        
+        // Keep input focused for scanner
+        function keepFocus() {
+            if (document.activeElement !== scanInput) {
+                scanInput.focus();
+            }
+        }
+        
+        // Initialize
+        window.addEventListener('load', () => {
+            keepFocus();
+            loadStoredItems();
+        });
+        
+        document.addEventListener('click', () => setTimeout(keepFocus, 100));
+        
+        // Handle scan input
+        scanInput.addEventListener('input', function(e) {
+            clearTimeout(scanTimeout);
+            
+            const barcode = e.target.value.trim();
+            
+            if (barcode.length > 0) {
+                setStatus('scanning', '📡 Processing...');
+                
+                scanTimeout = setTimeout(() => {
+                    processScan(barcode);
+                }, 100);
+            }
+        });
+        
+        scanInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                clearTimeout(scanTimeout);
+                const barcode = e.target.value.trim();
+                if (barcode) {
+                    processScan(barcode);
+                }
+            }
+        });
+        
+        async function processScan(barcode) {
+            try {
+                setStatus('scanning', '📡 Processing...');
+                
+                const response = await fetch('/api/scanner/data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        barcode: barcode,
+                        timestamp: new Date().toISOString(),
+                        device: 'Zebra Scanner - Desktop',
+                        source: 'desktop_scanner_print'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    setStatus('success', '✅ Found!');
+                    
+                    let itemData = null;
+                    
+                    if (result.sample) {
+                        itemData = {
+                            type: 'sample',
+                            id: result.sample.SampleIDFormatted,
+                            barcode: barcode,
+                            description: result.sample.Description,
+                            location: result.sample.LocationName,
+                            amount: `${result.sample.Amount} ${result.sample.UnitName}`,
+                            partNumber: result.sample.PartNumber || '',
+                            timestamp: new Date().toISOString(),
+                            rawData: result.sample
+                        };
+                    } else if (result.container) {
+                        itemData = {
+                            type: 'container',
+                            id: result.container.ContainerIDFormatted,
+                            barcode: barcode,
+                            description: result.container.Description,
+                            location: result.container.LocationName,
+                            amount: `${result.container.SampleCount} samples`,
+                            partNumber: '',
+                            timestamp: new Date().toISOString(),
+                            rawData: result.container
+                        };
+                    }
+                    
+                    if (itemData) {
+                        addScannedItem(itemData);
+                    }
+                    
+                } else {
+                    setStatus('error', '❌ Not Found');
+                }
+                
+            } catch (error) {
+                setStatus('error', '🔌 Connection Error');
+                console.error('Scan error:', error);
+            }
+            
+            // Clear and refocus
+            scanInput.value = '';
+            setTimeout(keepFocus, 100);
+        }
+        
+        function addScannedItem(itemData) {
+            // Remove item if it already exists (update existing)
+            scannedItems = scannedItems.filter(item => item.barcode !== itemData.barcode);
+            
+            // Add to beginning of array
+            scannedItems.unshift(itemData);
+            
+            // Keep only last 5 items
+            if (scannedItems.length > MAX_ITEMS) {
+                scannedItems = scannedItems.slice(0, MAX_ITEMS);
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('scannedItems', JSON.stringify(scannedItems));
+            
+            // Update display
+            updateScannedItemsDisplay();
+        }
+        
+        function updateScannedItemsDisplay() {
+            if (scannedItems.length === 0) {
+                scannedItemsList.innerHTML = `
+                    <div class="empty-state">
+                        <div style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;">📦</div>
+                        <p>No items scanned yet</p>
+                        <p style="opacity: 0.7; margin-top: 10px;">Scan a barcode to get started</p>
+                    </div>
+                `;
+                clearAllBtn.style.display = 'none';
+                return;
+            }
+            
+            clearAllBtn.style.display = 'block';
+            
+            const itemsHtml = scannedItems.map((item, index) => {
+                const timeString = new Date(item.timestamp).toLocaleTimeString();
+                const typeIcon = item.type === 'sample' ? '🧪' : '📦';
+                
+                return `
+                    <div class="item-card ${index === 0 ? 'new-item' : ''}" data-barcode="${item.barcode}">
+                        <div class="item-header">
+                            <div class="item-id">${typeIcon} ${item.id}</div>
+                            <div class="item-time">${timeString}</div>
+                        </div>
+                        
+                        <div class="item-details">
+                            <div class="item-detail">
+                                <span><strong>Description:</strong></span>
+                                <span>${item.description}</span>
+                            </div>
+                            <div class="item-detail">
+                                <span><strong>Location:</strong></span>
+                                <span>${item.location}</span>
+                            </div>
+                            <div class="item-detail">
+                                <span><strong>Amount:</strong></span>
+                                <span>${item.amount}</span>
+                            </div>
+                            ${item.partNumber ? `
+                            <div class="item-detail">
+                                <span><strong>Part Number:</strong></span>
+                                <span>${item.partNumber}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                        
+                        <div class="item-actions">
+                            <button class="btn btn-success" onclick="printLabel('${item.barcode}', '${item.type}')">
+                                🖨️ Print Label
+                            </button>
+                            <button class="btn btn-primary" onclick="showDetails('${item.barcode}')">
+                                📋 Details
+                            </button>
+                        </div>
+                        
+                        <div class="print-status" id="printStatus-${item.barcode.replace(/[^a-zA-Z0-9]/g, '')}"></div>
+                    </div>
+                `;
+            }).join('');
+            
+            scannedItemsList.innerHTML = itemsHtml;
+        }
+        
+        function loadStoredItems() {
+            const stored = localStorage.getItem('scannedItems');
+            if (stored) {
+                try {
+                    scannedItems = JSON.parse(stored);
+                    // Keep only items from today
+                    const today = new Date().toDateString();
+                    scannedItems = scannedItems.filter(item => {
+                        const itemDate = new Date(item.timestamp).toDateString();
+                        return itemDate === today;
+                    });
+                    updateScannedItemsDisplay();
+                } catch (e) {
+                    console.error('Error loading stored items:', e);
+                    scannedItems = [];
+                }
+            }
+        }
+        
+        async function printLabel(barcode, type) {
+            const statusId = `printStatus-${barcode.replace(/[^a-zA-Z0-9]/g, '')}`;
+            const statusEl = document.getElementById(statusId);
+            
+            statusEl.style.display = 'block';
+            statusEl.className = 'print-status info';
+            statusEl.innerHTML = '🖨️ Sending to printer...';
+            
+            try {
+                const item = scannedItems.find(i => i.barcode === barcode);
+                if (!item) {
+                    throw new Error('Item not found');
+                }
+                
+                let printUrl = '';
+                if (type === 'sample') {
+                    printUrl = `/api/print/sample/${item.rawData.SampleID}`;
+                } else if (type === 'container') {
+                    printUrl = `/api/print/container/${item.rawData.ContainerID}`;
+                }
+                
+                const response = await fetch(printUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(item.rawData)
+                });
+                
+                const result = await response.json();
+                
+                if (result && result.status === 'success') {
+                    statusEl.className = 'print-status success';
+                    statusEl.innerHTML = '✅ Label sent to printer successfully!';
+                } else if (result && result.status === 'warning') {
+                    statusEl.className = 'print-status info';
+                    statusEl.innerHTML = `⚠️ ${result.message || 'Print job queued. Please check printer.'}`;
+                } else {
+                    statusEl.className = 'print-status error';
+                    statusEl.innerHTML = `❌ ${result?.message || 'Print job failed'}`;
+                }
+            } catch (error) {
+                statusEl.className = 'print-status error';
+                statusEl.innerHTML = `❌ Print error: ${error.message}`;
+            }
+            
+            // Hide status after 5 seconds
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+        
+        function showDetails(barcode) {
+            const item = scannedItems.find(i => i.barcode === barcode);
+            if (!item) return;
+            
+            if (item.type === 'sample') {
+                window.open(`/storage?search=${item.id}`, '_blank');
+            } else if (item.type === 'container') {
+                window.open(`/containers?search=${item.id}`, '_blank');
+            }
+        }
+        
+        function clearAllScans() {
+            scannedItems = [];
+            localStorage.removeItem('scannedItems');
+            updateScannedItemsDisplay();
+        }
+        
+        function testScan() {
+            // Test with a known barcode from your system
+            scanInput.value = 'TEST123';
+            processScan('TEST123');
+        }
+        
+        function setStatus(type, text) {
+            status.className = `status ${type}`;
+            status.textContent = text;
+            
+            if (type !== 'ready') {
+                setTimeout(() => setStatus('ready', 'Ready to Scan'), 4000);
+            }
+        }
+        
+        // Auto-clear old items every hour
+        setInterval(() => {
+            const now = new Date();
+            const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+            
+            scannedItems = scannedItems.filter(item => {
+                return new Date(item.timestamp) > sixHoursAgo;
+            });
+            
+            if (scannedItems.length === 0) {
+                localStorage.removeItem('scannedItems');
+            } else {
+                localStorage.setItem('scannedItems', JSON.stringify(scannedItems));
+            }
+            
+            updateScannedItemsDisplay();
+        }, 60000); // Check every minute
+    </script>
+</body>
+</html>

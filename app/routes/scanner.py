@@ -578,6 +578,11 @@ def scanner_only():
     """Scanner-only interface - no access to main LabSystem features."""
     return render_template('scanner_only.html')
 
+@scanner_bp.route('/scanner-print-desktop')
+def scanner_print_desktop():
+    """Desktop scanner/print interface - shows last 5 scans with print functionality."""
+    return render_template('scanner_print_desktop.html')
+
 @scanner_bp.route('/api/scanner/webhook', methods=['POST'])
 def scanner_webhook():
     """Webhook endpoint for external scanner apps."""

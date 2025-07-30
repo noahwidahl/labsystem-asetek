@@ -516,6 +516,14 @@ class SampleService:
             if sample_data.get('hasSerialNumbers') and sample_data.get('serialNumbers'):
                 serial_numbers = [sn for sn in sample_data.get('serialNumbers', []) if sn and sn.strip()]
             
+            # Get location name for display
+            location_name = 'Unknown'
+            if location_id:
+                cursor.execute("SELECT LocationName FROM storagelocation WHERE LocationID = %s", (location_id,))
+                location_result = cursor.fetchone()
+                if location_result:
+                    location_name = location_result[0]
+
             response_data = {
                 'success': True,
                 'sample_id': sample_id,
@@ -531,6 +539,7 @@ class SampleService:
                     'Type': sample_type,
                     'Amount': total_amount,
                     'UnitName': self._get_unit_name(sample_data.get('unit')),
+                    'LocationName': location_name,
                     'ExpireDate': expire_date.strftime('%d-%m-%Y') if expire_date else '',
                     'SerialNumbers': serial_numbers,
                     'HasSerialNumbers': bool(sample_data.get('hasSerialNumbers'))

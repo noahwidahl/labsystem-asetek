@@ -600,20 +600,8 @@ class BarcodeScanner {
                 // Close modal
                 bsModal.hide();
                 
-                // Check if test sample print data is available
-                if (result.test_sample_data && result.test_sample_data.show_test_print_confirmation) {
-                    console.log('🖨️ Test sample data available, showing print prompt:', result.test_sample_data);
-                    // Show test sample print prompt
-                    if (typeof showTestSamplePrintPrompt === 'function') {
-                        showTestSamplePrintPrompt(result.test_sample_data);
-                    } else {
-                        console.error('❌ showTestSamplePrintPrompt function not available');
-                        this.showSuccess(`Sample ${sampleIdFormatted} moved to test successfully!`);
-                    }
-                } else {
-                    // Show success message without print prompt
-                    this.showSuccess(`Sample ${sampleIdFormatted} moved to test successfully!`);
-                }
+                // Show success message (no print prompt for test samples)
+                this.showSuccess(`Sample ${sampleIdFormatted} moved to test successfully!`);
             } else {
                 this.showError(result.error || 'Failed to move sample to test');
             }
