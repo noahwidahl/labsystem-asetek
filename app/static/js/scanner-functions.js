@@ -277,6 +277,7 @@ function displaySampleResults(sample, lookupType) {
     document.getElementById('sampleAmount').textContent = sample.Amount || '';
     document.getElementById('sampleUnit').textContent = sample.UnitName || '';
     document.getElementById('sampleLocation').textContent = sample.LocationName || '';
+    document.getElementById('sampleTask').textContent = sample.TaskName || 'None';
     
     // Add lookup type indicator
     if (lookupType === 'serial_number') {
@@ -330,6 +331,10 @@ function displayContainerResults(container) {
                     <tr>
                         <td><strong>Sample Count:</strong></td>
                         <td>${container.SampleCount || 0} samples</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Task:</strong></td>
+                        <td>${container.TaskName || 'None'}</td>
                     </tr>
                 </tbody>
             </table>
@@ -438,6 +443,10 @@ function clearScanResults() {
                     <tr>
                         <td><strong>Lokation:</strong></td>
                         <td id="sampleLocation"></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Task:</strong></td>
+                        <td id="sampleTask"></td>
                     </tr>
                 </tbody>
             </table>

@@ -21,7 +21,7 @@ PRINTER_CONFIG = {
         'app_path_env': 'BROTHER_SAMPLE_PRINTER_PATH',
         'zebra_app_path_env': 'ZEBRA_SAMPLE_PRINTER_PATH',
         'default_path': '',
-        'description': 'Brother QL-810W for Sample Labels (Zebra Scanner Compatible)',
+        'description': 'Brother QL-810W for Sample Labels',
         'format': 'compact',  # Smaller format for individual samples
         'use_zpl': True  # Use ZPL for Zebra scanner compatibility
     },
@@ -30,7 +30,7 @@ PRINTER_CONFIG = {
         'app_path_env': 'BROTHER_CONTAINER_PRINTER_PATH',
         'zebra_app_path_env': 'ZEBRA_CONTAINER_PRINTER_PATH',
         'default_path': '',
-        'description': 'Brother QL-810W for Container Labels (Zebra Scanner Compatible)',
+        'description': 'Brother QL-810W for Container Labels',
         'format': 'large',  # Larger format for packages/containers
         'use_zpl': True  # Use ZPL for Zebra scanner compatibility
     },

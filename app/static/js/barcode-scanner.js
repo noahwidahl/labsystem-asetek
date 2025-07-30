@@ -260,6 +260,7 @@ class BarcodeScanner {
                         <tr><td><strong>Description:</strong></td><td>${container.Description}</td></tr>
                         <tr><td><strong>Type:</strong></td><td>${container.TypeName}</td></tr>
                         <tr><td><strong>Location:</strong></td><td>${container.LocationName}</td></tr>
+                        <tr><td><strong>Task:</strong></td><td>${container.TaskName || 'None'}</td></tr>
                         <tr><td><strong>Capacity:</strong></td><td>${container.ContainerCapacity}</td></tr>
                     </table>
                 </div>
@@ -330,6 +331,7 @@ class BarcodeScanner {
                         <tr><td><strong>Part Number:</strong></td><td>${sample.PartNumber || '-'}</td></tr>
                         <tr><td><strong>Status:</strong></td><td><span class="badge bg-primary">${sample.Status}</span></td></tr>
                         <tr><td><strong>Amount:</strong></td><td>${sample.Amount} ${sample.UnitName || 'pcs'}</td></tr>
+                        <tr><td><strong>Task:</strong></td><td>${sample.TaskName || 'None'}</td></tr>
                         <tr><td><strong>Expire Date:</strong></td><td>${sample.ExpireDate || '-'}</td></tr>
                     </table>
                 </div>

@@ -12,43 +12,12 @@
                     <p class="text-muted">Scan containers, samples, test samples and manage print jobs</p>
                 </div>
                 <div class="d-flex gap-2">
-                    <button class="btn btn-outline-info btn-sm" data-bs-toggle="collapse" data-bs-target="#scannerInfoCollapse">
-                        <i class="fas fa-info-circle me-1"></i>How to Use Scanner
-                    </button>
                     <button class="btn btn-primary" onclick="testScan()">
                         <i class="fas fa-vial me-2"></i>Test Scan
                     </button>
                 </div>
             </div>
             
-            <!-- Info Box -->
-            <div class="collapse mb-4" id="scannerInfoCollapse">
-                <div class="card border-info">
-                    <div class="card-header bg-light border-info">
-                        <h6 class="mb-0"><i class="fas fa-barcode me-2"></i>Scanner Instructions</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <h6><i class="fas fa-hand-pointer me-2"></i>Point and Scan</h6>
-                                <p class="small">Aim the wireless scanner at any barcode and press the trigger. Results will appear automatically.</p>
-                            </div>
-                            <div class="col-md-4">
-                                <h6><i class="fas fa-tags me-2"></i>Supported Barcodes</h6>
-                                <p class="small">
-                                    <strong>Containers:</strong> CNT-123<br>
-                                    <strong>Samples:</strong> BC1-xxx or SMP-123<br>
-                                    <strong>Test Samples:</strong> TST-123
-                                </p>
-                            </div>
-                            <div class="col-md-4">
-                                <h6><i class="fas fa-history me-2"></i>Scan History</h6>
-                                <p class="small">View your recent scans below and click on any item to view details again.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -142,16 +111,15 @@
                             <thead class="table-light">
                                 <tr>
                                     <th>Time</th>
-                                    <th>Sample ID</th>
+                                    <th>ID</th>
                                     <th>Barcode</th>
                                     <th>Description</th>
                                     <th>Status</th>
-                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="printJobsBody">
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">
+                                    <td colspan="5" class="text-center text-muted py-4">
                                         <i class="fas fa-print fa-2x mb-2"></i>
                                         <br>No print jobs yet. Register samples to create print jobs.
                                     </td>
@@ -392,7 +360,7 @@ function loadPrintJobs() {
     if (printJobs.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="text-center text-muted py-4">
+                <td colspan="5" class="text-center text-muted py-4">
                     <i class="fas fa-print fa-2x mb-2"></i>
                     <br>No print jobs yet. Register samples to create print jobs.
                 </td>
@@ -409,18 +377,16 @@ function loadPrintJobs() {
             </button>` :
             '<span class="text-muted">-</span>';
         
-        // Add type icon based on job type
-        const typeIcon = job.type === 'container' ? '📦' : '🧪';
+        // No emoji needed for clean display
         const itemId = job.sampleIdFormatted || 'Unknown';
         
         return `
             <tr>
                 <td>${new Date(job.timestamp).toLocaleString()}</td>
-                <td><code>${typeIcon} ${itemId}</code></td>
+                <td><code>${itemId}</code></td>
                 <td><code>${job.barcode}</code></td>
                 <td>${job.description}</td>
                 <td>${statusBadge}</td>
-                <td>${actionButton}</td>
             </tr>
         `;
     }).join('');
