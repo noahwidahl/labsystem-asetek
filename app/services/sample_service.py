@@ -462,54 +462,9 @@ class SampleService:
                 f"Sample '{description}' registered with {total_amount} units"
             ))
             
-            # Handle automatic label printing based on storage option
+            # Automatic label printing is disabled - all printing handled by frontend
             print_results = []
-            auto_print_enabled = sample_data.get('auto_print_labels', False)
-            
-            if auto_print_enabled:
-                try:
-                    if create_containers and container_ids:
-                        # Container storage - container labels are already printed by container service
-                        print(f"DEBUG: Container labels automatically printed for containers: {container_ids}")
-                        for container_id in container_ids:
-                            print_results.append({
-                                'type': 'container',
-                                'container_id': container_id,
-                                'status': 'printed_by_container_service'
-                            })
-                    else:
-                        # Direct storage - print individual sample labels
-                        print(f"DEBUG: Printing individual sample label for direct storage sample {sample_id}")
-                        from app.routes.printer import print_sample_label
-                        
-                        # Prepare sample data for label printing
-                        sample_label_data = {
-                            'SampleID': sample_id,
-                            'SampleIDFormatted': f'SMP-{sample_id}',
-                            'Description': description,
-                            'PartNumber': sample_data.get('partNumber', ''),
-                            'Amount': total_amount,
-                            'UnitName': self._get_unit_name(sample_data.get('unit')),
-                            'Barcode': base_barcode,
-                            'Type': sample_type,
-                            'ExpireDate': expire_date.strftime('%d-%m-%Y') if expire_date else ''
-                        }
-                        
-                        sample_print_result = print_sample_label(sample_label_data, auto_print=True)
-                        print_results.append({
-                            'type': 'sample',
-                            'sample_id': sample_id,
-                            'print_result': sample_print_result
-                        })
-                        print(f"DEBUG: Sample label print result: {sample_print_result}")
-                        
-                except Exception as print_error:
-                    print(f"DEBUG: Label printing error: {print_error}")
-                    # Don't fail sample creation if printing fails
-                    print_results.append({
-                        'type': 'error',
-                        'message': f'Sample created but label printing failed: {str(print_error)}'
-                    })
+            print(f"DEBUG: Automatic printing disabled - all label printing will be handled by frontend print confirmation")
             
             # Get serial numbers if they were added
             serial_numbers = []
@@ -523,6 +478,14 @@ class SampleService:
                 location_result = cursor.fetchone()
                 if location_result:
                     location_name = location_result[0]
+
+            # Get task name for display
+            task_name = 'None'
+            if sample_data.get('task'):
+                cursor.execute("SELECT TaskName FROM task WHERE TaskID = %s", (sample_data.get('task'),))
+                task_result = cursor.fetchone()
+                if task_result:
+                    task_name = task_result[0]
 
             response_data = {
                 'success': True,
@@ -542,7 +505,8 @@ class SampleService:
                     'LocationName': location_name,
                     'ExpireDate': expire_date.strftime('%d-%m-%Y') if expire_date else '',
                     'SerialNumbers': serial_numbers,
-                    'HasSerialNumbers': bool(sample_data.get('hasSerialNumbers'))
+                    'HasSerialNumbers': bool(sample_data.get('hasSerialNumbers')),
+                    'TaskName': task_name
                 }
             }
             

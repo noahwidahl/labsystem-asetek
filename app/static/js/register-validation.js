@@ -481,6 +481,14 @@ function handleFormSubmission() {
             if (data.sample_data && typeof window.populatePrintStep === 'function') {
                 console.log('Moving to print step with sample data:', data.sample_data);
                 
+                // Store container information for print step
+                if (data.container_ids && data.container_ids.length > 0) {
+                    window.registrationContainerIds = data.container_ids;
+                    console.log('Stored container IDs for print step:', data.container_ids);
+                } else {
+                    window.registrationContainerIds = null;
+                }
+                
                 // Populate the print step with sample data
                 window.populatePrintStep(data.sample_data);
                 

@@ -184,6 +184,11 @@ def format_label_enhanced(label_type, data, printer_config):
                 zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDExp: {expire_date}^FS")
                 current_y += 25
             
+            # Add task information
+            task_name = data.get('TaskName', 'None')
+            zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDTask: {task_name[:20]}^FS")
+            current_y += 25
+            
             # Add some space before barcode
             current_y += 15
             
@@ -205,6 +210,7 @@ def format_label_enhanced(label_type, data, printer_config):
         elif format_type == 'compact':
             expire_date = data.get('ExpireDate', '')
             location_name = data.get('LocationName', '')
+            task_name = data.get('TaskName', 'None')
             return f"""SAMPLE LABEL
 ============
 ID: {data.get('SampleIDFormatted', '')}
@@ -213,9 +219,11 @@ Part: {data.get('PartNumber', '')}
 Amt: {data.get('Amount', '')} {data.get('UnitName', '')}
 Exp: {expire_date}
 Loc: {location_name}
+Task: {task_name}
 Barcode: {data.get('Barcode', '')}
 """
         else:
+            task_name = data.get('TaskName', 'None')
             return f"""
 SAMPLE LABEL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -225,6 +233,7 @@ Barcode: {data.get('Barcode', '')}
 Part Number: {data.get('PartNumber', '')}
 Type: {data.get('Type', '')}
 Amount: {data.get('Amount', '')} {data.get('UnitName', '')}
+Task: {task_name}
 Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
@@ -262,6 +271,11 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
             if container_type:
                 zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDType: {container_type[:20]}^FS")
                 current_y += 25
+            
+            # Add task information
+            task_name = data.get('TaskName', 'None')
+            zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDTask: {task_name[:20]}^FS")
+            current_y += 25
             
             if location:
                 zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDLocation: {location[:18]}^FS")
@@ -317,11 +331,13 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
         # Add status indicator for empty containers
         status_info = " - EMPTY" if len(samples) == 0 else ""
         
+        task_name = data.get('TaskName', 'None')
         label_content = f"""CONTAINER LABEL{part_info}{status_info}
 ===============
 Container: CNT-{data.get('ContainerID', ''):0>4}
 Type: {data.get('Type', data.get('ContainerType', ''))}
 Description: {data.get('Description', '')}
+Task: {task_name}
 Location: {data.get('LocationName', '')}
 Samples: {len(samples)} items{part_info}
 Date: {packing_date}
@@ -592,7 +608,7 @@ def print_container_label(container_id, auto_print=True, max_samples_per_label=7
                 'message': f'Container {container_id} not found'
             }
         
-        # Get all samples in the container
+        # Get all samples in the container with task information
         # Note: using correct lowercase table names from database schema
         cursor.execute("""
             SELECT 
@@ -600,10 +616,12 @@ def print_container_label(container_id, auto_print=True, max_samples_per_label=7
                 s.Description,
                 s.PartNumber,
                 s.Barcode,
-                cs.Amount
+                cs.Amount,
+                t.TaskName
             FROM containersample cs
             JOIN samplestorage ss ON cs.SampleStorageID = ss.StorageID
             JOIN sample s ON ss.SampleID = s.SampleID
+            LEFT JOIN task t ON s.TaskID = t.TaskID
             WHERE cs.ContainerID = %s
             ORDER BY s.SampleID
         """, (container_id,))
@@ -631,6 +649,12 @@ def print_container_label(container_id, auto_print=True, max_samples_per_label=7
             'ContainerCapacity': container_result[4] or 0,
             'samples': []
         }
+        
+        # Get task information from first sample (if any)
+        first_sample_task = 'None'
+        if samples_result and len(samples_result) > 0:
+            first_sample_task = samples_result[0][5] or 'None'  # TaskName is index 5
+        container_data['TaskName'] = first_sample_task
         
         # Add sample information with proper barcode generation
         for sample_row in samples_result:
@@ -805,11 +829,13 @@ def print_sample_label_endpoint(sample_id):
                 s.Type,
                 s.ExpireDate,
                 u.UnitName,
-                sl.LocationName
+                sl.LocationName,
+                t.TaskName
             FROM sample s
             LEFT JOIN unit u ON s.UnitID = u.UnitID
             LEFT JOIN samplestorage ss ON s.SampleID = ss.SampleID
             LEFT JOIN storagelocation sl ON ss.LocationID = sl.LocationID
+            LEFT JOIN task t ON s.TaskID = t.TaskID
             WHERE s.SampleID = %s
         """, (sample_id,))
         
@@ -833,7 +859,8 @@ def print_sample_label_endpoint(sample_id):
             'Type': sample_result[5] or 'Standard',
             'ExpireDate': sample_result[6].strftime('%d-%m-%Y') if sample_result[6] else '',
             'UnitName': 'pcs' if (sample_result[7] or '').lower() == 'stk' else (sample_result[7] or 'pcs'),
-            'LocationName': sample_result[8] or ''
+            'LocationName': sample_result[8] or '',
+            'TaskName': sample_result[9] or 'None'
         }
         
         result = print_sample_label(sample_data, auto_print)

@@ -506,32 +506,13 @@ class ContainerService:
                     f"Container {container_id} created: {container.description}"
                 ))
                 
-                # Automatically print container label if enabled
-                auto_print_enabled = container_data.get('auto_print_label', True)
-                print_result = None
-                
-                if auto_print_enabled:
-                    try:
-                        # Import print function to avoid circular imports
-                        from app.routes.printer import print_container_label
-                        print_result = print_container_label(container_id, auto_print=True)
-                        print(f"DEBUG: Container label print result: {print_result}")
-                    except Exception as print_error:
-                        print(f"DEBUG: Container label print error: {print_error}")
-                        # Don't fail container creation if printing fails
-                        print_result = {
-                            'status': 'error',
-                            'message': f'Container created but label printing failed: {str(print_error)}'
-                        }
+                # Automatic printing is disabled - all printing handled by frontend
+                print(f"DEBUG: Container {container_id} created, automatic printing disabled")
                 
                 result = {
                     'success': True,
                     'container_id': container_id
                 }
-                
-                # Add print result if attempted
-                if print_result:
-                    result['print_result'] = print_result
                 
                 return result
         except Exception as e:
