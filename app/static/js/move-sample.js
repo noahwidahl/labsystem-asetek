@@ -602,3 +602,6 @@ function showErrorMessage(message) {
 
 // Print functionality is now handled by global print-functions.js
 // Functions showSampleLocationPrintPrompt, addSamplePrintJob, etc. are available globally
+
+// Make executePrintQueue globally available for use by other modules
+window.executePrintQueue = executePrintQueue;
