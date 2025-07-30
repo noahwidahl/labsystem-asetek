@@ -51,13 +51,14 @@ def init_dashboard(blueprint, mysql):
             cursor.execute("SELECT COUNT(*) FROM sample WHERE Status = 'In Storage'")
             sample_count = cursor.fetchone()[0] or 0
             
-            # Get samples expiring soon (within 14 days)
+            # Get samples expiring soon (within 14 days) - consistent with expiry management page
             cursor.execute("""
-                SELECT COUNT(*) FROM samplestorage ss
-                JOIN sample s ON ss.SampleID = s.SampleID
-                WHERE ss.ExpireDate <= DATE_ADD(CURRENT_DATE(), INTERVAL 14 DAY)
+                SELECT COUNT(*) FROM sample s
+                WHERE (
+                    (s.ExpireDate <= CURRENT_DATE()) OR 
+                    (s.ExpireDate > CURRENT_DATE() AND s.ExpireDate <= DATE_ADD(CURRENT_DATE(), INTERVAL 14 DAY))
+                )
                 AND s.Status = 'In Storage'
-                AND ss.AmountRemaining > 0
             """)
             expiring_count = cursor.fetchone()[0] or 0
             
