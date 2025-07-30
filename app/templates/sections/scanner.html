@@ -258,11 +258,24 @@ function filterScans(type) {
 let scannerCurrentPrintSample = null;
 let printJobs = JSON.parse(localStorage.getItem('printJobs') || '[]');
 
-function showPrintConfirmation(sampleData) {
-    scannerCurrentPrintSample = sampleData;
-    document.getElementById('printSampleId').textContent = sampleData.SampleIDFormatted || `SMP-${sampleData.SampleID}`;
-    document.getElementById('printBarcode').textContent = sampleData.Barcode;
-    document.getElementById('printDescription').textContent = sampleData.Description;
+function showPrintConfirmation(itemData) {
+    scannerCurrentPrintSample = itemData;
+    
+    // Set modal content based on item type
+    if (itemData.type === 'container') {
+        document.getElementById('printSampleId').textContent = itemData.ContainerIDFormatted || `CNT-${itemData.ContainerID}`;
+        document.getElementById('printBarcode').textContent = itemData.Barcode || `CNT-${itemData.ContainerID}`;
+        document.getElementById('printDescription').textContent = itemData.Description + ` (${itemData.SampleCount || 0} samples)`;
+        // Update modal title for containers
+        document.querySelector('#printConfirmModal .modal-title').textContent = 'Print Container Label';
+    } else {
+        // Default to sample
+        document.getElementById('printSampleId').textContent = itemData.SampleIDFormatted || `SMP-${itemData.SampleID}`;
+        document.getElementById('printBarcode').textContent = itemData.Barcode;
+        document.getElementById('printDescription').textContent = itemData.Description;
+        // Reset modal title for samples
+        document.querySelector('#printConfirmModal .modal-title').textContent = 'Print Sample Label';
+    }
     
     new bootstrap.Modal(document.getElementById('printConfirmModal')).show();
 }
@@ -271,14 +284,27 @@ async function printNow() {
     if (!scannerCurrentPrintSample) return;
     
     try {
-        const response = await fetch(`/api/print/sample/${scannerCurrentPrintSample.SampleID}`, {
+        let printUrl = '';
+        let requestBody = { auto_print: true };
+        
+        // Determine print URL based on item type
+        if (scannerCurrentPrintSample.type === 'sample') {
+            printUrl = `/api/print/sample/${scannerCurrentPrintSample.SampleID}`;
+        } else if (scannerCurrentPrintSample.type === 'container') {
+            const containerId = scannerCurrentPrintSample.ContainerID;
+            printUrl = `/api/print/container/${containerId}`;
+            requestBody = scannerCurrentPrintSample; // Send full container data
+        } else {
+            showAlert('warning', 'Unknown item type for printing');
+            return;
+        }
+        
+        const response = await fetch(printUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                auto_print: true
-            })
+            body: JSON.stringify(requestBody)
         });
         
         const result = await response.json();
@@ -322,16 +348,28 @@ function savePrintJobForLater() {
     scannerCurrentPrintSample = null;
 }
 
-function addPrintJob(sampleData, status) {
+function addPrintJob(itemData, status) {
     const printJob = {
         id: Date.now(),
         timestamp: new Date().toISOString(),
-        sampleId: sampleData.SampleID,
-        sampleIdFormatted: sampleData.SampleIDFormatted || `SMP-${sampleData.SampleID}`,
-        barcode: sampleData.Barcode,
-        description: sampleData.Description,
-        status: status // 'queued', 'printed', 'failed'
+        status: status, // 'queued', 'printed', 'failed'
+        type: itemData.type || 'sample',
+        rawData: itemData // Store full item data for retry
     };
+    
+    // Set type-specific fields
+    if (itemData.type === 'container') {
+        printJob.containerId = itemData.ContainerID;
+        printJob.sampleIdFormatted = itemData.ContainerIDFormatted || `CNT-${itemData.ContainerID}`;
+        printJob.barcode = itemData.Barcode || `CNT-${itemData.ContainerID}`;
+        printJob.description = itemData.Description || 'Container';
+    } else {
+        // Default to sample
+        printJob.sampleId = itemData.SampleID;
+        printJob.sampleIdFormatted = itemData.SampleIDFormatted || `SMP-${itemData.SampleID}`;
+        printJob.barcode = itemData.Barcode;
+        printJob.description = itemData.Description;
+    }
     
     printJobs.unshift(printJob); // Add to beginning
     
@@ -371,10 +409,14 @@ function loadPrintJobs() {
             </button>` :
             '<span class="text-muted">-</span>';
         
+        // Add type icon based on job type
+        const typeIcon = job.type === 'container' ? '📦' : '🧪';
+        const itemId = job.sampleIdFormatted || 'Unknown';
+        
         return `
             <tr>
                 <td>${new Date(job.timestamp).toLocaleString()}</td>
-                <td><code>${job.sampleIdFormatted}</code></td>
+                <td><code>${typeIcon} ${itemId}</code></td>
                 <td><code>${job.barcode}</code></td>
                 <td>${job.description}</td>
                 <td>${statusBadge}</td>
@@ -402,14 +444,24 @@ async function retryPrint(jobId) {
     if (!job) return;
     
     try {
-        const response = await fetch(`/api/print/sample/${job.sampleId}`, {
+        let printUrl = '';
+        let requestBody = { auto_print: true };
+        
+        // Determine print URL based on job type
+        if (job.type === 'container') {
+            printUrl = `/api/print/container/${job.containerId}`;
+            requestBody = job.rawData || job; // Use stored raw data if available
+        } else {
+            // Default to sample printing
+            printUrl = `/api/print/sample/${job.sampleId}`;
+        }
+        
+        const response = await fetch(printUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                auto_print: true
-            })
+            body: JSON.stringify(requestBody)
         });
         
         const result = await response.json();

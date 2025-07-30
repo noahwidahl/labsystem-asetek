@@ -233,6 +233,8 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
         # Enhanced container label with multiple barcodes and sample information
         samples = data.get('samples', [])
         packing_date = data.get('PackingDate', datetime.now().strftime('%d-%m-%Y'))
+        current_app.logger.info(f"=== FORMAT LABEL DEBUG: Container label requested with {len(samples)} samples ===")
+        current_app.logger.info(f"=== FORMAT LABEL DEBUG: use_zpl = {printer_config.get('use_zpl', False)} ===")
         
         if use_zpl:
             # ZPL format for container labels with dynamic height based on content
@@ -610,6 +612,14 @@ def print_container_label(container_id, auto_print=True, max_samples_per_label=7
         current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Found {len(samples_result)} samples in container {container_id} ===")
         for i, sample_row in enumerate(samples_result):
             current_app.logger.info(f"Sample {i+1}: ID={sample_row[0]}, Desc='{sample_row[1]}', Part='{sample_row[2]}', Barcode='{sample_row[3]}', Amount={sample_row[4]}")
+        
+        # Also log container details for debugging
+        current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Container details ===")
+        current_app.logger.info(f"Container ID: {container_result[0]}")
+        current_app.logger.info(f"Description: {container_result[1]}")
+        current_app.logger.info(f"Type: {container_result[2]}")
+        current_app.logger.info(f"Location: {container_result[3]}")
+        current_app.logger.info(f"Capacity: {container_result[4]}")
         cursor.close()
         
         # Prepare container data for label
@@ -708,8 +718,15 @@ def print_container_label(container_id, auto_print=True, max_samples_per_label=7
             if len(all_samples) <= max_samples_per_label:
                 # Single label
                 current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Printing single label ===")
+                current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Container data keys: {list(container_data.keys())} ===")
+                current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Printer config: {printer_config} ===")
+                
                 label_content = format_label_enhanced('container', container_data, printer_config)
+                current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Formatted label content (first 300 chars): {label_content[:300]}... ===")
+                current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Full label content:\n{label_content} ===")
+                
                 result = print_to_device(label_content, printer_config)
+                current_app.logger.info(f"=== CONTAINER PRINT DEBUG: Print device result: {result} ===")
                 
                 if result['status'] == 'success':
                     log_print_action('container', container_data, printer_config)
@@ -835,10 +852,14 @@ def print_container_label_endpoint(container_id):
     Endpoint to print container label for a specific container.
     """
     try:
+        current_app.logger.info(f"=== CONTAINER ENDPOINT DEBUG: Received request to print container {container_id} ===")
         data = request.get_json() or {}
         auto_print = data.get('auto_print', True)
+        current_app.logger.info(f"=== CONTAINER ENDPOINT DEBUG: Request data: {data} ===")
+        current_app.logger.info(f"=== CONTAINER ENDPOINT DEBUG: auto_print = {auto_print} ===")
         
         result = print_container_label(container_id, auto_print)
+        current_app.logger.info(f"=== CONTAINER ENDPOINT DEBUG: Print result: {result} ===")
         return jsonify(result)
         
     except Exception as e:

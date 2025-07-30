@@ -282,11 +282,28 @@ class BarcodeScanner {
             </div>
         `;
         
-        // Add action buttons
+        // Add action buttons - show direct print option on scanner page
+        const isOnScannerPage = window.location.pathname === '/scanner';
+        let printButton = '';
+        
+        if (isOnScannerPage && typeof window.showPrintConfirmation === 'function') {
+            // Direct print button for scanner page
+            printButton = `
+                <button type="button" class="btn btn-primary" onclick="window.barcodeScanner.showContainerPrintConfirmation(${container.ContainerID}, '${container.ContainerIDFormatted || 'CNT-' + container.ContainerID}', '${barcode}', '${container.Description || ''}', ${container.SampleCount || 0})">
+                    <i class="fas fa-print me-1"></i>Print Label
+                </button>
+            `;
+        } else {
+            // Print queue button for other pages
+            printButton = `
+                <button type="button" class="btn btn-outline-primary" onclick="window.barcodeScanner.addContainerToPrintQueue(${container.ContainerID}, '${container.ContainerIDFormatted || 'CNT-' + container.ContainerID}', '${barcode}', '${container.Description || ''}')">
+                    <i class="fas fa-print me-1"></i>Add to Print Queue
+                </button>
+            `;
+        }
+        
         footer.innerHTML = `
-            <button type="button" class="btn btn-outline-primary" onclick="window.barcodeScanner.addContainerToPrintQueue(${container.ContainerID}, '${container.ContainerIDFormatted || 'CNT-' + container.ContainerID}', '${barcode}', '${container.Description || ''}')">
-                <i class="fas fa-print me-1"></i>Add to Print Queue
-            </button>
+            ${printButton}
             <button type="button" class="btn btn-outline-secondary" onclick="window.location.href='/containers'">
                 <i class="fas fa-box me-1"></i>View All Containers
             </button>
@@ -335,11 +352,28 @@ class BarcodeScanner {
             </div>
         `;
         
-        // Add action buttons
+        // Add action buttons - show direct print option on scanner page
+        const isOnScannerPage = window.location.pathname === '/scanner';
+        let printButton = '';
+        
+        if (isOnScannerPage && typeof window.showPrintConfirmation === 'function') {
+            // Direct print button for scanner page
+            printButton = `
+                <button type="button" class="btn btn-primary" onclick="window.barcodeScanner.showSamplePrintConfirmation(${sample.SampleID}, '${sample.SampleIDFormatted}', '${barcode}', '${sample.Description || ''}')">
+                    <i class="fas fa-print me-1"></i>Print Label
+                </button>
+            `;
+        } else {
+            // Print queue button for other pages
+            printButton = `
+                <button type="button" class="btn btn-outline-primary" onclick="window.barcodeScanner.addSampleToPrintQueue(${sample.SampleID}, '${sample.SampleIDFormatted}', '${barcode}', '${sample.Description || ''}')">
+                    <i class="fas fa-print me-1"></i>Add to Print Queue
+                </button>
+            `;
+        }
+        
         footer.innerHTML = `
-            <button type="button" class="btn btn-outline-primary" onclick="window.barcodeScanner.addSampleToPrintQueue(${sample.SampleID}, '${sample.SampleIDFormatted}', '${barcode}', '${sample.Description || ''}')">
-                <i class="fas fa-print me-1"></i>Add to Print Queue
-            </button>
+            ${printButton}
             <button type="button" class="btn btn-outline-success" onclick="window.barcodeScanner.showMoveToTestModal(${sample.SampleID}, '${sample.SampleIDFormatted}')">
                 <i class="fas fa-flask me-1"></i>Move to Test
             </button>
@@ -875,6 +909,63 @@ class BarcodeScanner {
         } catch (error) {
             console.error('Error adding container to print queue:', error);
             this.showError('Error adding container to print queue');
+        }
+    }
+    
+    showContainerPrintConfirmation(containerId, containerIdFormatted, barcode, description, sampleCount) {
+        // Close the scanner modal first
+        const scannerModal = document.getElementById('barcodeModal');
+        if (scannerModal) {
+            const bsModal = bootstrap.Modal.getInstance(scannerModal);
+            if (bsModal) {
+                bsModal.hide();
+            }
+        }
+        
+        // Create container data object for print confirmation
+        const containerData = {
+            type: 'container',
+            ContainerID: containerId,
+            ContainerIDFormatted: containerIdFormatted,
+            Barcode: barcode,
+            Description: description,
+            SampleCount: sampleCount
+        };
+        
+        // Call the scanner page print confirmation function
+        if (typeof window.showPrintConfirmation === 'function') {
+            window.showPrintConfirmation(containerData);
+        } else {
+            console.error('showPrintConfirmation function not available');
+            this.showError('Print confirmation not available on this page');
+        }
+    }
+    
+    showSamplePrintConfirmation(sampleId, sampleIdFormatted, barcode, description) {
+        // Close the scanner modal first
+        const scannerModal = document.getElementById('barcodeModal');
+        if (scannerModal) {
+            const bsModal = bootstrap.Modal.getInstance(scannerModal);
+            if (bsModal) {
+                bsModal.hide();
+            }
+        }
+        
+        // Create sample data object for print confirmation
+        const sampleData = {
+            type: 'sample',
+            SampleID: sampleId,
+            SampleIDFormatted: sampleIdFormatted,
+            Barcode: barcode,
+            Description: description
+        };
+        
+        // Call the scanner page print confirmation function
+        if (typeof window.showPrintConfirmation === 'function') {
+            window.showPrintConfirmation(sampleData);
+        } else {
+            console.error('showPrintConfirmation function not available');
+            this.showError('Print confirmation not available on this page');
         }
     }
 }

@@ -583,12 +583,27 @@
                     throw new Error('Item not found');
                 }
                 
+                console.log(`=== PRINT DEBUG: Printing ${type} with barcode ${barcode} ===`);
+                console.log('Item data:', item);
+                console.log(`=== PRINT DEBUG: Item type: ${item.type} ===`);
+                console.log(`=== PRINT DEBUG: Raw data type: ${typeof item.rawData} ===`);
+                
                 let printUrl = '';
                 if (type === 'sample') {
                     printUrl = `/api/print/sample/${item.rawData.SampleID}`;
+                    console.log(`=== PRINT DEBUG: Using sample endpoint with ID ${item.rawData.SampleID} ===`);
                 } else if (type === 'container') {
-                    printUrl = `/api/print/container/${item.rawData.ContainerID}`;
+                    // Try both possible field names for container ID
+                    const containerId = item.rawData.ContainerID || item.rawData.containerId;
+                    printUrl = `/api/print/container/${containerId}`;
+                    console.log(`=== PRINT DEBUG: Using container endpoint with ID ${containerId} ===`);
+                    console.log(`=== PRINT DEBUG: Raw data keys: ${Object.keys(item.rawData)} ===`);
+                    console.log(`=== PRINT DEBUG: Raw data values:`, item.rawData);
+                    console.log(`=== PRINT DEBUG: Final container URL: ${printUrl} ===`);
                 }
+                
+                console.log(`=== PRINT DEBUG: Calling URL: ${printUrl} ===`);
+                console.log('=== PRINT DEBUG: Request body:', item.rawData);
                 
                 const response = await fetch(printUrl, {
                     method: 'POST',
