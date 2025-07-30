@@ -244,6 +244,45 @@ class ContainerService:
             container.total_items = 0
             return container
     
+    def _generate_unique_container_barcode(self, cursor):
+        """
+        Generate a unique container barcode that doesn't already exist in the database
+        """
+        attempt = 1
+        max_attempts = 1000  # Prevent infinite loop
+        
+        while attempt <= max_attempts:
+            # First try with the AUTO_INCREMENT value
+            if attempt == 1:
+                cursor.execute("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'container'")
+                auto_increment_result = cursor.fetchone()
+                candidate_id = auto_increment_result[0] if auto_increment_result else 1
+            else:
+                # If AUTO_INCREMENT failed, find the highest existing ID and increment
+                cursor.execute("SELECT MAX(ContainerID) FROM container")
+                max_id_result = cursor.fetchone()
+                max_id = max_id_result[0] if max_id_result and max_id_result[0] else 0
+                candidate_id = max_id + attempt
+            
+            candidate_barcode = f"CNT-{candidate_id}"
+            
+            # Check if this barcode already exists
+            cursor.execute("SELECT COUNT(*) FROM container WHERE Barcode = %s", (candidate_barcode,))
+            exists = cursor.fetchone()[0] > 0
+            
+            if not exists:
+                print(f"DEBUG: Generated unique container barcode: {candidate_barcode}")
+                return candidate_barcode
+            
+            print(f"DEBUG: Barcode {candidate_barcode} already exists, trying next candidate")
+            attempt += 1
+        
+        # If we couldn't find a unique barcode after max_attempts, use timestamp fallback
+        import time
+        timestamp_barcode = f"CNT-{int(time.time())}"
+        print(f"DEBUG: Using timestamp-based barcode as fallback: {timestamp_barcode}")
+        return timestamp_barcode
+    
     def create_container(self, container_data, user_id):
         print(f"DEBUG: create_container called with data: {container_data}")
         # Extract key data for debugging
@@ -379,13 +418,8 @@ class ContainerService:
                         capacity = 100
                         print(f"DEBUG: Non-numeric capacity value, using standard default 100")
                     
-                    # Generate container ID first to create barcode
-                    cursor.execute(f"SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{table_name}'")
-                    auto_increment_result = cursor.fetchone()
-                    next_container_id = auto_increment_result[0] if auto_increment_result else 1
-                    
-                    # Generate CNT- barcode
-                    container_barcode = f"CNT-{next_container_id}"
+                    # Generate unique container barcode
+                    container_barcode = self._generate_unique_container_barcode(cursor)
                     
                     query = f"""
                         INSERT INTO {table_name} (
@@ -429,13 +463,8 @@ class ContainerService:
                         capacity = 100
                         print(f"DEBUG: Non-numeric capacity value, using standard default 100")
                     
-                    # Generate container ID first to create barcode
-                    cursor.execute(f"SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{table_name}'")
-                    auto_increment_result = cursor.fetchone()
-                    next_container_id = auto_increment_result[0] if auto_increment_result else 1
-                    
-                    # Generate CNT- barcode
-                    container_barcode = f"CNT-{next_container_id}"
+                    # Generate unique container barcode
+                    container_barcode = self._generate_unique_container_barcode(cursor)
                     
                     query = f"""
                         INSERT INTO {table_name} (
