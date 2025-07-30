@@ -154,34 +154,34 @@ def format_label_enhanced(label_type, data, printer_config):
                 "^XA",
                 "^LH0,0^FS",
                 "^FO30,20^A0N,25,25^FDSAMPLE LABEL^FS",
-                f"^FO30,60^A0N,30,30^FD{sample_id}^FS"
+                f"^FO30,60^A0N,22,22^FD{sample_id}^FS"
             ]
             
             current_y = 100
             
             # Add description (always present)
             if description:
-                zpl_lines.append(f"^FO30,{current_y}^A0N,20,20^FDDesc: {description[:25]}^FS")
-                current_y += 30
+                zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDDesc: {description[:25]}^FS")
+                current_y += 25
             
             # Add part number if present
             if part_number:
-                zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FDPart: {part_number[:20]}^FS")
+                zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDPart: {part_number[:20]}^FS")
                 current_y += 25
             
             # Add amount
             if amount:
-                zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FDAmt: {amount} {unit_name}^FS")
+                zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDAmt: {amount} {unit_name}^FS")
                 current_y += 25
             
             # Add location if present
             if location:
-                zpl_lines.append(f"^FO30,{current_y}^A0N,16,16^FDLoc: {location[:20]}^FS")
+                zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDLoc: {location[:20]}^FS")
                 current_y += 25
             
             # Add expire date if present
             if expire_date:
-                zpl_lines.append(f"^FO30,{current_y}^A0N,16,16^FDExp: {expire_date}^FS")
+                zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDExp: {expire_date}^FS")
                 current_y += 25
             
             # Add some space before barcode
@@ -192,11 +192,11 @@ def format_label_enhanced(label_type, data, printer_config):
             current_y += 95  # Barcode height + margin
             
             # Add barcode text
-            zpl_lines.append(f"^FO30,{current_y}^A0N,16,16^FD{barcode}^FS")
+            zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FD{barcode}^FS")
             current_y += 25
             
             # Add timestamp
-            zpl_lines.append(f"^FO30,{current_y}^A0N,14,14^FD{datetime.now().strftime('%d-%m-%Y %H:%M')}^FS")
+            zpl_lines.append(f"^FO30,{current_y}^A0N,16,16^FD{datetime.now().strftime('%d-%m-%Y %H:%M')}^FS")
             
             # Close ZPL
             zpl_lines.append("^XZ")
@@ -249,37 +249,37 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
                 "^XA",
                 "^LH0,0^FS",
                 "^FO30,20^A0N,30,30^FDCONTAINER LABEL^FS",
-                f"^FO30,60^A0N,35,35^FDCNT-{container_id:0>4}^FS"
+                f"^FO30,60^A0N,22,22^FDCNT-{container_id:0>4}^FS"
             ]
             
             current_y = 110
             
             # Add container info
             if description:
-                zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FDDesc: {description[:20]}^FS")
+                zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDDesc: {description[:20]}^FS")
                 current_y += 25
             
             if container_type:
-                zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FDType: {container_type[:20]}^FS")
+                zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDType: {container_type[:20]}^FS")
                 current_y += 25
             
             if location:
-                zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FDLocation: {location[:18]}^FS")
+                zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDLocation: {location[:18]}^FS")
                 current_y += 25
             
-            zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FDSamples: {len(samples)}^FS")
+            zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FDSamples: {len(samples)}^FS")
             current_y += 35
             
             # Add container barcode
             zpl_lines.append(f"^FO30,{current_y}{generate_zpl_barcode(container_barcode, '128', 100, 4)}")
             current_y += 115  # Barcode height + margin
             
-            zpl_lines.append(f"^FO30,{current_y}^A0N,18,18^FD{container_barcode}^FS")
+            zpl_lines.append(f"^FO30,{current_y}^A0N,22,22^FD{container_barcode}^FS")
             current_y += 35
             
             # Add sample information if present
             if samples:
-                zpl_lines.append(f"^FO30,{current_y}^A0N,16,16^FDSample Contents:^FS")
+                zpl_lines.append(f"^FO30,{current_y}^A0N,20,20^FDSample Contents:^FS")
                 current_y += 25
                 
                 # Show up to 7 samples to fit the requirement
@@ -289,18 +289,18 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
                     sample_desc = sample.get('Description', '')[:15]  # Truncate for space
                     sample_barcode = sample.get('Barcode', f"SMP{sample_id}")
                     
-                    zpl_lines.append(f"^FO30,{current_y}^A0N,14,14^FD{i+1}. SMP-{sample_id:0>3} {sample_desc}^FS")
+                    zpl_lines.append(f"^FO30,{current_y}^A0N,16,16^FD{i+1}. SMP-{sample_id:0>3} {sample_desc}^FS")
                     current_y += 20
-                    zpl_lines.append(f"^FO30,{current_y}^A0N,12,12^FD   {sample_barcode}^FS")
+                    zpl_lines.append(f"^FO30,{current_y}^A0N,14,14^FD   {sample_barcode}^FS")
                     current_y += 18
                 
                 if len(samples) > max_samples:
-                    zpl_lines.append(f"^FO30,{current_y}^A0N,14,14^FD... and {len(samples)-max_samples} more samples^FS")
+                    zpl_lines.append(f"^FO30,{current_y}^A0N,16,16^FD... and {len(samples)-max_samples} more samples^FS")
                     current_y += 25
             
             # Add timestamp
             current_y += 10
-            zpl_lines.append(f"^FO30,{current_y}^A0N,12,12^FD{datetime.now().strftime('%d-%m-%Y %H:%M')}^FS")
+            zpl_lines.append(f"^FO30,{current_y}^A0N,16,16^FD{datetime.now().strftime('%d-%m-%Y %H:%M')}^FS")
             
             # Close ZPL
             zpl_lines.append("^XZ")

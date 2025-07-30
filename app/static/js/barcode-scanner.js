@@ -164,6 +164,9 @@ class BarcodeScanner {
     showScanModal(barcode, type, data) {
         this.isModalOpen = true;
         
+        // Store scan data for use in print functions
+        this.lastScanData = data;
+        
         // Remove any existing modal to prevent conflicts
         const existingModal = document.getElementById('barcodeModal');
         if (existingModal) {
@@ -289,7 +292,7 @@ class BarcodeScanner {
         if (isOnScannerPage && typeof window.showPrintConfirmation === 'function') {
             // Direct print button for scanner page
             printButton = `
-                <button type="button" class="btn btn-primary" onclick="window.barcodeScanner.showContainerPrintConfirmation(${container.ContainerID}, '${container.ContainerIDFormatted || 'CNT-' + container.ContainerID}', '${barcode}', '${container.Description || ''}', ${container.SampleCount || 0})">
+                <button type="button" class="btn btn-primary" onclick="window.barcodeScanner.showContainerPrintConfirmationWithContext(${container.ContainerID}, '${container.ContainerIDFormatted || 'CNT-' + container.ContainerID}', '${barcode}', '${container.Description || ''}')">
                     <i class="fas fa-print me-1"></i>Print Label
                 </button>
             `;
@@ -939,6 +942,21 @@ class BarcodeScanner {
             console.error('showPrintConfirmation function not available');
             this.showError('Print confirmation not available on this page');
         }
+    }
+    
+    showContainerPrintConfirmationWithContext(containerId, containerIdFormatted, barcode, description) {
+        // Find the current scan data to get correct sample count
+        let sampleCount = 0;
+        
+        // Look for the most recent scan data in our scan history
+        if (this.lastScanData && this.lastScanData.samples) {
+            sampleCount = this.lastScanData.samples.length;
+        } else if (this.lastScanData && this.lastScanData.container && this.lastScanData.container.SampleCount) {
+            sampleCount = this.lastScanData.container.SampleCount;
+        }
+        
+        // Call the original function with correct sample count
+        this.showContainerPrintConfirmation(containerId, containerIdFormatted, barcode, description, sampleCount);
     }
     
     showSamplePrintConfirmation(sampleId, sampleIdFormatted, barcode, description) {
