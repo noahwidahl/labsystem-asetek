@@ -40,7 +40,7 @@ def init_container(blueprint, mysql):
             location_columns = [col[0] for col in cursor.description]
             locations = [dict(zip(location_columns, row)) for row in cursor.fetchall()]
             
-            # Get active samples for the "Add sample" function
+            # Get active samples for the "Add sample" function - exclude samples already in containers
             cursor.execute("""
                 SELECT 
                     s.SampleID,
@@ -51,8 +51,10 @@ def init_container(blueprint, mysql):
                 FROM Sample s
                 JOIN SampleStorage ss ON s.SampleID = ss.SampleID
                 JOIN Unit u ON s.UnitID = u.UnitID
+                LEFT JOIN ContainerSample cs ON ss.StorageID = cs.SampleStorageID
                 WHERE ss.AmountRemaining > 0
                 AND s.Status = 'In Storage'
+                AND cs.ContainerSampleID IS NULL
                 ORDER BY s.SampleID DESC
             """)
             
@@ -329,7 +331,8 @@ def init_container(blueprint, mysql):
                 data.get('sampleId'),
                 data.get('amount', 1),
                 user_id,
-                data.get('force_add', False)  # Added force_add parameter to bypass capacity check
+                data.get('force_add', False),  # Added force_add parameter to bypass capacity check
+                data.get('source', '')  # Source parameter to differentiate between container details and sample overview
             )
             
             return jsonify(result)

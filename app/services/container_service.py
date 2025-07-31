@@ -524,7 +524,7 @@ class ContainerService:
                 'error': str(e)
             }
             
-    def add_sample_to_container(self, container_id, sample_id, amount=1, user_id=None, force_add=False):
+    def add_sample_to_container(self, container_id, sample_id, amount=1, user_id=None, force_add=False, source=''):
         print(f"DEBUG: add_sample_to_container called with container_id={container_id}, sample_id={sample_id}, amount={amount}, force_add={force_add}")
         # Note: This function now MOVES samples to containers rather than adding them
         try:
@@ -625,7 +625,15 @@ class ContainerService:
                     """, (sample_location_id, container_id))
                     print(f"DEBUG: Updated container {container_id} location to {sample_location_id}")
                 
-                # Remove sample from original container if it exists
+                # For container details "add" functionality, prevent moving between containers
+                # Only allow adding samples from direct storage
+                if source == 'container_details' and original_container_id and original_container_id != container_id:
+                    return {
+                        'success': False,
+                        'error': 'This sample is already in another container. Please use the Move functionality in Sample Overview to move samples between containers.'
+                    }
+                
+                # Remove sample from original container if it exists (for Sample Overview moves)
                 if original_container_id and original_container_id != container_id:
                     cursor.execute("""
                         DELETE FROM containersample 

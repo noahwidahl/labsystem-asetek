@@ -87,9 +87,12 @@ function showContainerUpdatePrintPrompt(containerId, updateInfo) {
     
     // Create modal if it doesn't exist
     let modal = document.getElementById('containerUpdatePrintModal');
+    console.log('🖨️ Looking for existing modal, found:', modal);
     if (!modal) {
+        console.log('🖨️ Creating new containerUpdatePrintModal');
         modal = createContainerUpdatePrintModal();
         document.body.appendChild(modal);
+        console.log('🖨️ Modal created and appended to body');
     }
     
     // Update modal content
@@ -97,8 +100,11 @@ function showContainerUpdatePrintPrompt(containerId, updateInfo) {
     document.getElementById('updateContainerAction').textContent = updateInfo?.action || 'Container updated';
     
     // Show modal
+    console.log('🖨️ Creating bootstrap modal for containerUpdatePrintModal');
     const bootstrapModal = new bootstrap.Modal(modal);
+    console.log('🖨️ About to show modal, modal element:', modal);
     bootstrapModal.show();
+    console.log('🖨️ Modal show() called');
 }
 
 function createContainerPrintModal() {

@@ -1,6 +1,14 @@
 // app/static/js/container-details.js
+console.log('🚀 CONTAINER-DETAILS: Script loading...');
+
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Container details initialized');
+    console.log('🏠 CONTAINER-DETAILS: DOM loaded, initializing container details');
+    
+    // Debug: Check if global print functions are available
+    console.log('🖨️ CONTAINER-DETAILS: Print functions check:');
+    console.log('- showCombinedContainerPrintPrompt:', typeof window.showCombinedContainerPrintPrompt);
+    console.log('- showContainerUpdatePrintPrompt:', typeof window.showContainerUpdatePrintPrompt);
+    console.log('- executePrintQueue:', typeof window.executePrintQueue);
     
     // Initialize the sample select with search functionality
     setupSampleSelect();
@@ -121,10 +129,6 @@ window.loadContainerDetails = function(containerId) {
                                            data-sample-id="${sampleId}">
                                         Details
                                     </button>
-                                    <button class="btn btn-sm btn-danger sample-move-btn" 
-                                           data-sample-id="${sampleId}">
-                                        Move
-                                    </button>
                                 </td>
                             </tr>
                         `;
@@ -150,25 +154,6 @@ window.loadContainerDetails = function(containerId) {
                         });
                     });
                     
-                    // Add event listeners to the move sample buttons
-                    document.querySelectorAll('#container-samples-list .sample-move-btn').forEach(button => {
-                        button.addEventListener('click', function() {
-                            const sampleId = this.dataset.sampleId;
-                            if (sampleId) {
-                                // Hide container details modal
-                                const containerModal = bootstrap.Modal.getInstance(document.getElementById('containerDetailsModal'));
-                                if (containerModal) containerModal.hide();
-                                
-                                // Prepare and show the move sample modal
-                                if (typeof prepareMoveModal === 'function') {
-                                    prepareMoveModal('container', sampleId);
-                                } else {
-                                    console.error('Move sample function not available. Make sure move-sample.js is loaded.');
-                                    showErrorMessage('Unable to move sample. Please try again later.');
-                                }
-                            }
-                        });
-                    });
                 } else {
                     document.getElementById('container-samples-list').innerHTML = 
                         '<p class="text-center text-muted">No samples in this container</p>';
@@ -225,9 +210,11 @@ function setupSampleSelect() {
 
 // Add sample to container
 function addSampleToContainer(forceAdd = false) {
+    console.log('🎯 CONTAINER-DETAILS: addSampleToContainer called with forceAdd:', forceAdd);
     const containerId = document.getElementById('targetContainerId').value;
     const sampleId = document.getElementById('sampleSelect').value;
     const amount = parseInt(document.getElementById('sampleAmount').value) || 1;
+    console.log('🎯 CONTAINER-DETAILS: Add data - containerId:', containerId, 'sampleId:', sampleId, 'amount:', amount);
     
     // Validation
     if (!sampleId) {
@@ -240,11 +227,17 @@ function addSampleToContainer(forceAdd = false) {
         return;
     }
     
+    // Proceed with add - backend now filters out samples already in containers
+    proceedWithAddSample(containerId, sampleId, amount, forceAdd);
+}
+
+function proceedWithAddSample(containerId, sampleId, amount, forceAdd = false) {
     // Create data object
     const data = {
         containerId: containerId,
         sampleId: sampleId,
-        amount: amount
+        amount: amount,
+        source: 'container_details'  // Flag to indicate this is from container details page
     };
     
     // If forceAdd is true, add that to the request
@@ -263,20 +256,130 @@ function addSampleToContainer(forceAdd = false) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showSuccessMessage('Sample moved to container successfully!');
+            showSuccessMessage('Sample added to container successfully!');
             
             // Check if there's a capacity warning
             if (data.capacity_warning) {
                 showWarningMessage('Container capacity has been exceeded but sample was added anyway.');
             }
             
-            // Close modal and reload page
+            // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('addSampleToContainerModal'));
             if (modal) modal.hide();
             
+            // Handle printing based on add type - only for direct storage to container adds
+            const originalContainerId = data.original_container_id;
+            const newContainerId = containerId;
+            console.log('🖨️ Container Add - Original:', originalContainerId, 'New:', newContainerId, 'Original has samples:', data.original_container_has_samples);
+            
+            // Debug: Check if print functions are available
+            console.log('🖨️ DEBUG: showCombinedContainerPrintPrompt available:', typeof window.showCombinedContainerPrintPrompt);
+            console.log('🖨️ DEBUG: showContainerUpdatePrintPrompt available:', typeof window.showContainerUpdatePrintPrompt);
+            console.log('🖨️ DEBUG: executePrintQueue available:', typeof window.executePrintQueue);
+            
+            // Wait a moment for print functions to be fully loaded if needed
+            const handlePrintWorkflow = () => {
+                // Show print prompts for affected containers - this should not happen in add mode since we block container-to-container operations
+                if (originalContainerId && newContainerId && originalContainerId !== newContainerId) {
+                    // This should not happen with the new validation, but keep for safety
+                    console.log('🖨️ Container-to-container operation detected (should not happen):', {originalContainerId, newContainerId, original_has_samples: data.original_container_has_samples});
+                
+                    // Show combined prompt for both containers
+                    if (typeof window.showCombinedContainerPrintPrompt === 'function') {
+                        console.log('🖨️ Using showCombinedContainerPrintPrompt');
+                        const originalStatus = data.original_container_has_samples ? 'updated' : 'now empty';
+                        window.showCombinedContainerPrintPrompt({
+                            sourceContainerId: originalContainerId,
+                            sourceStatus: originalStatus,
+                            destinationContainerId: newContainerId,
+                            destinationStatus: 'updated',
+                            sampleId: sampleId
+                        });
+                    } else {
+                        console.log('🖨️ showCombinedContainerPrintPrompt not available, using fallback');
+                        // Fallback approach - show individual prompts
+                        const printQueue = [];
+                        
+                        printQueue.push(() => {
+                            console.log('🖨️ Showing new container prompt for', newContainerId);
+                            if (typeof window.showContainerUpdatePrintPrompt === 'function') {
+                                window.showContainerUpdatePrintPrompt(newContainerId, {
+                                    description: `New container after adding sample`,
+                                    action: 'Sample added to container'
+                                });
+                            }
+                        });
+                        
+                        if (originalContainerId) {
+                            printQueue.push(() => {
+                                console.log('🖨️ Showing original container prompt for', originalContainerId);
+                                const containerStatus = data.original_container_has_samples ? 'updated' : 'now empty';
+                                if (typeof window.showContainerUpdatePrintPrompt === 'function') {
+                                    window.showContainerUpdatePrintPrompt(originalContainerId, {
+                                        description: `Original container after sample removal (${containerStatus})`,
+                                        action: 'Sample removed from container'
+                                    });
+                                }
+                            });
+                        }
+                        
+                        if (typeof window.executePrintQueue === 'function') {
+                            console.log('🖨️ Using executePrintQueue with', printQueue.length, 'items');
+                            window.executePrintQueue(printQueue);
+                        } else {
+                            console.log('🖨️ executePrintQueue not available, using manual fallback');
+                            // Execute sequentially with delays
+                            let index = 0;
+                            function executeNext() {
+                                if (index < printQueue.length) {
+                                    printQueue[index]();
+                                    index++;
+                                    setTimeout(executeNext, 2000);
+                                } else {
+                                    setTimeout(() => {
+                                        window.location.reload();
+                                    }, 1500);
+                                }
+                            }
+                            executeNext();
+                        }
+                    }
+                } else if (newContainerId && !originalContainerId) {
+                // Sample added to container from direct storage - show new container prompt only
+                console.log('🖨️ Sample added from direct storage to container');
+                if (typeof window.showContainerUpdatePrintPrompt === 'function') {
+                    window.showContainerUpdatePrintPrompt(newContainerId, {
+                        description: `Container after adding sample`,
+                        action: 'Sample added to container'
+                    });
+                } else {
+                    console.log('🖨️ No print function available, reloading page');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                }
+            } else {
+                // No special print handling needed - just reload
+                console.log('🖨️ No special print handling needed, reloading page');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            }
+        };
+        
+        // Execute the print workflow - try immediately, then with delay if functions not available
+        if (typeof window.showCombinedContainerPrintPrompt === 'function' || 
+            typeof window.showContainerUpdatePrintPrompt === 'function') {
+            console.log('🖨️ Print functions available, executing immediately');
+            handlePrintWorkflow();
+        } else {
+            console.log('🖨️ Print functions not yet available, waiting 500ms');
             setTimeout(() => {
-                window.location.reload();
-            }, 1500);  // Give a bit more time to see the messages
+                console.log('🖨️ Retrying print workflow after delay');
+                handlePrintWorkflow();
+            }, 500);
+        }
+        
         } else if (data.warning && data.capacity_exceeded) {
             // Show capacity warning and ask if user wants to continue
             showCapacityWarningConfirm(
@@ -286,7 +389,7 @@ function addSampleToContainer(forceAdd = false) {
                 data.capacity,
                 () => {
                     // User clicked 'Yes', force add the sample
-                    addSampleToContainer(true);
+                    proceedWithAddSample(containerId, sampleId, amount, true);
                 }
             );
         } else {
