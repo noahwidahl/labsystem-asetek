@@ -132,12 +132,12 @@ function setupSupplierSearch() {
         if (suppliers.length === 0) {
             supplierResults.innerHTML = `
                 <div class="supplier-search-empty">
-                    No suppliers found matching "${searchTerm}"
+                    No suppliers found
                 </div>
-                <div class="p-2">
-                    <button type="button" class="btn btn-sm btn-outline-primary w-100" 
+                <div class="p-2 text-center">
+                    <button type="button" class="btn btn-sm btn-outline-primary" 
                            data-bs-toggle="modal" data-bs-target="#newSupplierModal">
-                        <i class="fas fa-plus me-1"></i> Create new supplier
+                        <i class="fas fa-plus"></i> New
                     </button>
                 </div>
             `;

@@ -6,16 +6,21 @@
     background: white;
     border: 1px solid #ced4da;
     border-radius: 4px;
-    max-height: 250px;
+    max-height: 150px;
     overflow-y: auto;
-    width: 100%;
+    width: 300px;
+    max-width: 300px;
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .supplier-search-item {
-    padding: 8px 12px;
+    padding: 6px 10px;
     cursor: pointer;
     transition: background-color 0.2s;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .supplier-search-item:hover {
@@ -27,9 +32,11 @@
 }
 
 .supplier-search-empty {
-    padding: 8px 12px;
+    padding: 6px 10px;
     color: #6c757d;
     font-style: italic;
+    font-size: 14px;
+    text-align: center;
 }
 
 .selected-supplier {
@@ -39,4 +46,21 @@
 .selected-supplier .badge {
     font-size: 14px;
     padding: 5px 8px;
+}
+
+/* Create new supplier button in search results */
+.supplier-search-results .btn-sm {
+    font-size: 11px;
+    padding: 3px 6px;
+    margin: 2px;
+    white-space: nowrap;
+}
+
+.supplier-search-results .p-2 {
+    padding: 4px !important;
+}
+
+.supplier-search-results .w-100 {
+    width: auto !important;
+    max-width: 100%;
 }

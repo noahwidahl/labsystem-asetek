@@ -1,0 +1,37 @@
+  -- Disable foreign key checks temporarily
+  SET FOREIGN_KEY_CHECKS = 0;
+
+  -- Clear all data tables (in order to respect foreign keys)
+  DELETE FROM testsampleusage;
+  DELETE FROM tasksample;
+  DELETE FROM containersample;
+  DELETE FROM sampleserialnumber;
+  DELETE FROM samplestorage;
+  DELETE FROM sample;
+  DELETE FROM test;
+  DELETE FROM task;
+  DELETE FROM container;
+  DELETE FROM containertype;
+  DELETE FROM history;
+  DELETE FROM expirationnotification;
+  DELETE FROM reception;
+  DELETE FROM supplier;
+
+  -- Reset auto-increment counters
+  ALTER TABLE testsampleusage AUTO_INCREMENT = 1;
+  ALTER TABLE tasksample AUTO_INCREMENT = 1;
+  ALTER TABLE containersample AUTO_INCREMENT = 1;
+  ALTER TABLE sampleserialnumber AUTO_INCREMENT = 1;
+  ALTER TABLE samplestorage AUTO_INCREMENT = 1;
+  ALTER TABLE sample AUTO_INCREMENT = 1;
+  ALTER TABLE test AUTO_INCREMENT = 1;
+  ALTER TABLE task AUTO_INCREMENT = 1;
+  ALTER TABLE container AUTO_INCREMENT = 1;
+  ALTER TABLE containertype AUTO_INCREMENT = 1;
+  ALTER TABLE history AUTO_INCREMENT = 1;
+  ALTER TABLE expirationnotification AUTO_INCREMENT = 1;
+  ALTER TABLE reception AUTO_INCREMENT = 1;
+  ALTER TABLE supplier AUTO_INCREMENT = 1;
+
+  -- Re-enable foreign key checks
+  SET FOREIGN_KEY_CHECKS = 1;
