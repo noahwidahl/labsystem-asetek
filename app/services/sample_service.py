@@ -429,6 +429,23 @@ class SampleService:
             # Insert serial numbers if provided (multiple serial numbers per sample)
             if sample_data.get('hasSerialNumbers') and sample_data.get('serialNumbers'):
                 serial_numbers = sample_data.get('serialNumbers', [])
+                
+                # First, validate that all serial numbers are unique in the database
+                for serial_number in serial_numbers:
+                    if serial_number and serial_number.strip():
+                        cursor.execute("""
+                            SELECT COUNT(*) FROM sampleserialnumber 
+                            WHERE SerialNumber = %s
+                        """, (serial_number.strip(),))
+                        
+                        count = cursor.fetchone()[0]
+                        if count > 0:
+                            return {
+                                'success': False,
+                                'error': f"Serial number '{serial_number.strip()}' already exists in the system. Please use a unique serial number."
+                            }
+                
+                # If all serial numbers are unique, proceed with insertion
                 for serial_number in serial_numbers:
                     if serial_number and serial_number.strip():
                         cursor.execute("""

@@ -1694,6 +1694,43 @@ def init_sample(blueprint, mysql):
                 'error': str(e)
             }), 500
     
+    @blueprint.route('/api/validate-serial-numbers', methods=['POST'])
+    def validate_serial_numbers():
+        """Validate that serial numbers are unique in the system"""
+        try:
+            data = request.get_json()
+            serial_numbers = data.get('serialNumbers', [])
+            
+            if not serial_numbers:
+                return jsonify({'success': True, 'message': 'No serial numbers to validate'})
+            
+            cursor = mysql.connection.cursor()
+            
+            # Check each serial number for duplicates
+            for serial_number in serial_numbers:
+                if serial_number and serial_number.strip():
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM sampleserialnumber 
+                        WHERE SerialNumber = %s
+                    """, (serial_number.strip(),))
+                    
+                    count = cursor.fetchone()[0]
+                    if count > 0:
+                        cursor.close()
+                        return jsonify({
+                            'success': False,
+                            'error': f"Serial number '{serial_number.strip()}' already exists in the system. Please use a unique serial number."
+                        })
+            
+            cursor.close()
+            return jsonify({'success': True, 'message': 'All serial numbers are unique'})
+            
+        except Exception as e:
+            print(f"API error validating serial numbers: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     @blueprint.route('/api/samples/recent')
     def get_recent_samples():
         """

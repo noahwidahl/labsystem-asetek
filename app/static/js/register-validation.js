@@ -146,6 +146,8 @@ function validateCurrentStep() {
                     showErrorMessage(`${expectedCount - registerApp.scannedItems.length} more samples need to be scanned`);
                     return false;
                 }
+                
+                // Serial number uniqueness validation is handled asynchronously in form navigation
             }
             return true;
         case 4:
@@ -522,6 +524,42 @@ function handleFormSubmission() {
     });
 }
 
+// Async function to validate serial numbers against database
+async function validateSerialNumbersAsync(serialNumbers) {
+    if (!serialNumbers || serialNumbers.length === 0) {
+        return { success: true };
+    }
+    
+    try {
+        console.log('🔍 SERIAL VALIDATION: Checking serial numbers:', serialNumbers);
+        
+        const response = await fetch('/api/validate-serial-numbers', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                serialNumbers: serialNumbers
+            })
+        });
+        
+        const data = await response.json();
+        console.log('🔍 SERIAL VALIDATION: Response:', data);
+        
+        if (!data.success) {
+            showErrorToast(data.error);
+            return { success: false, error: data.error };
+        }
+        
+        return { success: true };
+        
+    } catch (error) {
+        console.error('Error validating serial numbers:', error);
+        showErrorToast('Error validating serial numbers: ' + error.message);
+        return { success: false, error: error.message };
+    }
+}
+
 // Explicitly export all functions to the global scope to ensure they're available
 // Run immediately, don't wait for DOMContentLoaded
 (function() {
@@ -529,6 +567,7 @@ function handleFormSubmission() {
     window.validateCurrentStep = validateCurrentStep;
     window.updateRegistrationSummary = updateRegistrationSummary;
     window.handleFormSubmission = handleFormSubmission;
+    window.validateSerialNumbersAsync = validateSerialNumbersAsync;
     
     console.log('Critical registration functions explicitly exported to global scope immediately');
 })();

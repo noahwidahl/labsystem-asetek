@@ -433,8 +433,43 @@ function nextStep() {
     
     // Function exists, try to validate
     try {
-        if (validateCurrentStep()) {
-            proceedToNextStep(true);
+        // Special handling for step 3 (identification) - needs async serial number validation
+        if (registerApp.currentStep === 3) {
+            console.log('Step 3: Running async serial number validation');
+            
+            // First run synchronous validation
+            if (validateCurrentStep()) {
+                // Then run async serial number validation
+                const hasSerialNumbers = document.getElementById('hasSerialNumbers')?.checked;
+                if (hasSerialNumbers && registerApp.scannedItems && registerApp.scannedItems.length > 0) {
+                    console.log('Running async serial number validation for:', registerApp.scannedItems);
+                    
+                    // Call async validation
+                    validateSerialNumbersAsync(registerApp.scannedItems)
+                        .then(result => {
+                            if (result.success) {
+                                console.log('Serial number validation passed, proceeding to next step');
+                                proceedToNextStep(true);
+                            } else {
+                                console.log('Serial number validation failed:', result.error);
+                                // Error toast is already shown by validateSerialNumbersAsync
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error during async serial number validation:', error);
+                            showErrorToast('Error validating serial numbers: ' + error.message);
+                        });
+                } else {
+                    // No serial numbers to validate, proceed normally
+                    proceedToNextStep(true);
+                }
+            }
+            // If synchronous validation failed, don't proceed (error already shown)
+        } else {
+            // For all other steps, use normal synchronous validation
+            if (validateCurrentStep()) {
+                proceedToNextStep(true);
+            }
         }
     } catch (error) {
         console.error("Error during validation:", error);
