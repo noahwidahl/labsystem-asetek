@@ -34,21 +34,20 @@ function initializeSupplierSearch() {
     let searchTimeout;
     let currentFocus = -1;
     
-    // Supplier search functionality
+    // Supplier search functionality - Improved responsiveness
     supplierSearchInput.addEventListener('input', function() {
         const query = this.value.trim();
         currentFocus = -1;
         
         clearTimeout(searchTimeout);
         
-        if (query.length < 2) {
+        if (query.length < 1) {
             supplierResults.classList.add('d-none');
             return;
         }
         
-        searchTimeout = setTimeout(() => {
-            searchSuppliers(query);
-        }, 300);
+        // Immediate search for better responsiveness - no delay
+        searchSuppliers(query);
     });
     
     // Keyboard navigation
