@@ -1,82 +1,86 @@
 /**
- * Toast Utilities - Professional toast notifications
+ * Toast Utilities - ULTRA SIMPLE VERSION
  */
 
-// Create and show a toast notification
-function showToast(message, type = 'success', duration = 5000) {
-    const toastContainer = document.querySelector('.toast-container');
-    if (!toastContainer) {
-        console.error('Toast container not found');
-        return;
+// UNIQUE TOAST FUNCTIONS - No conflicts with other files
+function showToastMessage(message, type, duration) {
+    console.log('TOAST MESSAGE: Function called');
+    console.log('TOAST MESSAGE: Parameters:', message, type, duration);
+    
+    // Immediate alert as fallback to ensure SOMETHING works
+    if (!document.body) {
+        alert(message);
+        return null;
     }
-
-    // Generate unique ID for toast
-    const toastId = 'toast-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
     
-    // Icon mapping
-    const icons = {
-        success: 'fas fa-check-circle text-success',
-        error: 'fas fa-exclamation-circle text-danger',
-        warning: 'fas fa-exclamation-triangle text-warning',
-        info: 'fas fa-info-circle text-info'
-    };
-
-    // Background color mapping
-    const bgColors = {
-        success: 'bg-success',
-        error: 'bg-danger', 
-        warning: 'bg-warning',
-        info: 'bg-info'
-    };
-
-    // Create toast HTML
-    const toastHTML = `
-        <div id="${toastId}" class="toast align-items-center text-white ${bgColors[type]} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="d-flex">
-                <div class="toast-body d-flex align-items-center">
-                    <i class="${icons[type]} me-2"></i>
-                    ${message}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-        </div>
-    `;
-
-    // Add toast to container
-    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    console.log('TOAST MESSAGE: Creating div');
+    var div = document.createElement('div');
     
-    // Get the toast element and show it
-    const toastElement = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastElement, {
-        delay: duration
-    });
+    console.log('TOAST MESSAGE: Setting styles');
+    div.style.position = 'fixed';
+    div.style.top = '50%';
+    div.style.left = '50%';
+    div.style.transform = 'translate(-50%, -50%)';
+    div.style.zIndex = '99999';
+    div.style.padding = '15px';
+    div.style.borderRadius = '5px';
+    div.style.minWidth = '250px';
+    div.style.fontSize = '14px';
+    div.style.textAlign = 'center';
     
-    // Show the toast
-    toast.show();
+    if (type === 'error') {
+        div.style.backgroundColor = '#dc3545';
+        div.style.color = 'white';
+        div.textContent = 'ERROR: ' + message;
+    } else {
+        div.style.backgroundColor = '#28a745';
+        div.style.color = 'white';
+        div.textContent = 'SUCCESS: ' + message;
+    }
     
-    // Remove toast from DOM after it's hidden
-    toastElement.addEventListener('hidden.bs.toast', function() {
-        toastElement.remove();
-    });
+    console.log('TOAST MESSAGE: Adding to body');
+    document.body.appendChild(div);
     
-    return toast;
+    console.log('TOAST MESSAGE: Setting timeout');
+    setTimeout(function() {
+        console.log('TOAST MESSAGE: Removing');
+        if (div.parentNode) {
+            div.parentNode.removeChild(div);
+        }
+    }, 5000);
+    
+    console.log('TOAST MESSAGE: Returning div');
+    return div;
 }
 
-// Convenience functions for different toast types
-function showSuccessToast(message, duration = 5000) {
-    return showToast(message, 'success', duration);
+// UNIQUE convenience functions that won't be overwritten
+function showSuccessToast(message, duration) {
+    console.log('SUCCESS TOAST: Called with message:', message);
+    return showToastMessage(message, 'success', duration);
 }
 
-function showErrorToast(message, duration = 7000) {
-    return showToast(message, 'error', duration);
+function showErrorToast(message, duration) {
+    console.log('ERROR TOAST: Called with message:', message);
+    console.log('ERROR TOAST: About to call showToastMessage');
+    var result = showToastMessage(message, 'error', duration);
+    console.log('ERROR TOAST: showToastMessage returned:', result);
+    return result;
 }
 
-function showWarningToast(message, duration = 6000) {
-    return showToast(message, 'warning', duration);
+function showWarningToast(message, duration) {
+    console.log('WARNING TOAST: Called');
+    return showToastMessage(message, 'warning', duration);
 }
 
-function showInfoToast(message, duration = 5000) {
-    return showToast(message, 'info', duration);
+function showInfoToast(message, duration) {
+    console.log('INFO TOAST: Called');
+    return showToastMessage(message, 'info', duration);
+}
+
+// Also create the old showToast function that calls our new one
+function showToast(message, type, duration) {
+    console.log('OLD SHOWTOST: Redirecting to showToastMessage');
+    return showToastMessage(message, type, duration);
 }
 
 // Make functions globally available

@@ -213,13 +213,20 @@ function createNewSupplier() {
             
             showSuccessToast('Supplier created successfully');
         } else {
+            console.log('🔴 REGISTER DEBUG: About to show error toast');
+            console.log('🔴 REGISTER DEBUG: Error data:', data);
+            console.log('🔴 REGISTER DEBUG: showErrorToast function exists?', typeof showErrorToast);
             showErrorToast('Error creating supplier: ' + (data.error || 'Unknown error'));
+            console.log('🔴 REGISTER DEBUG: Error toast call completed');
         }
     })
     .catch(error => {
+        console.log('🔴 REGISTER DEBUG: Catch block - About to show error toast');
+        console.log('🔴 REGISTER DEBUG: Catch error:', error);
         saveButton.textContent = originalText;
         saveButton.disabled = false;
         showErrorToast('Error creating supplier: ' + error.message);
+        console.log('🔴 REGISTER DEBUG: Catch error toast call completed');
     });
 }
 
