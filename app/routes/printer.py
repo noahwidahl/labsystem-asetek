@@ -480,6 +480,12 @@ def log_print_action(label_type, label_data, printer_config):
         if mysql and mysql.connection:
             cursor = mysql.connection.cursor()
             
+            # Get current user using Windows authentication
+            from app.utils.auth import get_current_user
+            current_user = get_current_user(mysql)
+            current_user_id = current_user.get('UserID', 1)  # Fall back to 1 if no user found
+            current_app.logger.info(f"DEBUG PRINT ACTION: User found - ID: {current_user_id}, Name: {current_user.get('Name', 'Unknown')}")
+            
             # Determine the relevant ID for the history log
             sample_id = label_data.get('SampleID')
             container_id = label_data.get('ContainerID')
@@ -500,7 +506,7 @@ def log_print_action(label_type, label_data, printer_config):
                     sample_id,
                     action_type,
                     notes,
-                    1,  # Default user - should be replaced with actual user from session
+                    current_user_id,
                     datetime.now()
                 ))
             elif container_id:
@@ -515,7 +521,7 @@ def log_print_action(label_type, label_data, printer_config):
                 """, (
                     action_type,
                     f"{notes} (Container: CNT-{container_id:04d})",
-                    1,
+                    current_user_id,
                     datetime.now(),
                     container_id
                 ))
