@@ -179,19 +179,9 @@
             </div>
             <div class="modal-body">
                 <form id="createTaskForm">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="taskName" class="form-label">Task Name *</label>
-                                <input type="text" class="form-control" id="taskName" required>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="projectCode" class="form-label">Project Code</label>
-                                <input type="text" class="form-control" id="projectCode" placeholder="e.g. Emma-V2">
-                            </div>
-                        </div>
+                    <div class="mb-3">
+                        <label for="taskName" class="form-label">Task Name *</label>
+                        <input type="text" class="form-control" id="taskName" required>
                     </div>
                     <div class="mb-3">
                         <label for="taskDescription" class="form-label">Description</label>
@@ -497,7 +487,6 @@ async function createTask() {
     try {
         const formData = {
             task_name: document.getElementById('taskName').value,
-            project_code: document.getElementById('projectCode').value,
             description: document.getElementById('taskDescription').value,
             status: document.getElementById('taskStatus').value,
             priority: document.getElementById('taskPriority').value,
@@ -634,7 +623,6 @@ async function editTask(taskId) {
         if (data.success) {
             // Populate edit form with current data
             document.getElementById('taskName').value = data.task.task_name || '';
-            document.getElementById('projectCode').value = data.task.project_code || '';
             document.getElementById('taskDescription').value = data.task.description || '';
             document.getElementById('taskStatus').value = data.task.status || 'Planning';
             document.getElementById('taskPriority').value = data.task.priority || 'Medium';
@@ -663,7 +651,6 @@ async function updateTask(taskId) {
     try {
         const formData = {
             task_name: document.getElementById('taskName').value,
-            project_code: document.getElementById('projectCode').value,
             description: document.getElementById('taskDescription').value,
             status: document.getElementById('taskStatus').value,
             priority: document.getElementById('taskPriority').value,
