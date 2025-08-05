@@ -16,6 +16,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add event listeners for container detail buttons
     setupContainerDetailButtons();
     
+    // Setup modal event listeners for proper backdrop handling
+    const containerModal = document.getElementById('containerDetailsModal');
+    if (containerModal) {
+        containerModal.addEventListener('hidden.bs.modal', function() {
+            // Ensure backdrop is properly removed
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) {
+                backdrop.remove();
+            }
+            // Remove modal-open class from body
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+        });
+    }
+    
     // Add listener for add sample button in details modal
     const addSampleBtn = document.getElementById('add-sample-to-container-btn');
     if (addSampleBtn) {
