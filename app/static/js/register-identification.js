@@ -382,6 +382,12 @@ function processScan(barcode) {
     const totalExpected = getExpectedScanAmount();
     
     // Check for duplicates
+    console.log('🔍 DUPLICATE CHECK:', {
+        newBarcode: barcode,
+        existingItems: registerApp.scannedItems,
+        isIncluded: registerApp.scannedItems.includes(barcode)
+    });
+    
     if (registerApp.scannedItems.includes(barcode)) {
         showWarningMessage(`Stregkode "${barcode}" er allerede scannet`);
         return;

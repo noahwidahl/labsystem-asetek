@@ -329,7 +329,20 @@ def init_sample(blueprint, mysql):
             print(f"API error: {e}")
             import traceback
             traceback.print_exc()
-            return jsonify({'success': False, 'error': str(e)}), 500
+            
+            # Handle database integrity errors with user-friendly messages
+            error_message = str(e)
+            if "Duplicate entry" in error_message and "unique_serial_number" in error_message:
+                # Extract the duplicate serial number from the error message
+                import re
+                match = re.search(r"Duplicate entry '([^']+)'", error_message)
+                if match:
+                    duplicate_serial = match.group(1)
+                    error_message = f"Serial number '{duplicate_serial}' already exists in the system. Please use a unique serial number."
+                else:
+                    error_message = "One or more serial numbers already exist in the system. Please use unique serial numbers."
+            
+            return jsonify({'success': False, 'error': error_message}), 500
     
     @blueprint.route('/api/samples/<int:sample_id>', methods=['DELETE'])
     def delete_sample(sample_id):
