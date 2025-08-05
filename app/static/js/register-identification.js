@@ -28,6 +28,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// Helper function to get the correct expected amount of scans based on sample type
+function getExpectedScanAmount() {
+    const totalAmount = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
+    const sampleType = document.querySelector('[name="sampleTypeOption"]:checked')?.value;
+    const result = (sampleType === 'bulk') ? 1 : totalAmount;
+    
+    console.log('🔍 getExpectedScanAmount DEBUG:', {
+        totalAmount: totalAmount,
+        sampleType: sampleType,
+        result: result,
+        sampleTypeElement: document.querySelector('[name="sampleTypeOption"]:checked')
+    });
+    
+    return result;
+}
+
 // Initialize identification step when it becomes active
 function initializeIdentificationStep() {
     console.log('Initializing identification step');
@@ -40,10 +56,12 @@ function initializeIdentificationStep() {
     }
     
     // Get expected amount and current scanned items
-    const expectedAmount = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
+    const totalAmount = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
+    const sampleType = document.querySelector('[name="sampleTypeOption"]:checked')?.value;
+    const expectedAmount = getExpectedScanAmount();
     const currentScanned = registerApp.scannedItems.length;
     
-    console.log(`Expected: ${expectedAmount}, Currently scanned: ${currentScanned}`);
+    console.log(`Sample type: ${sampleType}, Total amount: ${totalAmount}, Expected scans: ${expectedAmount}, Currently scanned: ${currentScanned}`);
     
     // Update UI immediately
     updateScanUI();
@@ -51,11 +69,21 @@ function initializeIdentificationStep() {
     // Show helpful message about scanning requirement
     const alertDiv = document.querySelector('#step3 .alert');
     if (alertDiv && expectedAmount > 0) {
-        alertDiv.innerHTML = `
-            <i class="fas fa-info-circle"></i> 
-            You need to scan or enter <strong>${expectedAmount}</strong> unique serial numbers for your samples. 
-            Currently scanned: <strong>${currentScanned}</strong>
-        `;
+        let message = '';
+        if (sampleType === 'bulk') {
+            message = `
+                <i class="fas fa-info-circle"></i> 
+                You need to scan or enter <strong>1</strong> unique serial number for this bulk material (Amount: ${totalAmount}). 
+                Currently scanned: <strong>${currentScanned}</strong>
+            `;
+        } else {
+            message = `
+                <i class="fas fa-info-circle"></i> 
+                You need to scan or enter <strong>${expectedAmount}</strong> unique serial numbers for your samples. 
+                Currently scanned: <strong>${currentScanned}</strong>
+            `;
+        }
+        alertDiv.innerHTML = message;
     }
     
     // Auto-focus barcode input if no items scanned yet
@@ -314,7 +342,7 @@ function setupScannerListeners() {
                     .map(code => code.trim())
                     .filter(code => code.length > 0);
                 
-                const totalExpected = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
+                const totalExpected = getExpectedScanAmount();
                 const currentCount = registerApp.scannedItems.length;
                 
                 if (currentCount + barcodes.length > totalExpected) {
@@ -351,7 +379,7 @@ function setupScannerListeners() {
 function processScan(barcode) {
     if (!barcode) return;
 
-    const totalExpected = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
+    const totalExpected = getExpectedScanAmount();
     
     // Check for duplicates
     if (registerApp.scannedItems.includes(barcode)) {
@@ -373,11 +401,11 @@ function processScan(barcode) {
 function updateScanUI() {
     const counter = document.getElementById('scannedCount');
     const totalCounter = document.getElementById('totalCount');
-    const total = document.querySelector('[name="totalAmount"]')?.value || 0;
+    const expectedAmount = getExpectedScanAmount();
     const emptyMessage = document.querySelector('.empty-scanned-message');
 
     if (counter) counter.textContent = registerApp.scannedItems.length;
-    if (totalCounter) totalCounter.textContent = total;
+    if (totalCounter) totalCounter.textContent = expectedAmount;
 
     const container = document.querySelector('.scanned-items');
     if (container) {

@@ -130,7 +130,18 @@ function validateCurrentStep() {
             // Validation of identification
             const hasSerialNumbers = document.getElementById('hasSerialNumbers')?.checked;
             if (hasSerialNumbers) {
-                const expectedCount = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
+                // Use the same logic as identification step for consistency
+                const totalAmount = parseInt(document.querySelector('[name="totalAmount"]')?.value) || 0;
+                const sampleType = document.querySelector('[name="sampleTypeOption"]:checked')?.value;
+                const expectedCount = (sampleType === 'bulk') ? 1 : totalAmount;
+                
+                console.log('🔍 VALIDATION DEBUG for step 3:', {
+                    totalAmount: totalAmount,
+                    sampleType: sampleType,
+                    expectedCount: expectedCount,
+                    scannedCount: registerApp.scannedItems.length
+                });
+                
                 if (registerApp.scannedItems.length < expectedCount) {
                     showErrorMessage(`${expectedCount - registerApp.scannedItems.length} more samples need to be scanned`);
                     return false;
