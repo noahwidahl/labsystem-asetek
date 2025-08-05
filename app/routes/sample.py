@@ -1069,8 +1069,6 @@ def init_sample(blueprint, mysql):
                     sample['ContainerID'] = None
                 sample['Amount'] = float(sample['Amount'])
             
-            # Sample properties are not available in this database
-            properties = []
             
             # Get sample history
             cursor.execute("""
@@ -1111,7 +1109,6 @@ def init_sample(blueprint, mysql):
             return jsonify({
                 'success': True,
                 'sample': sample,
-                'properties': properties,
                 'history': history,
                 'serial_numbers': serial_numbers
             })
@@ -1624,7 +1621,6 @@ def init_sample(blueprint, mysql):
                 }), 400
             
             supplier_name = data.get('name').strip()
-            supplier_notes = data.get('notes', '').strip()
             
             # Get current user for logging
             current_user = get_current_user(mysql)
@@ -1643,21 +1639,11 @@ def init_sample(blueprint, mysql):
                     'supplier_id': existing[0]
                 }), 400
             
-            # Check if Notes column exists in Supplier table
-            cursor.execute("SHOW COLUMNS FROM Supplier LIKE 'Notes'")
-            notes_column_exists = cursor.fetchone() is not None
-            
             # Insert new supplier
-            if notes_column_exists and supplier_notes:
-                cursor.execute("""
-                    INSERT INTO Supplier (SupplierName, Notes)
-                    VALUES (%s, %s)
-                """, (supplier_name, supplier_notes))
-            else:
-                cursor.execute("""
-                    INSERT INTO Supplier (SupplierName)
-                    VALUES (%s)
-                """, (supplier_name,))
+            cursor.execute("""
+                INSERT INTO Supplier (SupplierName)
+                VALUES (%s)
+            """, (supplier_name,))
             
             mysql.connection.commit()
             supplier_id = cursor.lastrowid

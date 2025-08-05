@@ -40,7 +40,6 @@ window.loadSampleDetails = function(sampleId) {
     document.getElementById('sample-units').textContent = '-';
     document.getElementById('sample-serial-numbers').textContent = '-';
     document.getElementById('sample-comments').textContent = '-';
-    document.getElementById('sample-properties').innerHTML = '<p class="text-center text-muted">Loading properties...</p>';
     document.getElementById('sample-history-list').innerHTML = '<p class="text-center text-muted">Loading history...</p>';
     
     // Set the modal title
@@ -93,25 +92,6 @@ window.loadSampleDetails = function(sampleId) {
                 // Update comments
                 document.getElementById('sample-comments').textContent = sample.Comments || 'No comments';
                 
-                // Display properties
-                if (data.properties && data.properties.length > 0) {
-                    let propertiesHtml = '<div class="row">';
-                    data.properties.forEach(prop => {
-                        propertiesHtml += `
-                            <div class="col-md-6 mb-2">
-                                <div class="d-flex justify-content-between">
-                                    <strong>${prop.PropertyName || 'Property'}:</strong>
-                                    <span>${prop.PropertyValue || '-'}</span>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    propertiesHtml += '</div>';
-                    document.getElementById('sample-properties').innerHTML = propertiesHtml;
-                } else {
-                    document.getElementById('sample-properties').innerHTML = 
-                        '<p class="text-center text-muted">No properties for this sample</p>';
-                }
                 
                 // Display history
                 if (data.history && data.history.length > 0) {

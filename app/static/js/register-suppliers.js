@@ -169,10 +169,11 @@ function initializeSupplierModal() {
 
 function createNewSupplier() {
     const supplierName = document.getElementById('newSupplierName').value.trim();
-    const supplierNotes = document.getElementById('newSupplierNotes')?.value.trim() || '';
     
     if (!supplierName) {
-        // Show validation error\n        const nameInput = document.getElementById('newSupplierName');\n        nameInput.classList.add('is-invalid');\n        nameInput.focus();
+        const nameInput = document.getElementById('newSupplierName');
+        nameInput.classList.add('is-invalid');
+        nameInput.focus();
         return;
     }
     
@@ -187,8 +188,7 @@ function createNewSupplier() {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            name: supplierName,
-            notes: supplierNotes
+            name: supplierName
         })
     })
     .then(response => response.json())
@@ -210,17 +210,16 @@ function createNewSupplier() {
             
             // Clear form
             document.getElementById('newSupplierName').value = '';
-            document.getElementById('newSupplierNotes').value = '';
             
-            alert('Supplier created successfully');
+            showSuccessToast('Supplier created successfully');
         } else {
-            alert('Error creating supplier: ' + (data.error || 'Unknown error'));
+            showErrorToast('Error creating supplier: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(error => {
         saveButton.textContent = originalText;
         saveButton.disabled = false;
-        alert('Error creating supplier: ' + error.message);
+        showErrorToast('Error creating supplier: ' + error.message);
     });
 }
 
@@ -271,7 +270,7 @@ function copySelectedRegistration() {
     const selectedSampleId = dropdown.value;
     
     if (!selectedSampleId) {
-        alert('Please select a sample to copy');
+        showWarningToast('Please select a sample to copy');
         return;
     }
     
@@ -285,14 +284,14 @@ function copySelectedRegistration() {
                 const modal = bootstrap.Modal.getInstance(document.getElementById('copyRegistrationModal'));
                 if (modal) modal.hide();
                 
-                alert('Sample data copied successfully');
+                showSuccessToast('Sample data copied successfully');
             } else {
-                alert('Error loading sample data: ' + (data.error || 'Unknown error'));
+                showErrorToast('Error loading sample data: ' + (data.error || 'Unknown error'));
             }
         })
         .catch(error => {
             console.error('Error copying registration:', error);
-            alert('Error copying registration: ' + error.message);
+            showErrorToast('Error copying registration: ' + error.message);
         });
 }
 

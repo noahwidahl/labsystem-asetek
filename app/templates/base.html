@@ -80,6 +80,11 @@
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1055;">
+        <!-- Toasts will be dynamically added here -->
+    </div>
+
     <!-- Modal windows -->
     {% include 'modals/sample_details_modal.html' %}
     {% include 'modals/container_details.html' %}
@@ -128,6 +133,9 @@
     
     <!-- Performance utilities -->
     <script src="{{ url_for('static', filename='js/performance-utils.js') }}"></script>
+    
+    <!-- Toast utilities -->
+    <script src="{{ url_for('static', filename='js/toast-utils.js') }}"></script>
     
     <!-- Custom page scripts -->
     {% block scripts %}{% endblock %}
