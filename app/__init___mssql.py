@@ -48,6 +48,9 @@ def create_app():
     from app.routes.task_mssql import task_mssql_bp
     from app.routes.scanner_mssql import scanner_mssql_bp
     from app.routes.expiration_mssql import expiration_mssql_bp
+    from app.routes.barcode_mssql import barcode_mssql_bp
+    from app.routes.system_mssql import system_mssql_bp
+    from app.routes.printer_mssql import printer_mssql_bp
     
     app.register_blueprint(dashboard_mssql_bp)
     app.register_blueprint(sample_mssql_bp)
@@ -56,6 +59,9 @@ def create_app():
     app.register_blueprint(task_mssql_bp)
     app.register_blueprint(scanner_mssql_bp)
     app.register_blueprint(expiration_mssql_bp)
+    app.register_blueprint(barcode_mssql_bp)
+    app.register_blueprint(system_mssql_bp)
+    app.register_blueprint(printer_mssql_bp)
     
     # Registrer error handlers
     @app.errorhandler(404)

@@ -172,50 +172,119 @@ def create_container():
         # Get current user (simplified for now)
         user_id = 1  # TODO: Implement proper user authentication
         
-        # Create container
-        result = mssql_db.execute_query("""
-            INSERT INTO [container] (
-                [Description], 
-                [ContainerTypeID], 
-                [IsMixed], 
-                [ContainerCapacity], 
-                [LocationID],
-                [ContainerStatus]
-            ) 
-            OUTPUT INSERTED.ContainerID
-            VALUES (?, ?, ?, ?, ?, 'Active')
-        """, (
-            data.get('description'),
-            data.get('containerTypeId'),
-            data.get('isMixed', False),
-            data.get('capacity'),
-            data.get('locationId')
-        ), fetch_one=True)
+        # Initialize container_type_id
+        container_type_id = data.get('containerTypeId')
         
-        if result:
-            container_id = result[0]
-            
-            # Log activity
-            mssql_db.execute_query("""
-                INSERT INTO [history] (
-                    [Timestamp], 
-                    [ActionType], 
-                    [UserID], 
-                    [Notes]
-                )
-                VALUES (GETDATE(), 'Container created', ?, ?)
-            """, (
-                user_id,
-                f"Container '{data.get('description')}' created with ID {container_id}"
-            ))
-            
-            return jsonify({
-                'success': True, 
-                'container_id': container_id,
-                'message': 'Container created successfully'
-            })
-        else:
-            return jsonify({'success': False, 'error': 'Failed to create container'}), 500
+        # Convert to int if it's a string
+        if container_type_id and str(container_type_id).isdigit():
+            container_type_id = int(container_type_id)
+        
+        # Check if creating new container type
+        new_container_type = data.get('newContainerType')
+        if not container_type_id and not new_container_type:
+            return jsonify({'success': False, 'error': 'Container type is required'}), 400
+        
+        # Use database transaction for container creation (same as sample registration)
+        with mssql_db.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                # Create new container type if needed within this transaction
+                if new_container_type:
+                    print(f"DEBUG: Creating new container type: {new_container_type}")
+                    
+                    cursor.execute("""
+                        INSERT INTO [containertype] ([TypeName], [Description], [DefaultCapacity])
+                        OUTPUT INSERTED.ContainerTypeID
+                        VALUES (?, ?, ?)
+                    """, (
+                        new_container_type.get('typeName'),
+                        new_container_type.get('description', ''),
+                        int(new_container_type.get('capacity', 50))
+                    ))
+                    
+                    type_result = cursor.fetchone()
+                    if type_result:
+                        container_type_id = type_result[0]
+                        print(f"DEBUG: Created new container type with ID: {container_type_id}")
+                        
+                        # Log the container type creation
+                        cursor.execute("""
+                            INSERT INTO [history] ([ActionType], [UserID], [Notes], [Timestamp])
+                            VALUES (?, ?, ?, GETDATE())
+                        """, (
+                            'Container type created',
+                            user_id,
+                            f"Container type '{new_container_type.get('typeName')}' created"
+                        ))
+                    else:
+                        raise Exception('Failed to create new container type')
+                
+                # Generate unique container barcode
+                from datetime import datetime
+                container_barcode = f"CNT{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                
+                # Get container capacity from container type if not specified
+                container_capacity = data.get('capacity')
+                if not container_capacity and container_type_id:
+                    cursor.execute("""
+                        SELECT [DefaultCapacity] FROM [containertype] WHERE [ContainerTypeID] = ?
+                    """, (container_type_id,))
+                    capacity_result = cursor.fetchone()
+                    container_capacity = capacity_result[0] if capacity_result else 50
+                
+                # Create container
+                cursor.execute("""
+                    INSERT INTO [container] (
+                        [Barcode],
+                        [Description], 
+                        [ContainerTypeID], 
+                        [IsMixed], 
+                        [ContainerCapacity], 
+                        [LocationID],
+                        [ContainerStatus]
+                    ) 
+                    OUTPUT INSERTED.ContainerID
+                    VALUES (?, ?, ?, ?, ?, ?, 'Active')
+                """, (
+                    container_barcode,
+                    data.get('description'),
+                    container_type_id,
+                    data.get('isMixed', False),
+                    container_capacity,
+                    data.get('locationId')
+                ))
+                
+                container_result = cursor.fetchone()
+                if not container_result:
+                    raise Exception('Failed to create container')
+                
+                container_id = container_result[0]
+                
+                # Log activity
+                cursor.execute("""
+                    INSERT INTO [history] (
+                        [Timestamp], 
+                        [ActionType], 
+                        [UserID], 
+                        [Notes]
+                    )
+                    VALUES (GETDATE(), 'Container created', ?, ?)
+                """, (
+                    user_id,
+                    f"Container '{data.get('description')}' created with ID {container_id}"
+                ))
+                
+                conn.commit()
+                
+                return jsonify({
+                    'success': True, 
+                    'container_id': container_id,
+                    'message': 'Container created successfully'
+                })
+                
+            except Exception as e:
+                conn.rollback()
+                raise
             
     except Exception as e:
         print(f"API error: {e}")
@@ -277,6 +346,24 @@ def get_container_types():
         return jsonify({'success': True, 'types': container_types})
     except Exception as e:
         print(f"API error when fetching container types: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@container_mssql_bp.route('/api/containers/types/<int:container_type_id>', methods=['DELETE'])
+def delete_container_type(container_type_id):
+    try:
+        # Get current user
+        user_id = 1  # TODO: Implement proper user authentication
+        
+        # Delete container type
+        mssql_db.execute_query("""
+            DELETE FROM [containertype] WHERE [ContainerTypeID] = ?
+        """, (container_type_id,))
+        
+        return jsonify({'success': True, 'message': 'Container type deleted successfully'})
+    except Exception as e:
+        print(f"API error deleting container type: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -450,6 +537,29 @@ def add_sample_to_container():
         
     except Exception as e:
         print(f"API error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@container_mssql_bp.route('/api/containers/remove-sample', methods=['POST'])
+def remove_sample_from_container():
+    try:
+        data = request.get_json()
+        container_id = data.get('containerId')
+        sample_id = data.get('sampleId')
+        amount = data.get('amount', 1)
+        
+        # Remove sample from container
+        result = mssql_db.execute_query("""
+            DELETE FROM [containersample] 
+            WHERE [ContainerID] = ? AND [SampleStorageID] = (
+                SELECT [StorageID] FROM [samplestorage] WHERE [SampleID] = ?
+            )
+        """, (container_id, sample_id))
+        
+        return jsonify({'success': True, 'message': 'Sample removed from container successfully'})
+    except Exception as e:
+        print(f"API error removing sample from container: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500

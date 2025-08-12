@@ -554,6 +554,179 @@ def create_sample():
                 f"Sample '{data.get('description')}' registered with {data.get('totalAmount', 1)} units"
             ))
             
+            # Handle containers if requested
+            container_ids = []
+            create_containers = data.get('storageOption') == 'container'
+            
+            if create_containers:
+                print(f"DEBUG: Processing container creation")
+                
+                # Check if using existing container
+                if data.get('useExistingContainer') and data.get('existingContainerId'):
+                    container_id = int(data.get('existingContainerId'))
+                    print(f"DEBUG: Using existing container with ID: {container_id}")
+                    
+                    # Check if existing container has enough capacity
+                    capacity_result = mssql_db.execute_query("""
+                        SELECT 
+                            c.[ContainerCapacity],
+                            ISNULL(SUM(cs.[Amount]), 0) as CurrentAmount
+                        FROM [container] c
+                        LEFT JOIN [containersample] cs ON c.[ContainerID] = cs.[ContainerID]
+                        WHERE c.[ContainerID] = ?
+                        GROUP BY c.[ContainerID], c.[ContainerCapacity]
+                    """, (container_id,), fetch_one=True)
+                    
+                    if capacity_result:
+                        container_capacity = capacity_result[0]
+                        current_amount = capacity_result[1] or 0
+                        total_amount = int(data.get('totalAmount', 1))
+                        
+                        if container_capacity and (current_amount + total_amount > container_capacity):
+                            return jsonify({
+                                'success': False,
+                                'error': f'Cannot add {total_amount} samples to container. Current: {current_amount}, Capacity: {container_capacity}, Available: {container_capacity - current_amount}'
+                            }), 400
+                    
+                    container_ids.append(container_id)
+                    
+                    # Add sample to existing container
+                    storage_result = mssql_db.execute_query("""
+                        SELECT [StorageID] FROM [samplestorage] WHERE [SampleID] = ?
+                    """, (sample_id,), fetch_one=True)
+                    
+                    if storage_result:
+                        storage_id = storage_result[0]
+                        mssql_db.execute_query("""
+                            INSERT INTO [containersample] ([ContainerID], [SampleStorageID], [Amount])
+                            VALUES (?, ?, ?)
+                        """, (container_id, storage_id, int(data.get('totalAmount', 1))))
+                
+                else:
+                    # Create new containers
+                    print(f"DEBUG: Creating new containers")
+                    container_count = int(data.get('containerCount', 1))
+                    container_description = data.get('containerDescription', '')
+                    
+                    # Initialize container_type_id
+                    container_type_id = data.get('containerTypeId')
+                    
+                    # Convert to int if it's a string
+                    if container_type_id and str(container_type_id).isdigit():
+                        container_type_id = int(container_type_id)
+                    
+                    # Only check if container type is required when not creating a new one
+                    new_container_type = data.get('newContainerType')
+                    if not container_type_id and not new_container_type:
+                        return jsonify({'success': False, 'error': 'Container type is required'}), 400
+                    
+                    print(f"DEBUG: Starting container creation transaction with count={container_count}")
+                    
+                    # Use single database transaction for both container type and container creation
+                with mssql_db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    try:
+                        print(f"DEBUG: Transaction started successfully")
+                        
+                        # Create new container type if needed within this transaction
+                        if new_container_type:
+                            print(f"DEBUG: Creating new container type in transaction: {new_container_type}")
+                            
+                            cursor.execute("""
+                                INSERT INTO [containertype] ([TypeName], [Description], [DefaultCapacity])
+                                OUTPUT INSERTED.ContainerTypeID
+                                VALUES (?, ?, ?)
+                            """, (
+                                new_container_type.get('typeName'),
+                                new_container_type.get('description', ''),
+                                int(new_container_type.get('capacity', 50))
+                            ))
+                            
+                            type_result = cursor.fetchone()
+                            if type_result:
+                                container_type_id = type_result[0]
+                                print(f"DEBUG: Created new container type with ID: {container_type_id}")
+                                
+                                # Log the container type creation in same transaction
+                                cursor.execute("""
+                                    INSERT INTO [history] ([ActionType], [UserID], [Notes], [Timestamp])
+                                    VALUES (?, ?, ?, GETDATE())
+                                """, (
+                                    'Container type created',
+                                    user_id,
+                                    f"Container type '{new_container_type.get('typeName')}' created"
+                                ))
+                            else:
+                                raise Exception('Failed to create new container type')
+                        
+                        print(f"DEBUG: About to create container with final container_type_id={container_type_id}")
+                        
+                        for i in range(container_count):
+                            print(f"DEBUG: Creating container {i+1} of {container_count}")
+                            # Generate unique container barcode
+                            container_barcode = f"CNT{datetime.now().strftime('%Y%m%d%H%M%S')}{str(i).zfill(3)}"
+                            
+                            # Get container capacity from container type
+                            cursor.execute("""
+                                SELECT [DefaultCapacity] FROM [containertype] WHERE [ContainerTypeID] = ?
+                            """, (container_type_id,))
+                            capacity_result = cursor.fetchone()
+                            container_capacity = capacity_result[0] if capacity_result else 50
+                            
+                            # Create container
+                            print(f"DEBUG: Creating container with barcode={container_barcode}, type_id={container_type_id}, capacity={container_capacity}")
+                            
+                            cursor.execute("""
+                                INSERT INTO [container] (
+                                    [Barcode], 
+                                    [ContainerTypeID], 
+                                    [Description], 
+                                    [LocationID],
+                                    [ContainerCapacity], 
+                                    [IsMixed],
+                                    [ContainerStatus]
+                                ) 
+                                OUTPUT INSERTED.ContainerID
+                                VALUES (?, ?, ?, ?, ?, ?, 'Active')
+                            """, (
+                                container_barcode,
+                                container_type_id,
+                                container_description,
+                                data.get('storageLocation', 1),
+                                container_capacity,
+                                data.get('containerIsMixed', False)
+                            ))
+                            
+                            container_result = cursor.fetchone()
+                            if container_result:
+                                container_id = container_result[0]
+                                container_ids.append(container_id)
+                                print(f"DEBUG: Successfully created container with ID: {container_id}")
+                                
+                                # Add sample to new container in same transaction
+                                cursor.execute("""
+                                    SELECT [StorageID] FROM [samplestorage] WHERE [SampleID] = ?
+                                """, (sample_id,))
+                                storage_result = cursor.fetchone()
+                                
+                                if storage_result:
+                                    storage_id = storage_result[0]
+                                    cursor.execute("""
+                                        INSERT INTO [containersample] ([ContainerID], [SampleStorageID], [Amount])
+                                        VALUES (?, ?, ?)
+                                    """, (container_id, storage_id, int(data.get('totalAmount', 1)) // container_count))
+                                    print(f"DEBUG: Added sample {sample_id} to container {container_id}")
+                                else:
+                                    print(f"ERROR: Could not find storage record for sample {sample_id}")
+                            else:
+                                print(f"ERROR: Container creation failed - no result returned")
+                        
+                        conn.commit()
+                    except Exception as e:
+                        conn.rollback()
+                        print(f"ERROR: Container creation transaction failed: {e}")
+                        raise
+            
             # Get additional data for frontend
             location_name = 'Unknown'
             if data.get('storageLocation'):
@@ -581,7 +754,7 @@ def create_sample():
                 if task_result:
                     task_name = task_result[0]
             
-            return jsonify({
+            response_data = {
                 'success': True,
                 'sample_id': sample_id,
                 'reception_id': reception_id,
@@ -601,7 +774,17 @@ def create_sample():
                     'HasSerialNumbers': bool(data.get('hasSerialNumbers')),
                     'TaskName': task_name
                 }
-            })
+            }
+            
+            # Add container information if containers were created
+            if create_containers:
+                if container_ids:
+                    response_data['container_ids'] = container_ids
+                    print(f"DEBUG: Added container_ids to response: {container_ids}")
+                else:
+                    print(f"DEBUG: Containers were requested but none were created successfully")
+            
+            return jsonify(response_data)
         else:
             return jsonify({'success': False, 'error': 'Failed to create sample'}), 500
             

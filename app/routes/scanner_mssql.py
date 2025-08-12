@@ -213,10 +213,15 @@ def log_scan_action(barcode, result, user_id=None):
             sample_id = None
             container_id = None
         
+        # Note: history table doesn't have ContainerID column in MSSQL, store container info in notes
+        final_notes = notes
+        if container_id:
+            final_notes += f" (Container ID: {container_id})"
+            
         mssql_db.execute_query("""
-            INSERT INTO [history] ([SampleID], [ContainerID], [ActionType], [Notes], [UserID], [Timestamp])
-            VALUES (?, ?, ?, ?, ?, GETDATE())
-        """, (sample_id, container_id, action_type, notes, user_id))
+            INSERT INTO [history] ([SampleID], [ActionType], [Notes], [UserID], [Timestamp])
+            VALUES (?, ?, ?, ?, GETDATE())
+        """, (sample_id, action_type, final_notes, user_id))
         
     except Exception as e:
         current_app.logger.error(f"Failed to log scan action: {str(e)}")

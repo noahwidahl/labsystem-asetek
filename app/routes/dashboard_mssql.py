@@ -716,4 +716,156 @@ def add_storage_lab():
         print(f"Error creating lab: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# ... Continue with other routes in similar fashion ...
+@dashboard_mssql_bp.route('/api/storage/update-section-shelves', methods=['POST'])
+def update_section_shelves():
+    """MSSQL version - Update the number of shelves in a section"""
+    try:
+        data = request.json
+        
+        # Validate input
+        if not data.get('rackNum') or not data.get('sectionNum'):
+            return jsonify({'success': False, 'error': 'Rack and section number are required'}), 400
+        
+        if not data.get('shelfCount') or not isinstance(data.get('shelfCount'), int) or data.get('shelfCount') < 1:
+            return jsonify({'success': False, 'error': 'Shelf count must be a positive integer'}), 400
+        
+        rack_num = str(data.get('rackNum'))
+        section_num = str(data.get('sectionNum'))
+        shelf_count = int(data.get('shelfCount'))
+        
+        # Get lab ID
+        lab_result = mssql_db.execute_query("SELECT TOP 1 [LabID] FROM [lab]", fetch_one=True)
+        lab_id = lab_result[0] if lab_result else 1
+        
+        # Check existing shelves
+        existing_shelves = mssql_db.execute_query("""
+            SELECT [LocationID], [LocationName], [Shelf] FROM [storagelocation]
+            WHERE [LocationName] LIKE ?
+            ORDER BY [Shelf]
+        """, (f"{rack_num}.{section_num}.%",), fetch_all=True)
+        
+        existing_count = len(existing_shelves) if existing_shelves else 0
+        
+        # If we need to add shelves
+        if shelf_count > existing_count:
+            # Get the highest existing shelf number
+            max_shelf = 0
+            if existing_shelves:
+                for shelf in existing_shelves:
+                    shelf_num = shelf[2] if shelf[2] is not None else int(shelf[1].split('.')[-1])
+                    max_shelf = max(max_shelf, shelf_num)
+            
+            # Add new shelves
+            for shelf_num in range(max_shelf + 1, max_shelf + 1 + (shelf_count - existing_count)):
+                location_name = f"{rack_num}.{section_num}.{shelf_num}"
+                mssql_db.execute_query("""
+                    INSERT INTO [storagelocation] ([LocationName], [LabID], [Rack], [Section], [Shelf])
+                    VALUES (?, ?, ?, ?, ?)
+                """, (location_name, lab_id, rack_num, section_num, shelf_num))
+            
+            message = f"Added {shelf_count - existing_count} new shelves to section {section_num} on rack {rack_num}"
+        
+        # If we need to remove shelves
+        elif shelf_count < existing_count:
+            # Sort shelves by shelf number descending to remove from the end
+            shelves_to_remove = sorted(existing_shelves, 
+                                     key=lambda x: x[2] if x[2] is not None else int(x[1].split('.')[-1]), 
+                                     reverse=True)
+            shelves_to_remove = shelves_to_remove[:existing_count - shelf_count]
+            
+            # Check if any shelves have samples
+            for shelf in shelves_to_remove:
+                location_id = shelf[0]
+                count_result = mssql_db.execute_query("""
+                    SELECT COUNT(*) FROM [samplestorage]
+                    WHERE [LocationID] = ? AND [AmountRemaining] > 0
+                """, (location_id,), fetch_one=True)
+                
+                count = count_result[0] if count_result else 0
+                if count > 0:
+                    return jsonify({
+                        'success': False,
+                        'error': f"Cannot remove shelf {shelf[1]} with {count} samples"
+                    }), 400
+            
+            # Remove shelves
+            for shelf in shelves_to_remove:
+                location_id = shelf[0]
+                mssql_db.execute_query("DELETE FROM [storagelocation] WHERE [LocationID] = ?", (location_id,))
+            
+            message = f"Removed {existing_count - shelf_count} shelves from section {section_num} on rack {rack_num}"
+        else:
+            message = f"No changes needed, section {section_num} on rack {rack_num} already has {shelf_count} shelves"
+        
+        return jsonify({
+            'success': True,
+            'message': message
+        })
+    except Exception as e:
+        print(f"Error updating section shelves: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@dashboard_mssql_bp.route('/api/storage/add-rack', methods=['POST'])
+def add_storage_rack():
+    """MSSQL version - Add a new storage rack with standard sections and shelves"""
+    try:
+        data = request.json
+        
+        # Validate input
+        if not data.get('rackNum'):
+            return jsonify({'success': False, 'error': 'Rack number is required'}), 400
+        
+        rack_num = data.get('rackNum')
+        
+        # Get lab ID - use the first available (as default)
+        lab_result = mssql_db.execute_query("SELECT TOP 1 [LabID] FROM [lab]", fetch_one=True)
+        lab_id = lab_result[0] if lab_result else 1
+        
+        # Create location records for each section and shelf
+        for section in range(1, 3):  # 2 sections as standard
+            for shelf in range(1, 6):  # 5 shelves per section
+                location_name = f"{rack_num}.{section}.{shelf}"
+                mssql_db.execute_query("""
+                    INSERT INTO [storagelocation] ([LocationName], [LabID], [Rack], [Section], [Shelf])
+                    VALUES (?, ?, ?, ?, ?)
+                """, (location_name, lab_id, rack_num, section, shelf))
+        
+        return jsonify({
+            'success': True,
+            'message': f'Rack {rack_num} created with 2 sections and 10 slots'
+        })
+    except Exception as e:
+        print(f"Error creating rack: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@dashboard_mssql_bp.route('/api/storage/update-description', methods=['POST'])
+def update_storage_description():
+    """MSSQL version - Update storage location description"""
+    try:
+        data = request.json
+        
+        # Validate input
+        if not data.get('locationId'):
+            return jsonify({'success': False, 'error': 'Location ID is required'}), 400
+        
+        location_id = data.get('locationId')
+        description = data.get('description', '')
+        
+        # Update the description
+        rows_affected = mssql_db.execute_query("""
+            UPDATE [storagelocation] 
+            SET [Description] = ? 
+            WHERE [LocationID] = ?
+        """, (description, location_id))
+        
+        if rows_affected == 0:
+            return jsonify({'success': False, 'error': 'Location not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'message': 'Description updated successfully'
+        })
+        
+    except Exception as e:
+        print(f"Error updating storage description: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

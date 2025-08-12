@@ -342,6 +342,30 @@ def init_container(blueprint, mysql):
             traceback.print_exc()
             return jsonify({'success': False, 'error': str(e)}), 500
     
+    @blueprint.route('/api/containers/remove-sample', methods=['POST'])
+    def remove_sample_from_container():
+        try:
+            data = request.get_json()
+            container_id = data.get('containerId')
+            sample_id = data.get('sampleId')
+            amount = data.get('amount', 1)
+            
+            # Get current user
+            current_user = get_current_user()
+            user_id = current_user['UserID']
+            
+            # Remove sample from container via service
+            from app.services.container_service import ContainerService
+            container_service = ContainerService(mysql)
+            result = container_service.remove_sample_from_container(container_id, sample_id, user_id)
+            
+            return jsonify(result)
+        except Exception as e:
+            print(f"API error removing sample from container: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
     @blueprint.route('/api/containers/<int:container_id>', methods=['DELETE'])
     def delete_container(container_id):
         try:
