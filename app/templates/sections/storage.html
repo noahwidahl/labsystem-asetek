@@ -28,7 +28,7 @@
                     <h5 class="mb-0">Search & Filter Options</h5>
                 </div>
                 <div class="card-body">
-                    <form id="filterForm" method="GET" action="{{ url_for('sample.storage') }}">
+                    <form id="filterForm" method="GET" action="{{ url_for('sample_mssql.storage') }}">
                         <div class="row g-3">
                             <!-- Search field -->
                             <div class="col-md-6">
@@ -97,7 +97,7 @@
                             
                             <!-- Submit buttons -->
                             <div class="col-12 d-flex justify-content-end gap-2 mt-4">
-                                <a href="{{ url_for('sample.storage') }}" class="btn btn-outline-secondary">Clear Filters</a>
+                                <a href="{{ url_for('sample_mssql.storage') }}" class="btn btn-outline-secondary">Clear Filters</a>
                                 <button type="submit" class="btn btn-primary">Apply Filters</button>
                             </div>
                         </div>
@@ -131,7 +131,7 @@
                 <span class="badge bg-info me-2">To: {{ filter_criteria.date_to }}</span>
                 {% endif %}
                 
-                <a href="{{ url_for('sample.storage') }}" class="btn btn-sm btn-outline-danger ms-auto">Clear All</a>
+                <a href="{{ url_for('sample_mssql.storage') }}" class="btn btn-sm btn-outline-danger ms-auto">Clear All</a>
             </div>
         </div>
         {% endif %}
@@ -240,7 +240,7 @@
                         <ul class="pagination mb-0">
                             <!-- Previous button -->
                             <li class="page-item {{ 'disabled' if not has_prev else '' }}">
-                                <a class="page-link" href="{{ url_for('sample.storage', page=page-1, search=current_search, status=filter_criteria.status if filter_criteria else '', location=filter_criteria.location if filter_criteria else '', date_from=filter_criteria.date_from if filter_criteria else '', date_to=filter_criteria.date_to if filter_criteria else '', sort_by=current_sort_by, sort_order=current_sort_order) }}" 
+                                <a class="page-link" href="{{ url_for('sample_mssql.storage', page=page-1, search=current_search, status=filter_criteria.status if filter_criteria else '', location=filter_criteria.location if filter_criteria else '', date_from=filter_criteria.date_from if filter_criteria else '', date_to=filter_criteria.date_to if filter_criteria else '', sort_by=current_sort_by, sort_order=current_sort_order) }}" 
                                    aria-label="Previous" {{ 'tabindex="-1" aria-disabled="true"' if not has_prev else '' }}>
                                     <span aria-hidden="true">&laquo;</span>
                                 </a>
@@ -252,7 +252,7 @@
                             
                             {% if start_page > 1 %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('sample.storage', page=1, search=current_search, status=filter_criteria.status if filter_criteria else '', location=filter_criteria.location if filter_criteria else '', date_from=filter_criteria.date_from if filter_criteria else '', date_to=filter_criteria.date_to if filter_criteria else '', sort_by=current_sort_by, sort_order=current_sort_order) }}">1</a>
+                                <a class="page-link" href="{{ url_for('sample_mssql.storage', page=1, search=current_search, status=filter_criteria.status if filter_criteria else '', location=filter_criteria.location if filter_criteria else '', date_from=filter_criteria.date_from if filter_criteria else '', date_to=filter_criteria.date_to if filter_criteria else '', sort_by=current_sort_by, sort_order=current_sort_order) }}">1</a>
                             </li>
                             {% if start_page > 2 %}
                             <li class="page-item disabled">
@@ -263,7 +263,7 @@
                             
                             {% for page_num in range(start_page, end_page + 1) %}
                             <li class="page-item {{ 'active' if page_num == page else '' }}">
-                                <a class="page-link" href="{{ url_for('sample.storage', page=page_num, search=current_search, status=filter_criteria.status if filter_criteria else '', location=filter_criteria.location if filter_criteria else '', date_from=filter_criteria.date_from if filter_criteria else '', date_to=filter_criteria.date_to if filter_criteria else '', sort_by=current_sort_by, sort_order=current_sort_order) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('sample_mssql.storage', page=page_num, search=current_search, status=filter_criteria.status if filter_criteria else '', location=filter_criteria.location if filter_criteria else '', date_from=filter_criteria.date_from if filter_criteria else '', date_to=filter_criteria.date_to if filter_criteria else '', sort_by=current_sort_by, sort_order=current_sort_order) }}">{{ page_num }}</a>
                             </li>
                             {% endfor %}
                             
@@ -274,13 +274,13 @@
                             </li>
                             {% endif %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('sample.storage', page=total_pages, search=current_search, status=filter_criteria.status if filter_criteria else '', location=filter_criteria.location if filter_criteria else '', date_from=filter_criteria.date_from if filter_criteria else '', date_to=filter_criteria.date_to if filter_criteria else '', sort_by=current_sort_by, sort_order=current_sort_order) }}">{{ total_pages }}</a>
+                                <a class="page-link" href="{{ url_for('sample_mssql.storage', page=total_pages, search=current_search, status=filter_criteria.status if filter_criteria else '', location=filter_criteria.location if filter_criteria else '', date_from=filter_criteria.date_from if filter_criteria else '', date_to=filter_criteria.date_to if filter_criteria else '', sort_by=current_sort_by, sort_order=current_sort_order) }}">{{ total_pages }}</a>
                             </li>
                             {% endif %}
                             
                             <!-- Next button -->
                             <li class="page-item {{ 'disabled' if not has_next else '' }}">
-                                <a class="page-link" href="{{ url_for('sample.storage', page=page+1, search=current_search, status=filter_criteria.status if filter_criteria else '', location=filter_criteria.location if filter_criteria else '', date_from=filter_criteria.date_from if filter_criteria else '', date_to=filter_criteria.date_to if filter_criteria else '', sort_by=current_sort_by, sort_order=current_sort_order) }}" 
+                                <a class="page-link" href="{{ url_for('sample_mssql.storage', page=page+1, search=current_search, status=filter_criteria.status if filter_criteria else '', location=filter_criteria.location if filter_criteria else '', date_from=filter_criteria.date_from if filter_criteria else '', date_to=filter_criteria.date_to if filter_criteria else '', sort_by=current_sort_by, sort_order=current_sort_order) }}" 
                                    aria-label="Next" {{ 'tabindex="-1" aria-disabled="true"' if not has_next else '' }}>
                                     <span aria-hidden="true">&raquo;</span>
                                 </a>

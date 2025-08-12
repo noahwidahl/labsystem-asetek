@@ -33,3 +33,26 @@ def register_blueprints(app, mysql):
     app.register_blueprint(system_bp)
     app.register_blueprint(expiration_bp)
     app.register_blueprint(barcode_bp)
+
+def register_blueprints_mssql(app):
+    """SQL Server version - no mysql parameter needed"""
+    from app.routes.dashboard_mssql import dashboard_mssql_bp
+    from app.routes.sample_mssql import sample_mssql_bp
+    from app.routes.container_mssql import container_mssql_bp
+    from app.routes.test_mssql import test_mssql_bp
+    from app.routes.task_mssql import task_mssql_bp
+    from app.routes.scanner_mssql import scanner_mssql_bp
+    from app.routes.system import system_bp
+    from app.routes.expiration_mssql import expiration_mssql_bp
+    from app.routes.barcode import barcode_bp
+    
+    # Registration of blueprints (SQL Server version uses mssql_db directly)
+    app.register_blueprint(dashboard_mssql_bp)
+    app.register_blueprint(sample_mssql_bp)  # Now includes print endpoint
+    app.register_blueprint(container_mssql_bp)
+    app.register_blueprint(test_mssql_bp)
+    app.register_blueprint(task_mssql_bp)
+    app.register_blueprint(scanner_mssql_bp)
+    app.register_blueprint(system_bp)
+    app.register_blueprint(expiration_mssql_bp)
+    app.register_blueprint(barcode_bp)

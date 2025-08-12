@@ -32,43 +32,43 @@
     <!-- Simplified navigation -->
     <nav class="side-nav">
         <div class="nav-section">
-            <a href="{{ url_for('dashboard.dashboard') }}" class="nav-item {% if request.path == url_for('dashboard.dashboard') or request.path == '/' %}active{% endif %}">
+            <a href="{{ url_for('dashboard_mssql.dashboard') }}" class="nav-item {% if request.path == url_for('dashboard_mssql.dashboard') or request.path == '/' %}active{% endif %}">
                 <i class="fas fa-home"></i>
                 <span>Dashboard</span>
             </a>
-            <a href="{{ url_for('sample.register') }}" class="nav-item {% if request.path == url_for('sample.register') %}active{% endif %}">
+            <a href="{{ url_for('sample_mssql.register') }}" class="nav-item {% if request.path == url_for('sample_mssql.register') %}active{% endif %}">
                 <i class="fas fa-plus-circle"></i>
                 <span>Register Samples</span>
             </a>
-            <a href="{{ url_for('sample.storage') }}" class="nav-item {% if request.path == url_for('sample.storage') %}active{% endif %}">
+            <a href="{{ url_for('sample_mssql.storage') }}" class="nav-item {% if request.path == url_for('sample_mssql.storage') %}active{% endif %}">
                 <i class="fas fa-box"></i>
                 <span>Sample Overview</span>
             </a>
-            <a href="{{ url_for('test.testing') }}" class="nav-item {% if request.path == url_for('test.testing') %}active{% endif %}">
+            <a href="{{ url_for('test_mssql.testing') }}" class="nav-item {% if request.path == url_for('test_mssql.testing') %}active{% endif %}">
                 <i class="fas fa-flask"></i>
                 <span>Test Administration</span>
             </a>
-            <a href="{{ url_for('task.tasks_page') }}" class="nav-item {% if request.path == url_for('task.tasks_page') %}active{% endif %}">
+            <a href="{{ url_for('task_mssql.tasks_page') }}" class="nav-item {% if request.path == url_for('task_mssql.tasks_page') %}active{% endif %}">
                 <i class="fas fa-tasks"></i>
                 <span>Task Management</span>
             </a>
-            <a href="{{ url_for('container.containers') }}" class="nav-item {% if request.path == url_for('container.containers') %}active{% endif %}">
+            <a href="{{ url_for('container_mssql.containers') }}" class="nav-item {% if request.path == url_for('container_mssql.containers') %}active{% endif %}">
                 <i class="fas fa-box-open"></i>
                 <span>Containers</span>
             </a>
-            <a href="{{ url_for('dashboard.history') }}" class="nav-item {% if request.path == url_for('dashboard.history') %}active{% endif %}">
+            <a href="{{ url_for('dashboard_mssql.history') }}" class="nav-item {% if request.path == url_for('dashboard_mssql.history') %}active{% endif %}">
                 <i class="fas fa-history"></i>
                 <span>History</span>
             </a>
-            <a href="{{ url_for('sample.disposal_page') }}" class="nav-item {% if request.path == url_for('sample.disposal_page') %}active{% endif %}">
+            <a href="{{ url_for('sample_mssql.disposal_page') }}" class="nav-item {% if request.path == url_for('sample_mssql.disposal_page') %}active{% endif %}">
                 <i class="fas fa-trash-alt"></i>
                 <span>Disposal</span>
             </a>
-            <a href="{{ url_for('scanner.scanner_page') }}" class="nav-item {% if request.path == url_for('scanner.scanner_page') %}active{% endif %}">
+            <a href="{{ url_for('scanner_mssql.scanner_page') }}" class="nav-item {% if request.path == url_for('scanner_mssql.scanner_page') %}active{% endif %}">
                 <i class="fas fa-barcode"></i>
                 <span>Scanner/Print</span>
             </a>
-            <a href="{{ url_for('sample.expiry_page') }}" class="nav-item {% if request.path == url_for('sample.expiry_page') %}active{% endif %}">
+            <a href="{{ url_for('sample_mssql.expiry_page') }}" class="nav-item {% if request.path == url_for('sample_mssql.expiry_page') %}active{% endif %}">
                 <i class="fas fa-exclamation-triangle"></i>
                 <span>Expiry Management</span>
             </a>

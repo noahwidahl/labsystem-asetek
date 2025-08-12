@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LabSystem - SQL Server Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 50px; }
+        .success { color: green; }
+        .info { color: blue; }
+        h1 { color: #333; }
+    </style>
+</head>
+<body>
+    <h1>🎉 LabSystem SQL Server Migration Success!</h1>
+    
+    <div class="success">
+        <h2>✅ Database Connection: Working</h2>
+        <p>Successfully connected to SQL Server database</p>
+    </div>
+    
+    <div class="info">
+        <h2>📊 Current User Info:</h2>
+        <p><strong>Name:</strong> {{ current_user.Name }}</p>
+        <p><strong>Role:</strong> {{ current_user.Role }}</p>
+        <p><strong>Login:</strong> {{ current_user.WindowsLogin }}</p>
+    </div>
+    
+    <div class="info">
+        <h2>🔧 Next Steps:</h2>
+        <ul>
+            <li>Database migration: ✅ Complete</li>
+            <li>SQL Server connection: ✅ Working</li>
+            <li>User authentication: ✅ Working</li>
+            <li>Routes conversion: ⏳ In progress</li>
+            <li>Entra ID integration: ⏳ Planned</li>
+        </ul>
+    </div>
+    
+    <p><em>Your lab system is ready for the next phase!</em></p>
+</body>
+</html>
