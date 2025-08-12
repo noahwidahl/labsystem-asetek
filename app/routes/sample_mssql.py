@@ -515,7 +515,7 @@ def create_sample():
                 barcode,
                 data.get('partNumber', ''),
                 1 if data.get('hasSerialNumbers') else 0,
-                data.get('sampleType', 'single'),
+                data.get('sampleType', 'single').lower(),
                 data.get('description'),
                 int(data.get('totalAmount', 1)),
                 data.get('unit'),
