@@ -480,6 +480,24 @@ def create_sample():
                 print(f"DEBUG: Invalid supplier ID format: {supplier_id}, setting to None")
                 supplier_id = None
         
+        # Pre-validate serial numbers before creating anything
+        serial_numbers = data.get('serialNumbers', [])
+        if serial_numbers and data.get('hasSerialNumbers'):
+            print(f"DEBUG: Pre-validating {len(serial_numbers)} serial numbers")
+            for serial_number in serial_numbers:
+                if serial_number.strip():
+                    existing_check = mssql_db.execute_query("""
+                        SELECT [SampleID] FROM [sampleserialnumber] 
+                        WHERE [SerialNumber] = ? AND [IsActive] = 1
+                    """, (serial_number.strip(),), fetch_one=True)
+                    
+                    if existing_check:
+                        print(f"ERROR: Serial number '{serial_number.strip()}' already exists in sample {existing_check[0]}")
+                        return jsonify({
+                            'success': False,
+                            'error': f'Serial number "{serial_number.strip()}" already exists in the system'
+                        }), 400
+
         # Use a single transaction for both reception and sample creation
         print(f"DEBUG: About to create reception and sample in transaction with supplier_id={supplier_id}, user_id={user_id}")
         
@@ -553,6 +571,17 @@ def create_sample():
                 sample_id,
                 f"Sample '{data.get('description')}' registered with {data.get('totalAmount', 1)} units"
             ))
+            
+            # Insert serial numbers if provided (already pre-validated)
+            if serial_numbers and data.get('hasSerialNumbers'):
+                print(f"DEBUG: Inserting {len(serial_numbers)} pre-validated serial numbers for sample {sample_id}")
+                for serial_number in serial_numbers:
+                    if serial_number.strip():  # Only insert non-empty serial numbers
+                        mssql_db.execute_query("""
+                            INSERT INTO [sampleserialnumber] ([SampleID], [SerialNumber], [CreatedDate], [IsActive])
+                            VALUES (?, ?, GETDATE(), 1)
+                        """, (sample_id, serial_number.strip()))
+                        print(f"DEBUG: Inserted serial number: {serial_number.strip()}")
             
             # Handle containers if requested
             container_ids = []
@@ -1587,43 +1616,54 @@ def validate_serial_numbers():
     try:
         data = request.json
         sample_id = data.get('sample_id')
-        serial_numbers = data.get('serial_numbers', [])
+        serial_numbers = data.get('serial_numbers', []) or data.get('serialNumbers', [])
         
-        if not sample_id or not serial_numbers:
+        if not serial_numbers:
             return jsonify({
                 'success': False,
-                'error': 'Sample ID and serial numbers are required'
+                'error': 'Serial numbers are required'
             }), 400
         
-        # Check if sample exists and is unique
-        sample_result = mssql_db.execute_query("""
-            SELECT [SampleID], [IsUnique], [Description] 
-            FROM [sample] WHERE [SampleID] = ?
-        """, (sample_id,), fetch_one=True)
-        
-        if not sample_result:
-            return jsonify({
-                'success': False,
-                'error': f'Sample {sample_id} not found'
-            }), 404
-        
-        if not sample_result[1]:  # IsUnique
-            return jsonify({
-                'success': False,
-                'error': 'Sample is not marked as unique'
-            }), 400
+        # If sample_id is provided, check if sample exists and is unique
+        if sample_id:
+            sample_result = mssql_db.execute_query("""
+                SELECT [SampleID], [IsUnique], [Description] 
+                FROM [sample] WHERE [SampleID] = ?
+            """, (sample_id,), fetch_one=True)
+            
+            if not sample_result:
+                return jsonify({
+                    'success': False,
+                    'error': f'Sample {sample_id} not found'
+                }), 404
+            
+            if not sample_result[1]:  # IsUnique
+                return jsonify({
+                    'success': False,
+                    'error': 'Sample is not marked as unique'
+                }), 400
         
         validation_results = []
         duplicates = []
         
         for serial_num in serial_numbers:
             # Check if serial number already exists
-            existing = mssql_db.execute_query("""
-                SELECT sn.[SampleID], s.[Description]
-                FROM [sampleserialnumber] sn
-                JOIN [sample] s ON sn.[SampleID] = s.[SampleID]
-                WHERE sn.[SerialNumber] = ? AND sn.[SampleID] != ? AND sn.[IsActive] = 1
-            """, (serial_num, sample_id), fetch_one=True)
+            if sample_id:
+                # For existing samples, exclude self from duplicate check
+                existing = mssql_db.execute_query("""
+                    SELECT sn.[SampleID], s.[Description]
+                    FROM [sampleserialnumber] sn
+                    JOIN [sample] s ON sn.[SampleID] = s.[SampleID]
+                    WHERE sn.[SerialNumber] = ? AND sn.[SampleID] != ? AND sn.[IsActive] = 1
+                """, (serial_num, sample_id), fetch_one=True)
+            else:
+                # For new samples during registration, check all existing serial numbers
+                existing = mssql_db.execute_query("""
+                    SELECT sn.[SampleID], s.[Description]
+                    FROM [sampleserialnumber] sn
+                    JOIN [sample] s ON sn.[SampleID] = s.[SampleID]
+                    WHERE sn.[SerialNumber] = ? AND sn.[IsActive] = 1
+                """, (serial_num,), fetch_one=True)
             
             if existing:
                 validation_results.append({
