@@ -602,8 +602,9 @@ def update_test_status(test_id):
 @test_mssql_bp.route('/api/tests/<int:test_id>/complete', methods=['POST'])
 def complete_test(test_id):
     try:
+        from app.utils.mssql_db import get_current_user_id
         data = request.json
-        user_id = 1  # TODO: Implement proper user authentication
+        user_id = get_current_user_id()  # Get actual current user
         sample_completions = data.get('sample_completions', [])
         
         # Update test status to completed

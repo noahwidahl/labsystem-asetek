@@ -196,3 +196,14 @@ def get_current_user_mssql(user_login=None):
     except Exception as e:
         logger.error(f"Error in get_current_user_mssql: {e}")
         return default_user
+
+def get_current_user_id():
+    """
+    Helper function to get just the UserID of the current user for logging purposes.
+    Returns the UserID from get_current_user_mssql().
+    """
+    try:
+        current_user = get_current_user_mssql()
+        return current_user.get('UserID', 1)
+    except:
+        return 1  # Fallback to admin user

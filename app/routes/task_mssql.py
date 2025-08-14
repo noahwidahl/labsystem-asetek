@@ -54,6 +54,10 @@ def get_tasks():
         conditions = []
         params = []
         
+        # Always exclude completed tasks unless specifically filtering for them
+        if not status_filter or status_filter != 'Completed':
+            conditions.append("t.[Status] != 'Completed'")
+        
         if status_filter:
             conditions.append("t.[Status] = ?")
             params.append(status_filter)
@@ -172,7 +176,8 @@ def create_task():
                 'error': 'No data provided'
             }), 400
         
-        user_id = 1  # TODO: Implement proper user authentication
+        from app.utils.mssql_db import get_current_user_id
+        user_id = get_current_user_id()  # Get actual current user
         
         # Generate task number - use simpler format to match existing data
         task_no_result = mssql_db.execute_query("""
@@ -396,7 +401,8 @@ def update_task(task_id):
                 'error': 'No data provided'
             }), 400
         
-        user_id = 1  # TODO: Implement proper user authentication
+        from app.utils.mssql_db import get_current_user_id
+        user_id = get_current_user_id()  # Get actual current user
         
         # Build update query dynamically
         update_fields = []
@@ -445,19 +451,44 @@ def update_task(task_id):
         
         mssql_db.execute_query(update_query, params)
         
-        # Log activity
-        mssql_db.execute_query("""
-            INSERT INTO [history] (
-                [Timestamp], 
-                [ActionType], 
-                [UserID], 
-                [Notes]
-            )
-            VALUES (GETDATE(), 'Task updated', ?, ?)
-        """, (
-            user_id,
-            f"Task {task_id} updated"
-        ))
+        # Check if task was completed - if so, add special logging
+        if 'status' in data and data['status'] == 'Completed':
+            # Get task details for completion logging
+            task_details = mssql_db.execute_query("""
+                SELECT [TaskNumber], [TaskName] FROM [task] WHERE [TaskID] = ?
+            """, (task_id,), fetch_one=True)
+            
+            if task_details:
+                task_number = task_details[0] or f"TSK-{task_id}"
+                task_name = task_details[1] or f"Task {task_id}"
+                
+                # Log task completion
+                mssql_db.execute_query("""
+                    INSERT INTO [history] (
+                        [Timestamp], 
+                        [ActionType], 
+                        [UserID], 
+                        [Notes]
+                    )
+                    VALUES (GETDATE(), 'Task completed', ?, ?)
+                """, (
+                    user_id,
+                    f"Task completed: {task_number} - {task_name}"
+                ))
+        else:
+            # Log regular update
+            mssql_db.execute_query("""
+                INSERT INTO [history] (
+                    [Timestamp], 
+                    [ActionType], 
+                    [UserID], 
+                    [Notes]
+                )
+                VALUES (GETDATE(), 'Task updated', ?, ?)
+            """, (
+                user_id,
+                f"Task {task_id} updated"
+            ))
         
         return jsonify({
             'success': True,
@@ -477,7 +508,8 @@ def delete_task(task_id):
     Delete a task.
     """
     try:
-        user_id = 1  # TODO: Implement proper user authentication
+        from app.utils.mssql_db import get_current_user_id
+        user_id = get_current_user_id()  # Get actual current user
         
         # Check if task has samples or tests
         samples_count = mssql_db.execute_query("""
@@ -586,6 +618,7 @@ def get_tasks_overview():
             FROM [task] t
             LEFT JOIN [sample] s ON t.[TaskID] = s.[TaskID]
             LEFT JOIN [test] te ON t.[TaskID] = te.[TaskID]
+            WHERE t.[Status] != 'Completed'
             GROUP BY t.[TaskID], t.[TaskNumber], t.[TaskName], t.[Status], t.[Priority]
             ORDER BY t.[CreatedDate] DESC
         """, fetch_all=True)
@@ -820,7 +853,8 @@ def assign_samples_to_task(task_id):
                 'error': 'No samples provided'
             }), 400
         
-        user_id = 1  # TODO: Implement proper user authentication
+        from app.utils.mssql_db import get_current_user_id
+        user_id = get_current_user_id()  # Get actual current user
         
         # Assign samples to task
         assigned_count = 0

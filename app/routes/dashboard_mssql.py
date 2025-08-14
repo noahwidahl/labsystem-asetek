@@ -410,10 +410,19 @@ def api_history_details(log_id):
             "TestID": log_data[5]
         }
         
-        # Try to get sample info if SampleID exists
+        # Only show sample info for sample-related actions
         sample_info = None
         sample_history = []
-        if log_data[4]:
+        sample_related_actions = [
+            'Received', 'Sample created', 'Sample registered', 'Sample moved', 'Sample assigned to task',
+            'Disposed', 'Sample consumed', 'Sample partially consumed', 'Sample transferred',
+            'Sample added to container', 'Sample removed from container'
+        ]
+        
+        action_type = log_data[2] or ''
+        is_sample_relevant = any(action in action_type for action in sample_related_actions) or log_data[4] is not None
+        
+        if is_sample_relevant and log_data[4]:
             try:
                 sample_data = mssql_db.execute_query("SELECT [SampleID], [Description], [Status], [PartNumber] FROM [sample] WHERE [SampleID] = ?", (log_data[4],), fetch_one=True)
                 if sample_data:
@@ -421,8 +430,8 @@ def api_history_details(log_id):
                         "SampleID": sample_data[0],
                         "Description": sample_data[1] or 'No description',
                         "Status": sample_data[2] or 'Unknown',
-                        "PartNumber": sample_data[3] or 'No part number',
-                        "Location": 'Unknown location'  # Simplified - no complex location lookup
+                        "PartNumber": sample_data[3] or 'No part number'
+                        # Removed Location as requested
                     }
                     
                     # Get basic sample history

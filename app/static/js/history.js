@@ -300,8 +300,7 @@ class HistoryManager {
             'modal-sample-id',
             'modal-sample-desc',
             'modal-sample-partnumber',
-            'modal-sample-status',
-            'modal-sample-location'
+            'modal-sample-status'
         ];
 
         elements.forEach(id => {
@@ -320,12 +319,7 @@ class HistoryManager {
             'modal-action-type': data.details?.ActionType || 'Unknown Action',
             'modal-timestamp': data.details?.Timestamp || 'Unknown Time',
             'modal-user': data.details?.UserName || 'Unknown User',
-            'modal-notes': data.details?.Notes || 'No notes available',
-            'modal-sample-id': data.sample_info?.SampleID ? `SMP-${data.sample_info.SampleID}` : 'N/A',
-            'modal-sample-desc': data.sample_info?.Description || 'No sample information available',
-            'modal-sample-partnumber': data.sample_info?.PartNumber || 'No part number',
-            'modal-sample-status': data.sample_info?.Status || 'N/A',
-            'modal-sample-location': data.sample_info?.Location || 'N/A'
+            'modal-notes': data.details?.Notes || 'No notes available'
         };
 
         Object.entries(elements).forEach(([id, value]) => {
@@ -334,6 +328,31 @@ class HistoryManager {
                 element.textContent = value;
             }
         });
+
+        // Show/hide sample information section based on whether sample info is available
+        const sampleInfoSection = document.getElementById('modal-sample-info-section');
+        if (data.sample_info && sampleInfoSection) {
+            // Show sample information section
+            sampleInfoSection.style.display = 'block';
+            
+            // Fill sample information
+            const sampleElements = {
+                'modal-sample-id': data.sample_info?.SampleID ? `SMP-${data.sample_info.SampleID}` : 'N/A',
+                'modal-sample-desc': data.sample_info?.Description || 'No description',
+                'modal-sample-partnumber': data.sample_info?.PartNumber || 'No part number',
+                'modal-sample-status': data.sample_info?.Status || 'N/A'
+            };
+
+            Object.entries(sampleElements).forEach(([id, value]) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = value;
+                }
+            });
+        } else if (sampleInfoSection) {
+            // Hide sample information section if no sample info
+            sampleInfoSection.style.display = 'none';
+        }
 
         // Hide the View Sample button for now since the route doesn't exist
         const viewSampleBtn = document.getElementById('viewSampleBtn');
@@ -352,12 +371,7 @@ class HistoryManager {
             'modal-action-type': 'Error',
             'modal-timestamp': 'N/A',
             'modal-user': 'N/A',
-            'modal-notes': message,
-            'modal-sample-id': 'N/A',
-            'modal-sample-desc': 'Error loading information',
-            'modal-sample-partnumber': 'N/A',
-            'modal-sample-status': 'N/A',
-            'modal-sample-location': 'N/A'
+            'modal-notes': message
         };
 
         Object.entries(elements).forEach(([id, value]) => {
@@ -366,6 +380,12 @@ class HistoryManager {
                 element.textContent = value;
             }
         });
+
+        // Hide sample information section on error
+        const sampleInfoSection = document.getElementById('modal-sample-info-section');
+        if (sampleInfoSection) {
+            sampleInfoSection.style.display = 'none';
+        }
 
         // Hide the View Sample button
         const viewSampleBtn = document.getElementById('viewSampleBtn');

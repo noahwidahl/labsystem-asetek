@@ -370,7 +370,72 @@ def storage():
 
 @sample_mssql_bp.route('/disposal')
 def disposal_page():
-    return render_template('sections/disposal.html')
+    try:
+        # Get users for disposal form
+        users_results = mssql_db.execute_query("""
+            SELECT [UserID], [Name] FROM [user] ORDER BY [Name]
+        """, fetch_all=True)
+        users = [{'UserID': row[0], 'Name': row[1]} for row in users_results]
+        
+        # Get recent disposals (last 10) - include both manual disposals and automatic consumption
+        recent_disposals_results = mssql_db.execute_query("""
+            SELECT TOP 10
+                h.[LogID],
+                FORMAT(h.[Timestamp], 'dd-MM-yyyy HH:mm') as DisposalDate,
+                'SMP-' + CAST(h.[SampleID] AS NVARCHAR) as SampleID,
+                h.[Notes] as AmountDisposed,
+                u.[Name] as DisposedBy
+            FROM [history] h
+            JOIN [user] u ON h.[UserID] = u.[UserID]
+            WHERE h.[ActionType] IN ('Disposed', 'Sample consumed', 'Sample partially consumed')
+            ORDER BY h.[Timestamp] DESC
+        """, fetch_all=True)
+        
+        recent_disposals = []
+        for row in recent_disposals_results or []:
+            disposal_dict = {
+                'LogID': row[0],
+                'DisposalDate': row[1],
+                'SampleID': row[2],
+                'AmountDisposed': row[3],
+                'DisposedBy': row[4]
+            }
+            
+            # Clean up amount disposed - extract just the number if possible
+            amount_str = disposal_dict.get('AmountDisposed', '')
+            if 'Amount:' in amount_str:
+                try:
+                    import re
+                    amount_match = re.search(r'Amount:\s*(\d+)', amount_str)
+                    if amount_match:
+                        disposal_dict['AmountDisposed'] = amount_match.group(1) + ' units'
+                    else:
+                        disposal_dict['AmountDisposed'] = 'Unknown'
+                except:
+                    disposal_dict['AmountDisposed'] = 'Unknown'
+            elif 'consumed' in amount_str.lower():
+                # Extract amount from consumption messages
+                try:
+                    import re
+                    amount_match = re.search(r'(\d+)', amount_str)
+                    if amount_match:
+                        disposal_dict['AmountDisposed'] = amount_match.group(1) + ' units'
+                    else:
+                        disposal_dict['AmountDisposed'] = 'Unknown'
+                except:
+                    disposal_dict['AmountDisposed'] = 'Unknown'
+            
+            recent_disposals.append(disposal_dict)
+        
+        return render_template('sections/disposal.html', 
+                             users=users, 
+                             recent_disposals=recent_disposals)
+    except Exception as e:
+        print(f"Error loading disposal page: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template('sections/disposal.html', 
+                             error="Error loading disposal page")
 
 @sample_mssql_bp.route('/expiry')
 def expiry_page():
@@ -1081,10 +1146,11 @@ def move_sample_to_location(sample_id):
     Move a sample to a direct storage location - CRITICAL FOR MOVE BUTTON!
     """
     try:
+        from app.utils.mssql_db import get_current_user_id
         data = request.json
         location_id = data.get('locationId')
         move_amount = int(data.get('amount', 0))
-        user_id = 1  # TODO: Implement proper user authentication
+        user_id = get_current_user_id()  # Get actual current user
         
         if not location_id:
             return jsonify({
@@ -1151,8 +1217,9 @@ def create_disposal():
     Create disposal record - CRITICAL FOR DISPOSAL FUNCTIONALITY!
     """
     try:
+        from app.utils.mssql_db import get_current_user_id
         data = request.json
-        user_id = 1  # TODO: Implement proper user authentication
+        user_id = get_current_user_id()  # Get actual current user
         
         # Validate required fields
         if not data.get('sampleId'):
@@ -1421,7 +1488,8 @@ def remove_sample_from_container(sample_id):
     Remove a sample from its current container - CRITICAL FOR MOVE FUNCTIONALITY!
     """
     try:
-        user_id = 1  # TODO: Implement proper user authentication
+        from app.utils.mssql_db import get_current_user_id
+        user_id = get_current_user_id()  # Get actual current user
         
         # Check if sample exists
         sample_result = mssql_db.execute_query("""
