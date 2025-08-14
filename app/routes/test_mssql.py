@@ -273,16 +273,15 @@ def create_test():
         
         print(f"DEBUG CREATE TEST: Received data: {data}")
         
-        # Generate test number
-        current_year = datetime.now().year
+        # Generate test number - use simple sequential format
         test_no_result = mssql_db.execute_query("""
-            SELECT MAX(CAST(SUBSTRING([TestNo], 6, LEN([TestNo]) - 5) AS INT)) + 1
+            SELECT MAX(CAST(SUBSTRING([TestNo], 5, LEN([TestNo]) - 4) AS INT)) + 1
             FROM [test] 
-            WHERE [TestNo] LIKE ?
-        """, (f"TST{current_year}%",), fetch_one=True)
+            WHERE [TestNo] LIKE 'TST-%'
+        """, fetch_one=True)
         
         next_number = test_no_result[0] if test_no_result and test_no_result[0] else 1
-        test_no = f"TST{current_year}{next_number:04d}"
+        test_no = f"TST-{next_number:03d}"
         
         print(f"DEBUG CREATE TEST: Generated test_no: {test_no}")
         
@@ -395,19 +394,32 @@ def add_samples_to_test(test_id):
                     'error': f'Insufficient amount available for sample {sample_id}'
                 }), 400
             
+            # Get test number for sample identifier
+            test_result = mssql_db.execute_query("""
+                SELECT [TestNo] FROM [test] WHERE [TestID] = ?
+            """, (test_id,), fetch_one=True)
+            
+            test_no = test_result[0] if test_result else f"T{test_id}"
+            
+            # Generate unique sample identifier
+            sample_identifier = f"{test_no}_{sample_id}_{amount}"
+            
             # Create test usage record
             usage_result = mssql_db.execute_query("""
                 INSERT INTO [testsampleusage] (
                     [TestID], 
                     [SampleID], 
+                    [SampleIdentifier],
+                    [AmountAllocated],
                     [AmountUsed], 
                     [Status], 
                     [CreatedDate], 
-                    [Notes]
+                    [Notes],
+                    [CreatedBy]
                 ) 
                 OUTPUT INSERTED.UsageID
-                VALUES (?, ?, ?, 'Active', GETDATE(), ?)
-            """, (test_id, sample_id, amount, notes), fetch_one=True)
+                VALUES (?, ?, ?, ?, ?, 'Allocated', GETDATE(), ?, ?)
+            """, (test_id, sample_id, sample_identifier, amount, 0, notes, user_id), fetch_one=True)
             
             if usage_result:
                 usage_id = usage_result[0]
@@ -467,12 +479,17 @@ def get_test_samples(test_id):
                 tu.[SampleID],
                 s.[Description],
                 s.[PartNumber],
-                tu.[AmountUsed],
+                ISNULL(tu.[AmountAllocated], 0) as AmountAllocated,
+                ISNULL(tu.[AmountUsed], 0) as AmountUsed,
                 tu.[Status],
+                tu.[SampleIdentifier],
                 tu.[CreatedDate] as UsageCreatedDate,
-                tu.[CompletedDate],
                 tu.[Notes],
-                u.[UnitName],
+                CASE
+                    WHEN u.[UnitName] IS NULL THEN 'pcs'
+                    WHEN LOWER(u.[UnitName]) = 'stk' THEN 'pcs'
+                    ELSE u.[UnitName]
+                END as UnitName,
                 sl.[LocationName]
             FROM [testsampleusage] tu
             JOIN [sample] s ON tu.[SampleID] = s.[SampleID]
@@ -485,18 +502,25 @@ def get_test_samples(test_id):
         
         samples = []
         for row in samples_results:
+            # Calculate returned amount as allocated - used for now
+            amount_allocated = row[4] or 0
+            amount_used = row[5] or 0
+            amount_returned = max(0, amount_allocated - amount_used)
+            
             samples.append({
-                'UsageID': row[0],
-                'SampleID': row[1],
-                'Description': row[2],
-                'PartNumber': row[3],
-                'AmountUsed': row[4],
-                'Status': row[5],
-                'CreatedDate': row[6],
-                'CompletedDate': row[7],
-                'Notes': row[8],
-                'UnitName': row[9] or 'pcs',
-                'LocationName': row[10] or 'Unknown'
+                'usage_id': row[0],
+                'sample_id': row[1],
+                'description': row[2],
+                'part_number': row[3] or '-',
+                'amount_allocated': amount_allocated,
+                'amount_used': amount_used,
+                'amount_returned': amount_returned,
+                'status': row[6],
+                'identifier': row[7] or f"TST{test_id}SMP{row[1]}{row[0]}",
+                'created_date': row[8],
+                'notes': row[9],
+                'unit_name': row[10],
+                'location_name': row[11] or 'Unknown'
             })
         
         return jsonify({
@@ -574,7 +598,7 @@ def complete_test(test_id):
         # Update test status to completed
         mssql_db.execute_query("""
             UPDATE [test] 
-            SET [Status] = 'Completed', [CompletedDate] = GETDATE()
+            SET [Status] = 'Completed'
             WHERE [TestID] = ?
         """, (test_id,))
         
@@ -587,7 +611,7 @@ def complete_test(test_id):
             # Update test usage
             mssql_db.execute_query("""
                 UPDATE [testsampleusage] 
-                SET [Status] = ?, [CompletedDate] = GETDATE(), [Notes] = ?
+                SET [Status] = ?, [Notes] = ?
                 WHERE [UsageID] = ?
             """, (status, notes, usage_id))
         
@@ -630,6 +654,7 @@ def get_test_details(test_id):
                 t.[Status], 
                 t.[CreatedDate], 
                 t.[UserID],
+                t.[TaskID],
                 u.[Name] as UserName
             FROM [test] t
             LEFT JOIN [user] u ON t.[UserID] = u.[UserID]
@@ -649,7 +674,8 @@ def get_test_details(test_id):
             'description': test_result[3],
             'status': test_result[4],
             'created_date': test_result[5],
-            'user_name': test_result[7] or 'Unknown'
+            'TaskID': test_result[7],
+            'user_name': test_result[8] or 'Unknown'
         }
         
         # Get samples
@@ -659,10 +685,11 @@ def get_test_details(test_id):
                 tu.[SampleID],
                 s.[Description],
                 s.[PartNumber],
-                tu.[AmountUsed],
+                ISNULL(tu.[AmountAllocated], 0) as AmountAllocated,
+                ISNULL(tu.[AmountUsed], 0) as AmountUsed,
                 tu.[Status],
+                tu.[SampleIdentifier],
                 tu.[CreatedDate] as UsageCreatedDate,
-                tu.[CompletedDate],
                 tu.[Notes],
                 CASE
                     WHEN u.[UnitName] IS NULL THEN 'pcs'
@@ -681,18 +708,25 @@ def get_test_details(test_id):
         
         samples = []
         for row in samples_results:
+            # Calculate returned amount as allocated - used for now
+            amount_allocated = row[4] or 0
+            amount_used = row[5] or 0
+            amount_returned = max(0, amount_allocated - amount_used)
+            
             samples.append({
-                'UsageID': row[0],
-                'SampleID': row[1],
-                'Description': row[2],
-                'PartNumber': row[3],
-                'AmountUsed': row[4],
-                'Status': row[5],
-                'CreatedDate': row[6],
-                'CompletedDate': row[7],
-                'Notes': row[8],
-                'UnitName': row[9],
-                'LocationName': row[10] or 'Unknown'
+                'usage_id': row[0],
+                'sample_id': row[1],
+                'description': row[2],
+                'part_number': row[3] or '-',
+                'amount_allocated': amount_allocated,
+                'amount_used': amount_used,
+                'amount_returned': amount_returned,
+                'status': row[6],
+                'identifier': row[7] or f"TST{test_id}SMP{row[1]}{row[0]}",
+                'created_date': row[8],
+                'notes': row[9],
+                'unit_name': row[10],
+                'location_name': row[11] or 'Unknown'
             })
         
         return jsonify({

@@ -280,6 +280,7 @@ function resetCreateTestModal() {
     // Reset visibility
     document.getElementById('testName').closest('.mb-3').style.display = 'block';
     document.getElementById('testDescription').closest('.mb-3').style.display = 'block';
+    document.getElementById('taskSelection').closest('.mb-3').style.display = 'block'; // Show task selection again
     document.getElementById('sampleSelectionSection').classList.add('d-none');
     document.getElementById('testNumberSection').style.display = 'none';
     document.getElementById('selectedTaskName').textContent = '';
@@ -811,23 +812,42 @@ function addSamplesToTest(testId) {
         testDetailsModal.hide();
     }
     
-    // Show modal to select samples
-    const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
-    
-    // Reset form but change title and behavior
-    document.getElementById('createTestForm').reset();
-    document.querySelector('#createTestModal .modal-title').textContent = 'Add Samples to Test';
-    document.getElementById('testName').closest('.mb-3').style.display = 'none';
-    document.getElementById('testDescription').closest('.mb-3').style.display = 'none';
-    document.getElementById('addSamplesNow').checked = true;
-    document.getElementById('sampleSelectionSection').classList.remove('d-none');
-    
-    // Change submit button
-    const submitBtn = document.querySelector('#createTestModal .btn-primary');
-    submitBtn.textContent = 'Add Samples';
-    submitBtn.onclick = function() { submitAddSamples(testId); };
-    
-    modal.show();
+    // Get test details to find the task ID
+    fetch(`/api/tests/${testId}/details`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.test.TaskID) {
+                const taskId = data.test.TaskID;
+                
+                // Show modal to select samples
+                const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
+                
+                // Reset form but change title and behavior
+                document.getElementById('createTestForm').reset();
+                document.querySelector('#createTestModal .modal-title').textContent = 'Add Samples to Test';
+                document.getElementById('testName').closest('.mb-3').style.display = 'none';
+                document.getElementById('testDescription').closest('.mb-3').style.display = 'none';
+                document.getElementById('taskSelection').closest('.mb-3').style.display = 'none'; // Hide task selection
+                document.getElementById('addSamplesNow').checked = true;
+                document.getElementById('sampleSelectionSection').classList.remove('d-none');
+                
+                // Load samples for the test's task
+                loadTaskSamples(taskId);
+                
+                // Change submit button
+                const submitBtn = document.querySelector('#createTestModal .btn-primary');
+                submitBtn.textContent = 'Add Samples';
+                submitBtn.onclick = function() { submitAddSamples(testId); };
+                
+                modal.show();
+            } else {
+                showError('Could not find test details');
+            }
+        })
+        .catch(error => {
+            console.error('Error getting test details:', error);
+            showError('Failed to get test details');
+        });
 }
 
 // Submit add samples to existing test

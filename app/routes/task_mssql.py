@@ -41,13 +41,14 @@ def get_tasks():
                 t.[Status],
                 ISNULL(t.[Priority], 'Medium') as Priority,
                 t.[CreatedDate],
-                NULL as DueDate,
+                t.[EndDate] as DueDate,
                 NULL as CompletedDate,
-                NULL as AssignedToUserID,
-                'Unassigned' as AssignedToName,
+                t.[AssignedTo] as AssignedToUserID,
+                ISNULL(u.[Name], 'Unassigned') as AssignedToName,
                 0 as SampleCount,
                 0 as TestCount
             FROM [task] t
+            LEFT JOIN [user] u ON t.[AssignedTo] = u.[UserID]
         """
         
         conditions = []
@@ -191,18 +192,26 @@ def create_task():
                 [Description], 
                 [Status], 
                 [Priority], 
+                [StartDate],
+                [EndDate],
                 [CreatedDate],
-                [CreatedBy]
+                [CreatedBy],
+                [AssignedTo],
+                [Notes]
             ) 
             OUTPUT INSERTED.TaskID
-            VALUES (?, ?, ?, ?, ?, GETDATE(), ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE(), ?, ?, ?)
         """, (
             task_number,
             data.get('task_name'),
             data.get('description', ''),
             data.get('status', 'Planning'),
             data.get('priority', 'Medium'),
-            user_id  # CreatedBy is required and cannot be NULL
+            data.get('start_date') if data.get('start_date') else None,
+            data.get('end_date') if data.get('end_date') else None,
+            user_id,  # CreatedBy is required and cannot be NULL
+            int(data.get('assigned_to')) if data.get('assigned_to') else None,
+            data.get('notes', '')
         ), fetch_one=True)
         
         if result:
@@ -254,12 +263,15 @@ def get_task(task_id):
                 t.[Status],
                 t.[Priority],
                 t.[CreatedDate],
-                NULL as DueDate,
-                NULL as CompletedDate,
-                NULL as AssignedToUserID,
-                'Unassigned' as AssignedToName,
-                'Unknown' as CreatedByName
+                t.[StartDate],
+                t.[EndDate] as DueDate,
+                t.[AssignedTo] as AssignedToUserID,
+                ISNULL(assigned_user.[Name], 'Unassigned') as AssignedToName,
+                ISNULL(created_user.[Name], 'Unknown') as CreatedByName,
+                t.[Notes]
             FROM [task] t
+            LEFT JOIN [user] assigned_user ON t.[AssignedTo] = assigned_user.[UserID]
+            LEFT JOIN [user] created_user ON t.[CreatedBy] = created_user.[UserID]
             WHERE t.[TaskID] = ?
         """, (task_id,), fetch_one=True)
         
@@ -277,10 +289,13 @@ def get_task(task_id):
             'status': task_result[4],
             'priority': task_result[5],
             'created_date': task_result[6].isoformat() if task_result[6] else None,
-            'end_date': task_result[7].isoformat() if task_result[7] else None,
+            'start_date': task_result[7].isoformat() if task_result[7] else None,
+            'end_date': task_result[8].isoformat() if task_result[8] else None,
+            'assigned_to_user_id': task_result[9],
+            'assigned_to_name': task_result[10],
+            'created_by_name': task_result[11],
             'completion_percentage': 0,
-            'notes': task_result[3],
-            'assigned_to_name': task_result[10]
+            'notes': task_result[12] if task_result[12] else ''
         }
         
         # Get task samples
@@ -711,16 +726,15 @@ def get_next_test_number(task_id):
     Get the next test number for a task.
     """
     try:
-        # Generate test number
-        current_year = datetime.now().year
+        # Generate test number - use simple sequential format
         test_no_result = mssql_db.execute_query("""
-            SELECT MAX(CAST(SUBSTRING([TestNo], 6, LEN([TestNo]) - 5) AS INT)) + 1
+            SELECT MAX(CAST(SUBSTRING([TestNo], 5, LEN([TestNo]) - 4) AS INT)) + 1
             FROM [test] 
-            WHERE [TestNo] LIKE ?
-        """, (f"TST{current_year}%",), fetch_one=True)
+            WHERE [TestNo] LIKE 'TST-%'
+        """, fetch_one=True)
         
         next_number = test_no_result[0] if test_no_result and test_no_result[0] else 1
-        test_no = f"TST{current_year}{next_number:04d}"
+        test_no = f"TST-{next_number:03d}"
         
         return jsonify({
             'success': True,
