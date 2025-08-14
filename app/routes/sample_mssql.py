@@ -202,7 +202,7 @@ def samples():
             s.[PartNumber], 
             s.[Description], 
             CASE 
-                WHEN s.[Status] = 'Disposed' THEN 0
+                WHEN s.[Status] = 'Consumed' THEN 0
                 ELSE ISNULL(ss.[AmountRemaining], 0)
             END AS AmountRemaining, 
             CASE
@@ -1198,7 +1198,7 @@ def create_disposal():
         if new_amount == 0:
             mssql_db.execute_query("""
                 UPDATE [sample] 
-                SET [Status] = 'Disposed' 
+                SET [Status] = 'Consumed' 
                 WHERE [SampleID] = ?
             """, (sample_id,))
         
@@ -1808,12 +1808,20 @@ def get_samples_available_for_task():
         search_params = []
         if search:
             search_condition = """
-                AND (s.[Description] LIKE ? 
+                AND (s.[SampleID] = ?
+                     OR s.[Description] LIKE ? 
                      OR s.[PartNumber] LIKE ?
-                     OR s.[Barcode] LIKE ?)
+                     OR s.[Barcode] LIKE ?
+                     OR CONCAT('SMP-', s.[SampleID]) LIKE ?)
             """
             search_term = f"%{search}%"
-            search_params = [search_term, search_term, search_term]
+            # Try to parse as SampleID (integer)
+            try:
+                sample_id_search = int(search.replace('SMP-', '').replace('smp-', ''))
+                search_params = [sample_id_search, search_term, search_term, search_term, search_term]
+            except ValueError:
+                # If not a valid integer, use 0 for SampleID search and rely on text searches
+                search_params = [0, search_term, search_term, search_term, search_term]
         
         # Get count of available samples
         count_query = f"""

@@ -298,14 +298,15 @@ def get_task(task_id):
             'notes': task_result[12] if task_result[12] else ''
         }
         
-        # Get task samples
+        # Get task samples with correct remaining amounts
         samples_results = mssql_db.execute_query("""
             SELECT 
                 s.[SampleID],
                 s.[Description],
                 s.[PartNumber],
                 s.[Status],
-                s.[Amount],
+                s.[Amount] as TotalAmount,
+                ISNULL(ss.[AmountRemaining], s.[Amount]) as AmountRemaining,
                 CASE
                     WHEN u.[UnitName] IS NULL THEN 'pcs'
                     WHEN LOWER(u.[UnitName]) = 'stk' THEN 'pcs'
@@ -329,9 +330,10 @@ def get_task(task_id):
                 'PartNumber': row[2],
                 'UsageStatus': row[3],
                 'TestNo': None,
-                'AmountRemaining': row[4],
-                'UnitName': row[5],
-                'LocationName': row[6] or 'Unknown'
+                'TotalAmount': row[4],
+                'AmountRemaining': row[5],  # This is the correct remaining amount
+                'UnitName': row[6],
+                'LocationName': row[7] or 'Unknown'
             })
         
         # Get task tests
@@ -727,10 +729,12 @@ def get_next_test_number(task_id):
     """
     try:
         # Generate test number - use simple sequential format
+        # Only count base test numbers (not iterations like TST-001-1)
         test_no_result = mssql_db.execute_query("""
             SELECT MAX(CAST(SUBSTRING([TestNo], 5, LEN([TestNo]) - 4) AS INT)) + 1
             FROM [test] 
-            WHERE [TestNo] LIKE 'TST-%'
+            WHERE [TestNo] LIKE 'TST-%' 
+            AND [TestNo] NOT LIKE 'TST-%-[0-9]%'
         """, fetch_one=True)
         
         next_number = test_no_result[0] if test_no_result and test_no_result[0] else 1
@@ -754,8 +758,7 @@ def get_task_available_samples(task_id):
     Get available samples for a task that can be assigned to tests.
     """
     try:
-        # Get all available samples that can be assigned to tests
-        # (Not limited to task-assigned samples for more flexibility)
+        # Get only samples that are assigned to this specific task
         samples_results = mssql_db.execute_query("""
             SELECT 
                 s.[SampleID],
@@ -772,10 +775,11 @@ def get_task_available_samples(task_id):
             LEFT JOIN [unit] u ON s.[UnitID] = u.[UnitID]
             LEFT JOIN [samplestorage] ss ON s.[SampleID] = ss.[SampleID]
             LEFT JOIN [storagelocation] sl ON ss.[LocationID] = sl.[LocationID]
-            WHERE s.[Status] = 'In Storage'
+            WHERE s.[TaskID] = ?
+            AND s.[Status] = 'In Storage'
             AND ISNULL(ss.[AmountRemaining], s.[Amount]) > 0
             ORDER BY s.[Description]
-        """, fetch_all=True)
+        """, (task_id,), fetch_all=True)
         
         samples = []
         for row in samples_results:
@@ -809,7 +813,6 @@ def assign_samples_to_task(task_id):
     try:
         data = request.get_json()
         sample_ids = data.get('sample_ids', [])
-        purpose = data.get('purpose', '')
         
         if not sample_ids:
             return jsonify({
@@ -844,7 +847,7 @@ def assign_samples_to_task(task_id):
             """, (
                 user_id,
                 sample_id,
-                f"Sample {sample_id} assigned to task {task_id}. Purpose: {purpose}"
+                f"Sample {sample_id} assigned to task {task_id}"
             ))
         
         return jsonify({

@@ -274,10 +274,12 @@ def create_test():
         print(f"DEBUG CREATE TEST: Received data: {data}")
         
         # Generate test number - use simple sequential format
+        # Only count base test numbers (not iterations like TST-001-1)
         test_no_result = mssql_db.execute_query("""
             SELECT MAX(CAST(SUBSTRING([TestNo], 5, LEN([TestNo]) - 4) AS INT)) + 1
             FROM [test] 
-            WHERE [TestNo] LIKE 'TST-%'
+            WHERE [TestNo] LIKE 'TST-%' 
+            AND [TestNo] NOT LIKE 'TST-%-[0-9]%'
         """, fetch_one=True)
         
         next_number = test_no_result[0] if test_no_result and test_no_result[0] else 1
@@ -431,6 +433,13 @@ def add_samples_to_test(test_id):
                     WHERE [SampleID] = ?
                 """, (amount, sample_id))
                 
+                # Update sample status to In Testing
+                mssql_db.execute_query("""
+                    UPDATE [sample] 
+                    SET [Status] = 'In Testing'
+                    WHERE [SampleID] = ?
+                """, (sample_id,))
+                
                 # Generate identifier
                 identifier = f"TST{test_id}SMP{sample_id}{usage_id}"
                 
@@ -502,20 +511,22 @@ def get_test_samples(test_id):
         
         samples = []
         for row in samples_results:
-            # Calculate returned amount as allocated - used for now
             amount_allocated = row[4] or 0
             amount_used = row[5] or 0
-            amount_returned = max(0, amount_allocated - amount_used)
+            
+            # Determine status based on usage
+            if amount_used > 0:
+                display_status = "Returned"
+            else:
+                display_status = "In Test"
             
             samples.append({
                 'usage_id': row[0],
                 'sample_id': row[1],
                 'description': row[2],
                 'part_number': row[3] or '-',
-                'amount_allocated': amount_allocated,
-                'amount_used': amount_used,
-                'amount_returned': amount_returned,
-                'status': row[6],
+                'amount': amount_allocated,  # Simplified to just show the amount
+                'status': display_status,
                 'identifier': row[7] or f"TST{test_id}SMP{row[1]}{row[0]}",
                 'created_date': row[8],
                 'notes': row[9],
@@ -602,18 +613,148 @@ def complete_test(test_id):
             WHERE [TestID] = ?
         """, (test_id,))
         
+        # Get test details for logging
+        test_result = mssql_db.execute_query("""
+            SELECT [TestNo] FROM [test] WHERE [TestID] = ?
+        """, (test_id,), fetch_one=True)
+        test_no = test_result[0] if test_result else f"TST-{test_id}"
+        
         # Process sample completions
         for completion in sample_completions:
             usage_id = completion.get('usage_id')
-            status = completion.get('status', 'Completed')
+            amount_used = completion.get('amount_used', 0)
+            amount_returned = completion.get('amount_returned', 0)
             notes = completion.get('notes', '')
             
-            # Update test usage
+            # Get current usage details
+            usage_result = mssql_db.execute_query("""
+                SELECT tu.[SampleID], tu.[AmountAllocated], tu.[AmountUsed]
+                FROM [testsampleusage] tu
+                WHERE tu.[UsageID] = ?
+            """, (usage_id,), fetch_one=True)
+            
+            if not usage_result:
+                continue
+                
+            sample_id, amount_allocated, current_amount_used = usage_result
+            total_amount_used = current_amount_used + amount_used
+            
+            # Update test usage with actual amounts used
             mssql_db.execute_query("""
                 UPDATE [testsampleusage] 
-                SET [Status] = ?, [Notes] = ?
+                SET [AmountUsed] = ?, 
+                    [Status] = CASE 
+                        WHEN ? >= [AmountAllocated] THEN 'Completed'
+                        ELSE 'Partial'
+                    END,
+                    [Notes] = ?
                 WHERE [UsageID] = ?
-            """, (status, notes, usage_id))
+            """, (total_amount_used, total_amount_used, notes, usage_id))
+            
+            # Always return unused amount to storage first
+            if amount_returned > 0:
+                mssql_db.execute_query("""
+                    UPDATE [samplestorage] 
+                    SET [AmountRemaining] = [AmountRemaining] + ?
+                    WHERE [SampleID] = ?
+                """, (amount_returned, sample_id,))
+            
+            # Check if sample was fully consumed (all allocated amount was used)
+            if total_amount_used >= amount_allocated:
+                # Sample is fully used - mark as consumed
+                mssql_db.execute_query("""
+                    UPDATE [sample] 
+                    SET [Status] = 'Consumed'
+                    WHERE [SampleID] = ?
+                """, (sample_id,))
+                
+                # Set remaining amount to 0 in storage (in case there was any remaining)
+                mssql_db.execute_query("""
+                    UPDATE [samplestorage] 
+                    SET [AmountRemaining] = 0
+                    WHERE [SampleID] = ?
+                """, (sample_id,))
+                
+                # Reduce total sample amount by the consumed amount
+                mssql_db.execute_query("""
+                    UPDATE [sample] 
+                    SET [Amount] = [Amount] - ?
+                    WHERE [SampleID] = ?
+                """, (amount_allocated, sample_id))
+                
+                # Log sample consumption in history with test number
+                mssql_db.execute_query("""
+                    INSERT INTO [history] (
+                        [Timestamp], 
+                        [ActionType], 
+                        [UserID], 
+                        [SampleID],
+                        [TestID],
+                        [Notes]
+                    )
+                    VALUES (GETDATE(), 'Sample consumed', ?, ?, ?, ?)
+                """, (
+                    user_id,
+                    sample_id,
+                    test_id,
+                    f"{amount_allocated}/{amount_allocated} of SMP-{sample_id} consumed in test {test_no}"
+                ))
+                
+            else:
+                # Check if sample has any other active test allocations
+                active_tests = mssql_db.execute_query("""
+                    SELECT COUNT(*)
+                    FROM [testsampleusage] tsu
+                    JOIN [test] t ON tsu.[TestID] = t.[TestID]
+                    WHERE tsu.[SampleID] = ?
+                    AND t.[Status] != 'Completed'
+                    AND tsu.[Status] IN ('Allocated', 'Active')
+                """, (sample_id,), fetch_one=True)
+                
+                has_active_tests = active_tests[0] if active_tests else 0
+                
+                # Update sample status based on whether it has active test allocations
+                if has_active_tests > 0:
+                    # Keep status as In Testing
+                    mssql_db.execute_query("""
+                        UPDATE [sample] 
+                        SET [Status] = 'In Testing'
+                        WHERE [SampleID] = ?
+                    """, (sample_id,))
+                else:
+                    # No more active tests - back to In Storage
+                    mssql_db.execute_query("""
+                        UPDATE [sample] 
+                        SET [Status] = 'In Storage'
+                        WHERE [SampleID] = ?
+                    """, (sample_id,))
+                
+                # Reduce total sample amount by the consumed amount only
+                if amount_used > 0:
+                    mssql_db.execute_query("""
+                        UPDATE [sample] 
+                        SET [Amount] = [Amount] - ?
+                        WHERE [SampleID] = ?
+                    """, (amount_used, sample_id))
+                
+                # Log partial consumption in history with test number
+                if amount_used > 0:
+                    mssql_db.execute_query("""
+                        INSERT INTO [history] (
+                            [Timestamp], 
+                            [ActionType], 
+                            [UserID], 
+                            [SampleID],
+                            [TestID],
+                            [Notes]
+                        )
+                        VALUES (GETDATE(), 'Sample partially consumed', ?, ?, ?, ?)
+                    """, (
+                        user_id,
+                        sample_id,
+                        test_id,
+                        f"{amount_used}/{amount_allocated} of SMP-{sample_id} consumed in test {test_no}, {amount_returned} returned"
+                    ))
         
         # Log activity
         mssql_db.execute_query("""
@@ -644,7 +785,7 @@ def complete_test(test_id):
 @test_mssql_bp.route('/api/tests/<int:test_id>/details', methods=['GET'])
 def get_test_details(test_id):
     try:
-        # Get test info
+        # Get test info including task name
         test_result = mssql_db.execute_query("""
             SELECT 
                 t.[TestID], 
@@ -655,9 +796,11 @@ def get_test_details(test_id):
                 t.[CreatedDate], 
                 t.[UserID],
                 t.[TaskID],
-                u.[Name] as UserName
+                u.[Name] as UserName,
+                task.[TaskName] as TaskName
             FROM [test] t
             LEFT JOIN [user] u ON t.[UserID] = u.[UserID]
+            LEFT JOIN [task] task ON t.[TaskID] = task.[TaskID]
             WHERE t.[TestID] = ?
         """, (test_id,), fetch_one=True)
         
@@ -675,7 +818,8 @@ def get_test_details(test_id):
             'status': test_result[4],
             'created_date': test_result[5],
             'TaskID': test_result[7],
-            'user_name': test_result[8] or 'Unknown'
+            'user_name': test_result[8] or 'Unknown',
+            'task_name': test_result[9] or 'Not assigned'
         }
         
         # Get samples
@@ -708,20 +852,22 @@ def get_test_details(test_id):
         
         samples = []
         for row in samples_results:
-            # Calculate returned amount as allocated - used for now
             amount_allocated = row[4] or 0
             amount_used = row[5] or 0
-            amount_returned = max(0, amount_allocated - amount_used)
+            
+            # Determine status based on usage
+            if amount_used > 0:
+                display_status = "Returned"
+            else:
+                display_status = "In Test"
             
             samples.append({
                 'usage_id': row[0],
                 'sample_id': row[1],
                 'description': row[2],
                 'part_number': row[3] or '-',
-                'amount_allocated': amount_allocated,
-                'amount_used': amount_used,
-                'amount_returned': amount_returned,
-                'status': row[6],
+                'amount': amount_allocated,  # Simplified to just show the amount
+                'status': display_status,
                 'identifier': row[7] or f"TST{test_id}SMP{row[1]}{row[0]}",
                 'created_date': row[8],
                 'notes': row[9],
@@ -940,4 +1086,204 @@ def move_sample_to_test(sample_id):
         return jsonify({
             'success': False,
             'error': f'Failed to move sample to test: {str(e)}'
+        }), 500
+
+@test_mssql_bp.route('/api/tests/create-iteration', methods=['POST'])
+def create_test_iteration():
+    """
+    Create a test iteration based on an existing test.
+    """
+    try:
+        data = request.json
+        base_test_no = data.get('base_test_no')
+        test_name = data.get('testName')
+        description = data.get('description', '')
+        
+        if not base_test_no:
+            return jsonify({
+                'success': False,
+                'error': 'Base test number is required'
+            }), 400
+            
+        if not test_name:
+            return jsonify({
+                'success': False,
+                'error': 'Test name is required'
+            }), 400
+        
+        user_id = 1  # TODO: Implement proper user authentication
+        
+        # Get the original test details
+        original_test = mssql_db.execute_query("""
+            SELECT [TestID], [TestName], [Description], [TaskID]
+            FROM [test]
+            WHERE [TestNo] = ?
+        """, (base_test_no,), fetch_one=True)
+        
+        if not original_test:
+            return jsonify({
+                'success': False,
+                'error': f'Base test {base_test_no} not found'
+            }), 404
+        
+        # Generate iteration number based on base test
+        # Find existing iterations for this base test
+        iteration_result = mssql_db.execute_query("""
+            SELECT COUNT(*) 
+            FROM [test] 
+            WHERE [TestNo] LIKE ? + '-%'
+        """, (base_test_no,), fetch_one=True)
+        
+        iteration_count = (iteration_result[0] if iteration_result else 0) + 1
+        new_test_no = f"{base_test_no}-{iteration_count}"
+        
+        # Create the iteration
+        with mssql_db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Insert new test as iteration
+            cursor.execute("""
+                INSERT INTO [test] (
+                    [TestNo], 
+                    [TestName], 
+                    [Description], 
+                    [Status], 
+                    [CreatedDate], 
+                    [UserID],
+                    [TaskID]
+                ) 
+                OUTPUT INSERTED.TestID
+                VALUES (?, ?, ?, 'Created', GETDATE(), ?, ?)
+            """, (
+                new_test_no,
+                test_name,
+                description,
+                user_id,
+                original_test[3]  # TaskID from original test
+            ))
+            
+            result = cursor.fetchone()
+            conn.commit()
+            
+            if result:
+                new_test_id = result[0]
+                
+                # Log activity
+                mssql_db.execute_query("""
+                    INSERT INTO [history] (
+                        [Timestamp], 
+                        [ActionType], 
+                        [UserID], 
+                        [Notes]
+                    )
+                    VALUES (GETDATE(), 'Test iteration created', ?, ?)
+                """, (
+                    user_id,
+                    f"Test iteration '{test_name}' created with number {new_test_no} based on {base_test_no}"
+                ))
+                
+                return jsonify({
+                    'success': True,
+                    'test_id': new_test_id,
+                    'test_no': new_test_no,
+                    'message': f'Test iteration {new_test_no} created successfully'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to create test iteration'
+                }), 500
+        
+    except Exception as e:
+        print(f"Error creating test iteration: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Failed to create test iteration: {str(e)}'
+        }), 500
+
+@test_mssql_bp.route('/api/tests/samples/<int:usage_id>/remove', methods=['POST'])
+def remove_sample_from_test(usage_id):
+    """
+    Remove/return a sample from a test back to storage.
+    """
+    try:
+        data = request.json
+        action = data.get('action', 'return')
+        amount = data.get('amount', 0)
+        user_id = 1  # TODO: Implement proper user authentication
+        
+        if amount <= 0:
+            return jsonify({
+                'success': False,
+                'error': 'Amount must be greater than 0'
+            }), 400
+        
+        # Get usage details
+        usage_result = mssql_db.execute_query("""
+            SELECT tu.[TestID], tu.[SampleID], tu.[AmountAllocated], tu.[AmountUsed], tu.[Status]
+            FROM [testsampleusage] tu
+            WHERE tu.[UsageID] = ?
+        """, (usage_id,), fetch_one=True)
+        
+        if not usage_result:
+            return jsonify({
+                'success': False,
+                'error': 'Sample usage not found'
+            }), 404
+        
+        test_id, sample_id, amount_allocated, amount_used, status = usage_result
+        available_amount = (amount_allocated or 0) - (amount_used or 0)
+        
+        if amount > available_amount:
+            return jsonify({
+                'success': False,
+                'error': f'Cannot return {amount}. Only {available_amount} available.'
+            }), 400
+        
+        # Update the usage record
+        mssql_db.execute_query("""
+            UPDATE [testsampleusage] 
+            SET [AmountUsed] = [AmountUsed] + ?,
+                [Status] = CASE 
+                    WHEN ([AmountAllocated] - ([AmountUsed] + ?)) <= 0 THEN 'Completed'
+                    ELSE [Status]
+                END
+            WHERE [UsageID] = ?
+        """, (amount, amount, usage_id))
+        
+        # Return sample to storage
+        mssql_db.execute_query("""
+            UPDATE [samplestorage] 
+            SET [AmountRemaining] = [AmountRemaining] + ?
+            WHERE [SampleID] = ?
+        """, (amount, sample_id))
+        
+        # Log activity
+        mssql_db.execute_query("""
+            INSERT INTO [history] (
+                [Timestamp], 
+                [ActionType], 
+                [UserID], 
+                [SampleID],
+                [TestID],
+                [Notes]
+            )
+            VALUES (GETDATE(), 'Sample returned from test', ?, ?, ?, ?)
+        """, (
+            user_id,
+            sample_id,
+            test_id,
+            f"Returned {amount} units from test to storage"
+        ))
+        
+        return jsonify({
+            'success': True,
+            'message': f'{amount} units returned to storage successfully'
+        })
+        
+    except Exception as e:
+        print(f"Error returning sample from test: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Failed to return sample: {str(e)}'
         }), 500

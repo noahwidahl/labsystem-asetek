@@ -185,12 +185,6 @@
                                     <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
                                     {% endif %}
                                 </th>
-                                <th class="sortable" data-sort="status">
-                                    Status
-                                    {% if current_sort_by == 'status' %}
-                                    <i class="fas fa-sort-{{ 'up' if current_sort_order == 'ASC' else 'down' }}"></i>
-                                    {% endif %}
-                                </th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -206,15 +200,6 @@
                                     <td>{{ sample.Location }}</td>
                                     <td>{{ sample.Registered }}</td>
                                     <td>
-                                        {% if sample.Status == 'Disposed' %}
-                                        <span class="text-danger fw-bold">{{ sample.Status }}</span>
-                                        {% elif sample.Status == 'In Test' %}
-                                        <span class="text-warning fw-bold">{{ sample.Status }}</span>
-                                        {% else %}
-                                        <span class="text-primary fw-bold">{{ sample.Status }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
                                         <button class="btn btn-sm btn-secondary sample-details-btn" data-sample-id="{{ sample.ID|replace('SMP-', '') }}">Details</button>
                                         <button class="btn btn-sm btn-danger sample-move-btn" data-sample-id="{{ sample.ID|replace('SMP-', '') }}">Move</button>
                                     </td>
@@ -222,7 +207,7 @@
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="9" class="text-center">No samples found</td>
+                                    <td colspan="8" class="text-center">No samples found</td>
                                 </tr>
                             {% endif %}
                         </tbody>

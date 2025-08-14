@@ -279,10 +279,6 @@
                     <label for="sampleSearch" class="form-label">Search Samples</label>
                     <input type="text" class="form-control" id="sampleSearch" placeholder="Search by Sample ID, description, or part number...">
                 </div>
-                <div class="mb-3">
-                    <label for="assignmentPurpose" class="form-label">Purpose (Optional)</label>
-                    <input type="text" class="form-control" id="assignmentPurpose" placeholder="Why is this sample being assigned to this task?">
-                </div>
                 <div class="table-responsive" style="max-height: 400px;">
                     <table class="table table-hover">
                         <thead class="table-light">
@@ -556,12 +552,7 @@ function generateTaskDetailsHTML(task, samples, tests) {
                 </table>
             </div>
             <div class="col-md-6">
-                <h6>Progress</h6>
-                <div class="progress mb-3" style="height: 20px;">
-                    <div class="progress-bar" role="progressbar" style="width: ${task.completion_percentage || 0}%">
-                        ${task.completion_percentage || 0}%
-                    </div>
-                </div>
+                <h6>Details</h6>
                 <p><strong>Description:</strong><br>${task.description || 'No description'}</p>
                 ${task.notes ? `<p><strong>Notes:</strong><br>${task.notes}</p>` : ''}
             </div>
@@ -753,7 +744,6 @@ let currentTaskIdForAssignment = null;
 async function showAssignSampleModal(taskId) {
     currentTaskIdForAssignment = taskId;
     document.getElementById('sampleSearch').value = '';
-    document.getElementById('assignmentPurpose').value = '';
     
     // Load available samples
     await loadAvailableSamples();
@@ -812,7 +802,6 @@ function updateAssignSamplesButton() {
 
 async function assignSelectedSamples() {
     const checkedSamples = document.querySelectorAll('.sample-checkbox:checked');
-    const purpose = document.getElementById('assignmentPurpose').value;
     
     if (checkedSamples.length === 0) {
         showAlert('warning', 'Please select at least one sample');
@@ -829,8 +818,7 @@ async function assignSelectedSamples() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                sample_ids: sampleIds,
-                purpose: purpose
+                sample_ids: sampleIds
             })
         });
         

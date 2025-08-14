@@ -145,11 +145,11 @@
                     <div id="sampleSelectionSection" class="d-none">
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i>
-                            <strong>Task Samples:</strong> Only showing samples assigned to the selected project/task.
+                            <strong>Task Samples:</strong> Only showing samples assigned to this test's task.
                             <span id="selectedTaskName"></span>
                         </div>
-                        <h6>Select Samples from Project Pool</h6>
-                        <div class="table-responsive">
+                        <h6>Select Samples from Task</h6>
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                             <table class="table table-sm">
                                 <thead>
                                     <tr>
@@ -157,12 +157,11 @@
                                         <th>Sample ID</th>
                                         <th>Description</th>
                                         <th>Available</th>
-                                        <th>Test ID</th>
                                         <th>Amount</th>
                                     </tr>
                                 </thead>
                                 <tbody id="sampleSelectionTable">
-                                    <!-- Samples will be loaded dynamically based on selected task -->
+                                    <!-- Samples will be loaded dynamically -->
                                 </tbody>
                             </table>
                         </div>
@@ -210,6 +209,39 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-success" onclick="submitCompleteTest()">Complete Test</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Iteration Modal -->
+<div class="modal fade" id="createIterationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create Test Iteration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createIterationForm">
+                    <div class="mb-3">
+                        <label for="baseTestInfo" class="form-label">Base Test</label>
+                        <input type="text" class="form-control" id="baseTestInfo" readonly>
+                        <small class="form-text text-muted">This iteration will be based on the selected test</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="iterationName" class="form-label">Iteration Name *</label>
+                        <input type="text" class="form-control" id="iterationName" required placeholder="Enter name for this iteration">
+                    </div>
+                    <div class="mb-3">
+                        <label for="iterationDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="iterationDescription" rows="3" placeholder="Describe what makes this iteration different..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitCreateIteration()">Create Iteration</button>
             </div>
         </div>
     </div>
@@ -352,24 +384,24 @@ async function loadTaskSamples(taskId) {
         } else {
             console.error('Error loading task samples:', data.error);
             document.getElementById('sampleSelectionTable').innerHTML = `
-                <tr><td colspan="6" class="text-center text-muted">Error loading samples: ${data.error}</td></tr>
+                <tr><td colspan="5" class="text-center text-muted">Error loading samples: ${data.error}</td></tr>
             `;
         }
     } catch (error) {
         console.error('Error:', error);
         document.getElementById('sampleSelectionTable').innerHTML = `
-            <tr><td colspan="6" class="text-center text-muted">Error loading samples</td></tr>
+            <tr><td colspan="5" class="text-center text-muted">Error loading samples</td></tr>
         `;
     }
 }
 
-// Display task samples in the table
+// Display available samples in the table
 function displayTaskSamples(samples) {
     const tableBody = document.getElementById('sampleSelectionTable');
     
     if (samples.length === 0) {
         tableBody.innerHTML = `
-            <tr><td colspan="6" class="text-center text-muted">No samples available in this project</td></tr>
+            <tr><td colspan="5" class="text-center text-muted">No samples assigned to this task</td></tr>
         `;
         return;
     }
@@ -383,7 +415,6 @@ function displayTaskSamples(samples) {
             <td>${sample.SampleIDFormatted}</td>
             <td>${sample.Description}</td>
             <td>${sample.AvailableAmount} ${sample.Unit}</td>
-            <td><span class="badge bg-success">Available</span></td>
             <td>
                 <input type="number" class="form-control form-control-sm sample-amount" 
                        min="1" max="${sample.AvailableAmount}" value="1" disabled>
@@ -536,6 +567,7 @@ function renderTestDetails(test, samples) {
                 <table class="table table-sm">
                     <tr><td><strong>Test No:</strong></td><td>${test.test_no}</td></tr>
                     <tr><td><strong>Name:</strong></td><td>${test.test_name}</td></tr>
+                    <tr><td><strong>Task:</strong></td><td>${test.task_name || 'Not assigned'}</td></tr>
                     <tr><td><strong>Status:</strong></td><td><span class="badge bg-primary">${test.status}</span></td></tr>
                     <tr><td><strong>Created:</strong></td><td>${formatDateTime(test.created_date)}</td></tr>
                     <tr><td><strong>Owner:</strong></td><td>${test.user_name}</td></tr>
@@ -571,11 +603,8 @@ function renderTestDetails(test, samples) {
                     <thead>
                         <tr>
                             <th>Identifier</th>
-                            <th>Sample</th>
-                            <th>Part Number</th>
-                            <th>Allocated</th>
-                            <th>Used</th>
-                            <th>Returned</th>
+                            <th>Amount</th>
+                            <th>Description</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
@@ -584,19 +613,17 @@ function renderTestDetails(test, samples) {
         `;
         
         samples.forEach(sample => {
-            const canModify = sample.status === 'Allocated' || sample.status === 'Active';
+            const canReturn = sample.status === 'In Test';
+            const statusBadge = sample.status === 'In Test' ? 'bg-primary' : 'bg-success';
             html += `
                 <tr>
                     <td><strong>${sample.identifier}</strong></td>
+                    <td>${sample.amount}</td>
                     <td>${sample.description}</td>
-                    <td>${sample.part_number || '-'}</td>
-                    <td>${sample.amount_allocated}</td>
-                    <td>${sample.amount_used}</td>
-                    <td>${sample.amount_returned}</td>
-                    <td><span class="badge bg-secondary">${sample.status}</span></td>
+                    <td><span class="badge ${statusBadge}">${sample.status}</span></td>
                     <td>
-                        ${canModify ? `
-                            <button class="btn btn-sm btn-outline-primary" onclick="returnSampleFromTest(${sample.usage_id}, ${sample.amount_allocated - sample.amount_used})">
+                        ${canReturn ? `
+                            <button class="btn btn-sm btn-outline-primary" onclick="returnSampleFromTest(${sample.usage_id}, ${sample.amount})">
                                 Return
                             </button>
                         ` : ''}
@@ -701,7 +728,6 @@ function showCompleteTestModal(testId, samples) {
                 <thead>
                     <tr>
                         <th>Sample</th>
-                        <th>Allocated</th>
                         <th>Amount Used</th>
                         <th>Amount Returned</th>
                         <th>Notes</th>
@@ -711,17 +737,13 @@ function showCompleteTestModal(testId, samples) {
     `;
     
     samples.forEach(sample => {
-        // Calculate available amount (allocated - already used - already returned)
-        const available = sample.amount_allocated - sample.amount_used - sample.amount_returned;
+        // Use the amount from the sample object
+        const available = sample.amount || 1;
         html += `
             <tr data-usage-id="${sample.usage_id}">
                 <td>
                     <strong>${sample.identifier}</strong><br>
                     <small class="text-muted">${sample.description}</small>
-                </td>
-                <td>
-                    ${sample.amount_allocated}
-                    ${sample.amount_returned > 0 ? `<br><small class="text-info">(${sample.amount_returned} already returned)</small>` : ''}
                 </td>
                 <td>
                     <input type="number" class="form-control form-control-sm amount-used" 
@@ -899,15 +921,37 @@ function submitAddSamples(testId) {
     });
 }
 
-// Create iteration
+// Create iteration - show modal
 function createIteration(baseTestNo) {
-    const testName = prompt('Enter test name for new iteration:');
-    if (!testName) return;
+    // Store the base test number globally
+    window.currentBaseTestNo = baseTestNo;
+    
+    // Set the base test info in the modal
+    document.getElementById('baseTestInfo').value = baseTestNo;
+    
+    // Clear form fields
+    document.getElementById('iterationName').value = '';
+    document.getElementById('iterationDescription').value = '';
+    
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('createIterationModal'));
+    modal.show();
+}
+
+// Submit create iteration
+function submitCreateIteration() {
+    const testName = document.getElementById('iterationName').value.trim();
+    const description = document.getElementById('iterationDescription').value.trim();
+    
+    if (!testName) {
+        showError('Please enter a name for the iteration');
+        return;
+    }
     
     const testData = {
-        base_test_no: baseTestNo,
+        base_test_no: window.currentBaseTestNo,
         testName: testName,
-        description: `Iteration of ${baseTestNo}`
+        description: description || `Iteration of ${window.currentBaseTestNo}`
     };
     
     fetch('/api/tests/create-iteration', {
@@ -921,6 +965,8 @@ function createIteration(baseTestNo) {
     .then(data => {
         if (data.success) {
             showSuccess(data.message);
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createIterationModal'));
+            modal.hide();
             location.reload();
         } else {
             showError(data.error);

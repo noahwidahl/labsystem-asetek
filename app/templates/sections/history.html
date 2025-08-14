@@ -71,7 +71,7 @@
                                 <i class="fas fa-inbox"></i>
                                 {% elif item.ActionType == "Test" %}
                                 <i class="fas fa-flask"></i>
-                                {% elif item.ActionType == "Disposed" %}
+                                {% elif item.ActionType == "Disposed" or item.ActionType == "Sample consumed" or item.ActionType == "Sample partially consumed" %}
                                 <i class="fas fa-trash-alt"></i>
                                 {% elif item.ActionType == "Storage" %}
                                 <i class="fas fa-box"></i>
