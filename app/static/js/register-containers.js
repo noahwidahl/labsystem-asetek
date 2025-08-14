@@ -305,12 +305,13 @@ function fetchExistingContainers() {
                     // Add capacity information if available
                     let capacityInfo = '';
                     if (container.ContainerCapacity !== null) {
-                        const availableCapacity = container.available_capacity !== undefined 
-                            ? container.available_capacity 
-                            : (container.ContainerCapacity - (container.sample_count || 0));
-                        capacityInfo = ` (${container.sample_count || 0} samples, ${availableCapacity}/${container.ContainerCapacity} available)`;
+                        const currentAmount = container.CurrentAmount || 0;
+                        const availableSpace = container.AvailableSpace !== undefined 
+                            ? container.AvailableSpace 
+                            : (container.ContainerCapacity - currentAmount);
+                        capacityInfo = ` (${currentAmount} samples, ${availableSpace}/${container.ContainerCapacity} available)`;
                     } else {
-                        capacityInfo = ` (${container.sample_count || 0} samples)`;
+                        capacityInfo = ` (${container.CurrentAmount || 0} samples)`;
                     }
                     
                     option.textContent = `${container.ContainerID}: ${container.Description}${locationInfo}${capacityInfo}`;

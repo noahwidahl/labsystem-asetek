@@ -295,27 +295,34 @@ def create_container():
 @container_mssql_bp.route('/api/containers/available')
 def get_available_containers():
     try:
-        # First try a simpler query to debug
+        # Get containers with correct current amount calculation (same as overview page)
         containers_results = mssql_db.execute_query("""
             SELECT 
                 c.[ContainerID],
                 c.[Description],
                 c.[ContainerCapacity],
-                0 as CurrentAmount,
+                ISNULL(SUM(cs.[Amount]), 0) as CurrentAmount,
                 ISNULL(sl.[LocationName], 'Unknown') as LocationName
             FROM [container] c
             LEFT JOIN [storagelocation] sl ON c.[LocationID] = sl.[LocationID]
+            LEFT JOIN [containersample] cs ON c.[ContainerID] = cs.[ContainerID]
             WHERE c.[ContainerStatus] = 'Active' OR c.[ContainerStatus] IS NULL
+            GROUP BY c.[ContainerID], c.[Description], c.[ContainerCapacity], sl.[LocationName]
             ORDER BY c.[ContainerID] DESC
         """, fetch_all=True)
         
         containers = []
         for row in containers_results:
+            current_amount = row[3] or 0
+            capacity = row[2] or 0
+            available_space = max(0, capacity - current_amount) if capacity > 0 else 0
+            
             containers.append({
                 'ContainerID': row[0],
                 'Description': row[1],
-                'ContainerCapacity': row[2],
-                'CurrentAmount': row[3],
+                'ContainerCapacity': capacity,
+                'CurrentAmount': current_amount,
+                'AvailableSpace': available_space,
                 'LocationName': row[4] or 'Unknown'
             })
         

@@ -215,11 +215,38 @@
     </div>
 </div>
 
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmationTitle">Confirm Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="confirmationMessage">
+                Are you sure?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmationConfirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
 let currentTestId = null;
+
+// Setup modal event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Reset modal when it's closed
+    document.getElementById('createTestModal').addEventListener('hidden.bs.modal', function () {
+        resetCreateTestModal();
+    });
+});
 
 // Toggle format info
 function toggleFormatInfo() {
@@ -238,11 +265,30 @@ function toggleFormatInfo() {
 // Show create test modal
 function showCreateTestModal() {
     const modal = new bootstrap.Modal(document.getElementById('createTestModal'));
+    
+    // Reset modal to original create test state
+    resetCreateTestModal();
+    
+    modal.show();
+}
+
+// Reset modal to create test state
+function resetCreateTestModal() {
+    // Reset form
     document.getElementById('createTestForm').reset();
+    
+    // Reset visibility
+    document.getElementById('testName').closest('.mb-3').style.display = 'block';
+    document.getElementById('testDescription').closest('.mb-3').style.display = 'block';
     document.getElementById('sampleSelectionSection').classList.add('d-none');
     document.getElementById('testNumberSection').style.display = 'none';
     document.getElementById('selectedTaskName').textContent = '';
-    modal.show();
+    
+    // Reset modal title and button
+    document.querySelector('#createTestModal .modal-title').textContent = 'Create New Test';
+    const submitBtn = document.querySelector('#createTestModal .btn-primary');
+    submitBtn.textContent = 'Create Test';
+    submitBtn.onclick = submitCreateTest;
 }
 
 // Handle task selection
@@ -286,7 +332,7 @@ document.getElementById('addSamplesNow').addEventListener('change', async functi
             await loadTaskSamples(taskId);
             section.classList.remove('d-none');
         } else {
-            alert('Please select a project/task first');
+            showError('Please select a project/task first');
             this.checked = false;
         }
     } else {
@@ -336,7 +382,7 @@ function displayTaskSamples(samples) {
             <td>${sample.SampleIDFormatted}</td>
             <td>${sample.Description}</td>
             <td>${sample.AvailableAmount} ${sample.Unit}</td>
-            <td><span class="badge bg-info">Auto: ${document.getElementById('testNumber').value}_${samples.indexOf(sample) + 1}</span></td>
+            <td><span class="badge bg-success">Available</span></td>
             <td>
                 <input type="number" class="form-control form-control-sm sample-amount" 
                        min="1" max="${sample.AvailableAmount}" value="1" disabled>
@@ -570,30 +616,55 @@ function renderTestDetails(test, samples) {
     document.getElementById('testDetailsBody').innerHTML = html;
 }
 
+// Show confirmation modal
+function showConfirmation(title, message, onConfirm) {
+    document.getElementById('confirmationTitle').textContent = title;
+    document.getElementById('confirmationMessage').textContent = message;
+    
+    const modal = new bootstrap.Modal(document.getElementById('confirmationModal'));
+    
+    // Remove any existing event listeners
+    const confirmBtn = document.getElementById('confirmationConfirm');
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    
+    // Add new event listener
+    newConfirmBtn.addEventListener('click', () => {
+        modal.hide();
+        onConfirm();
+    });
+    
+    modal.show();
+}
+
 // Start test
 function startTest(testId) {
-    if (confirm('Start this test? This will change the status to "In Progress".')) {
-        fetch(`/api/tests/${testId}/status`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({status: 'In Progress'})
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showSuccess(data.message);
-                location.reload();
-            } else {
-                showError(data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showError('Failed to start test');
-        });
-    }
+    showConfirmation(
+        'Start Test',
+        'Start this test? This will change the status to "In Progress".',
+        () => {
+            fetch(`/api/tests/${testId}/status`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({status: 'In Progress'})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSuccess(data.message);
+                    location.reload();
+                } else {
+                    showError(data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError('Failed to start test');
+            });
+        }
+    );
 }
 
 // Complete test
@@ -792,12 +863,7 @@ function submitAddSamples(testId) {
             modal.hide();
             
             // Reset modal to original state
-            document.querySelector('#createTestModal .modal-title').textContent = 'Create New Test';
-            document.getElementById('testName').closest('.mb-3').style.display = 'block';
-            document.getElementById('testDescription').closest('.mb-3').style.display = 'block';
-            const submitBtn = document.querySelector('#createTestModal .btn-primary');
-            submitBtn.textContent = 'Create Test';
-            submitBtn.onclick = submitCreateTest;
+            resetCreateTestModal();
             
             // Refresh test details if modal is open
             if (currentTestId === testId) {
@@ -888,15 +954,13 @@ function formatDateTime(dateString) {
 }
 
 function showSuccess(message) {
-    // Implement toast notification
     console.log('Success:', message);
-    alert(message); // Temporary - replace with proper toast
+    showSuccessToast(message);
 }
 
 function showError(message) {
-    // Implement toast notification
     console.error('Error:', message);
-    alert('Error: ' + message); // Temporary - replace with proper toast
+    showErrorToast(message);
 }
 </script>
 {% endblock %}

@@ -31,26 +31,35 @@ def get_tasks():
         assigned_filter = request.args.get('assigned_to')
         search_term = request.args.get('search')
         
-        # Build base query
+        # Build base query using only existing columns
         query = """
             SELECT 
                 t.[TaskID],
-                t.[TaskNumber],
+                ISNULL(t.[TaskNumber], 'TASK' + CAST(t.[TaskID] AS NVARCHAR)) as TaskNumber,
                 t.[TaskName],
                 t.[Description],
                 t.[Status],
-                t.[Priority],
+                ISNULL(t.[Priority], 'Medium') as Priority,
                 t.[CreatedDate],
-                t.[DueDate],
-                t.[CompletedDate],
-                t.[AssignedToUserID],
-                u.[Name] as AssignedToName,
-                COUNT(DISTINCT s.[SampleID]) as SampleCount,
-                COUNT(DISTINCT te.[TestID]) as TestCount
+                NULL as DueDate,
+                NULL as CompletedDate,
+                NULL as AssignedToUserID,
+                'Unassigned' as AssignedToName,
+                ISNULL(sample_counts.SampleCount, 0) as SampleCount,
+                ISNULL(test_counts.TestCount, 0) as TestCount
             FROM [task] t
-            LEFT JOIN [user] u ON t.[AssignedToUserID] = u.[UserID]
-            LEFT JOIN [sample] s ON t.[TaskID] = s.[TaskID]
-            LEFT JOIN [test] te ON t.[TaskID] = te.[TaskID]
+            LEFT JOIN (
+                SELECT [TaskID], COUNT(*) as SampleCount
+                FROM [sample] 
+                WHERE [TaskID] IS NOT NULL
+                GROUP BY [TaskID]
+            ) sample_counts ON t.[TaskID] = sample_counts.[TaskID]
+            LEFT JOIN (
+                SELECT [TaskID], COUNT(*) as TestCount
+                FROM [test] 
+                WHERE [TaskID] IS NOT NULL
+                GROUP BY [TaskID]
+            ) test_counts ON t.[TaskID] = test_counts.[TaskID]
         """
         
         conditions = []
@@ -60,10 +69,6 @@ def get_tasks():
             conditions.append("t.[Status] = ?")
             params.append(status_filter)
         
-        if assigned_filter:
-            conditions.append("t.[AssignedToUserID] = ?")
-            params.append(int(assigned_filter))
-        
         if search_term:
             conditions.append("(t.[TaskName] LIKE ? OR t.[Description] LIKE ? OR t.[TaskNumber] LIKE ?)")
             search_param = f"%{search_term}%"
@@ -72,31 +77,33 @@ def get_tasks():
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
         
-        query += """
-            GROUP BY t.[TaskID], t.[TaskNumber], t.[TaskName], t.[Description], t.[Status], 
-                     t.[Priority], t.[CreatedDate], t.[DueDate], t.[CompletedDate], 
-                     t.[AssignedToUserID], u.[Name]
-            ORDER BY t.[CreatedDate] DESC
-        """
+        query += " ORDER BY t.[CreatedDate] DESC"
+        
+        print(f"DEBUG: Task query: {query}")
+        print(f"DEBUG: Task params: {params}")
         
         tasks_results = mssql_db.execute_query(query, params, fetch_all=True)
+        
+        print(f"DEBUG: Found {len(tasks_results) if tasks_results else 0} tasks")
+        if tasks_results:
+            print(f"DEBUG: First task: {tasks_results[0] if tasks_results else 'None'}")
         
         tasks = []
         for row in tasks_results:
             tasks.append({
-                'TaskID': row[0],
-                'TaskNumber': row[1],
-                'TaskName': row[2],
-                'Description': row[3],
-                'Status': row[4],
-                'Priority': row[5],
-                'CreatedDate': row[6],
-                'DueDate': row[7],
-                'CompletedDate': row[8],
-                'AssignedToUserID': row[9],
-                'AssignedToName': row[10],
-                'SampleCount': row[11],
-                'TestCount': row[12]
+                'task_id': row[0],
+                'task_number': row[1],
+                'task_name': row[2],
+                'description': row[3],
+                'status': row[4],
+                'priority': row[5],
+                'created_date': row[6].isoformat() if row[6] else None,
+                'end_date': row[7].isoformat() if row[7] else None,  # DueDate mapped to end_date
+                'completed_date': row[8].isoformat() if row[8] else None,
+                'assigned_to_user_id': row[9],
+                'assigned_to_name': row[10],
+                'total_samples': row[11],
+                'total_tests': row[12]
             })
         
         return jsonify({
@@ -111,6 +118,42 @@ def get_tasks():
             'success': False,
             'error': str(e)
         }), 500
+
+@task_mssql_bp.route('/api/tasks/debug', methods=['GET'])
+def debug_tasks():
+    """
+    Debug endpoint to check raw task data.
+    """
+    try:
+        # Get all tasks without JOINs first
+        simple_tasks = mssql_db.execute_query("""
+            SELECT [TaskID], [TaskName], [Status], [Description], [CreatedDate]
+            FROM [task]
+            ORDER BY [TaskID]
+        """, fetch_all=True)
+        
+        print(f"DEBUG: Raw tasks from database: {simple_tasks}")
+        
+        tasks = []
+        for row in simple_tasks:
+            tasks.append({
+                'task_id': row[0],
+                'task_name': row[1], 
+                'status': row[2],
+                'description': row[3],
+                'created_date': str(row[4]) if row[4] else None
+            })
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Found {len(tasks)} tasks',
+            'tasks': tasks
+        })
+    except Exception as e:
+        print(f"Error in debug tasks: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @task_mssql_bp.route('/api/tasks', methods=['POST'])
 def create_task():
@@ -139,7 +182,7 @@ def create_task():
         next_number = task_no_result[0] if task_no_result and task_no_result[0] else 1
         task_number = f"TASK{current_year}{next_number:04d}"
         
-        # Create task
+        # Create task (include CreatedBy which is required)
         result = mssql_db.execute_query("""
             INSERT INTO [task] (
                 [TaskNumber], 
@@ -147,22 +190,18 @@ def create_task():
                 [Description], 
                 [Status], 
                 [Priority], 
-                [CreatedDate], 
-                [DueDate], 
-                [AssignedToUserID],
-                [CreatedByUserID]
+                [CreatedDate],
+                [CreatedBy]
             ) 
             OUTPUT INSERTED.TaskID
-            VALUES (?, ?, ?, ?, ?, GETDATE(), ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, GETDATE(), ?)
         """, (
             task_number,
             data.get('task_name'),
             data.get('description', ''),
             data.get('status', 'Planning'),
             data.get('priority', 'Medium'),
-            data.get('due_date'),
-            data.get('assigned_to_user_id'),
-            user_id
+            user_id  # CreatedBy is required and cannot be NULL
         ), fetch_one=True)
         
         if result:
@@ -204,7 +243,7 @@ def get_task(task_id):
     Get a specific task by ID with samples and tests.
     """
     try:
-        # Get task details
+        # Get task details (only use existing columns)
         task_result = mssql_db.execute_query("""
             SELECT 
                 t.[TaskID],
@@ -214,14 +253,12 @@ def get_task(task_id):
                 t.[Status],
                 t.[Priority],
                 t.[CreatedDate],
-                t.[DueDate],
-                t.[CompletedDate],
-                t.[AssignedToUserID],
-                u.[Name] as AssignedToName,
-                cb.[Name] as CreatedByName
+                NULL as DueDate,
+                NULL as CompletedDate,
+                NULL as AssignedToUserID,
+                'Unassigned' as AssignedToName,
+                'Unknown' as CreatedByName
             FROM [task] t
-            LEFT JOIN [user] u ON t.[AssignedToUserID] = u.[UserID]
-            LEFT JOIN [user] cb ON t.[CreatedByUserID] = cb.[UserID]
             WHERE t.[TaskID] = ?
         """, (task_id,), fetch_one=True)
         
@@ -232,18 +269,17 @@ def get_task(task_id):
             }), 404
         
         task = {
-            'TaskID': task_result[0],
-            'TaskNumber': task_result[1],
-            'TaskName': task_result[2],
-            'Description': task_result[3],
-            'Status': task_result[4],
-            'Priority': task_result[5],
-            'CreatedDate': task_result[6],
-            'DueDate': task_result[7],
-            'CompletedDate': task_result[8],
-            'AssignedToUserID': task_result[9],
-            'AssignedToName': task_result[10],
-            'CreatedByName': task_result[11]
+            'task_id': task_result[0],
+            'task_number': task_result[1],
+            'task_name': task_result[2],
+            'description': task_result[3],
+            'status': task_result[4],
+            'priority': task_result[5],
+            'created_date': task_result[6].isoformat() if task_result[6] else None,
+            'end_date': task_result[7].isoformat() if task_result[7] else None,
+            'completion_percentage': 0,
+            'notes': task_result[3],
+            'assigned_to_name': task_result[10]
         }
         
         # Get task samples
@@ -272,10 +308,12 @@ def get_task(task_id):
         for row in samples_results:
             samples.append({
                 'SampleID': row[0],
+                'SampleIDFormatted': f'SMP-{row[0]}',
                 'Description': row[1],
                 'PartNumber': row[2],
-                'Status': row[3],
-                'Amount': row[4],
+                'UsageStatus': row[3],
+                'TestNo': None,
+                'AmountRemaining': row[4],
                 'UnitName': row[5],
                 'LocationName': row[6] or 'Unknown'
             })
@@ -290,10 +328,10 @@ def get_task(task_id):
                 t.[Status],
                 t.[CreatedDate],
                 u.[Name] as UserName,
-                COUNT(tu.[TestUsageID]) as SampleCount
+                COUNT(tu.[UsageID]) as SampleCount
             FROM [test] t
             LEFT JOIN [user] u ON t.[UserID] = u.[UserID]
-            LEFT JOIN [testusage] tu ON t.[TestID] = tu.[TestID]
+            LEFT JOIN [testsampleusage] tu ON t.[TestID] = tu.[TestID]
             WHERE t.[TaskID] = ?
             GROUP BY t.[TestID], t.[TestNo], t.[TestName], t.[Description], t.[Status], t.[CreatedDate], u.[Name]
             ORDER BY t.[CreatedDate] DESC
@@ -307,7 +345,7 @@ def get_task(task_id):
                 'TestName': row[2],
                 'Description': row[3],
                 'Status': row[4],
-                'CreatedDate': row[5],
+                'CreatedDate': row[5].isoformat() if row[5] else None,
                 'UserName': row[6],
                 'SampleCount': row[7]
             })
@@ -366,13 +404,14 @@ def update_task(task_id):
             update_fields.append("[Priority] = ?")
             params.append(data['priority'])
         
-        if 'due_date' in data:
-            update_fields.append("[DueDate] = ?")
-            params.append(data['due_date'])
-        
-        if 'assigned_to_user_id' in data:
-            update_fields.append("[AssignedToUserID] = ?")
-            params.append(data['assigned_to_user_id'])
+        # Skip due_date and assigned_to_user_id since these columns don't exist
+        # if 'due_date' in data:
+        #     update_fields.append("[DueDate] = ?")
+        #     params.append(data['due_date'])
+        # 
+        # if 'assigned_to_user_id' in data:
+        #     update_fields.append("[AssignedToUserID] = ?")
+        #     params.append(data['assigned_to_user_id'])
         
         if not update_fields:
             return jsonify({
@@ -486,18 +525,18 @@ def get_task_stats():
                 SUM(CASE WHEN [Status] = 'On Hold' THEN 1 ELSE 0 END) as on_hold_tasks,
                 SUM(CASE WHEN [Status] = 'Completed' THEN 1 ELSE 0 END) as completed_tasks,
                 SUM(CASE WHEN [Status] = 'Cancelled' THEN 1 ELSE 0 END) as cancelled_tasks,
-                SUM(CASE WHEN [DueDate] < CAST(GETDATE() AS DATE) AND [Status] NOT IN ('Completed', 'Cancelled') THEN 1 ELSE 0 END) as overdue_tasks
+                0 as overdue_tasks
             FROM [task]
         """, fetch_one=True)
         
         stats = {
-            'total_tasks': stats_result[0] or 0,
-            'planning_tasks': stats_result[1] or 0,
-            'active_tasks': stats_result[2] or 0,
-            'on_hold_tasks': stats_result[3] or 0,
-            'completed_tasks': stats_result[4] or 0,
-            'cancelled_tasks': stats_result[5] or 0,
-            'overdue_tasks': stats_result[6] or 0
+            'total': stats_result[0] or 0,
+            'planning': stats_result[1] or 0,
+            'active': stats_result[2] or 0,
+            'on_hold': stats_result[3] or 0,
+            'completed': stats_result[4] or 0,
+            'cancelled': stats_result[5] or 0,
+            'overdue': stats_result[6] or 0
         }
         
         return jsonify({
@@ -525,16 +564,15 @@ def get_tasks_overview():
                 t.[TaskName],
                 t.[Status],
                 t.[Priority],
-                t.[DueDate],
-                u.[Name] as AssignedToName,
+                NULL as DueDate,
+                'Unassigned' as AssignedToName,
                 COUNT(DISTINCT s.[SampleID]) as SampleCount,
                 COUNT(DISTINCT te.[TestID]) as TestCount,
-                CASE WHEN t.[DueDate] < CAST(GETDATE() AS DATE) AND t.[Status] NOT IN ('Completed', 'Cancelled') THEN 1 ELSE 0 END as IsOverdue
+                0 as IsOverdue
             FROM [task] t
-            LEFT JOIN [user] u ON t.[AssignedToUserID] = u.[UserID]
             LEFT JOIN [sample] s ON t.[TaskID] = s.[TaskID]
             LEFT JOIN [test] te ON t.[TaskID] = te.[TaskID]
-            GROUP BY t.[TaskID], t.[TaskNumber], t.[TaskName], t.[Status], t.[Priority], t.[DueDate], u.[Name]
+            GROUP BY t.[TaskID], t.[TaskNumber], t.[TaskName], t.[Status], t.[Priority]
             ORDER BY t.[CreatedDate] DESC
         """, fetch_all=True)
         
@@ -580,10 +618,10 @@ def get_task_tests(task_id):
                 t.[Status],
                 t.[CreatedDate],
                 u.[Name] as UserName,
-                COUNT(tu.[TestUsageID]) as SampleCount
+                COUNT(tu.[UsageID]) as SampleCount
             FROM [test] t
             LEFT JOIN [user] u ON t.[UserID] = u.[UserID]
-            LEFT JOIN [testusage] tu ON t.[TestID] = tu.[TestID]
+            LEFT JOIN [testsampleusage] tu ON t.[TestID] = tu.[TestID]
             WHERE t.[TaskID] = ?
             GROUP BY t.[TestID], t.[TestNo], t.[TestName], t.[Description], t.[Status], t.[CreatedDate], u.[Name]
             ORDER BY t.[CreatedDate] DESC
@@ -665,6 +703,88 @@ def get_task_samples(task_id):
         
     except Exception as e:
         print(f"Error getting task samples: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@task_mssql_bp.route('/api/tasks/<int:task_id>/next-test-number', methods=['GET'])
+def get_next_test_number(task_id):
+    """
+    Get the next test number for a task.
+    """
+    try:
+        # Generate test number
+        current_year = datetime.now().year
+        test_no_result = mssql_db.execute_query("""
+            SELECT MAX(CAST(SUBSTRING([TestNo], 6, LEN([TestNo]) - 5) AS INT)) + 1
+            FROM [test] 
+            WHERE [TestNo] LIKE ?
+        """, (f"TST{current_year}%",), fetch_one=True)
+        
+        next_number = test_no_result[0] if test_no_result and test_no_result[0] else 1
+        test_no = f"TST{current_year}{next_number:04d}"
+        
+        return jsonify({
+            'success': True,
+            'test_number': test_no
+        })
+        
+    except Exception as e:
+        print(f"Error getting next test number: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@task_mssql_bp.route('/api/tasks/<int:task_id>/available-samples', methods=['GET'])
+def get_task_available_samples(task_id):
+    """
+    Get available samples for a task that can be assigned to tests.
+    """
+    try:
+        # Get all available samples that can be assigned to tests
+        # (Not limited to task-assigned samples for more flexibility)
+        samples_results = mssql_db.execute_query("""
+            SELECT 
+                s.[SampleID],
+                s.[Description], 
+                s.[PartNumber],
+                ISNULL(ss.[AmountRemaining], s.[Amount]) as AmountAvailable,
+                CASE
+                    WHEN u.[UnitName] IS NULL THEN 'pcs'
+                    WHEN LOWER(u.[UnitName]) = 'stk' THEN 'pcs'
+                    ELSE u.[UnitName]
+                END as Unit,
+                sl.[LocationName]
+            FROM [sample] s
+            LEFT JOIN [unit] u ON s.[UnitID] = u.[UnitID]
+            LEFT JOIN [samplestorage] ss ON s.[SampleID] = ss.[SampleID]
+            LEFT JOIN [storagelocation] sl ON ss.[LocationID] = sl.[LocationID]
+            WHERE s.[Status] = 'In Storage'
+            AND ISNULL(ss.[AmountRemaining], s.[Amount]) > 0
+            ORDER BY s.[Description]
+        """, fetch_all=True)
+        
+        samples = []
+        for row in samples_results:
+            samples.append({
+                'SampleID': row[0],
+                'SampleIDFormatted': f'SMP-{row[0]}',
+                'Description': row[1],
+                'PartNumber': row[2] or '',
+                'AvailableAmount': row[3],
+                'Unit': row[4],
+                'LocationName': row[5] or 'Unknown'
+            })
+        
+        return jsonify({
+            'success': True,
+            'samples': samples
+        })
+        
+    except Exception as e:
+        print(f"Error getting task available samples: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

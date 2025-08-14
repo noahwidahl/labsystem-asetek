@@ -6,58 +6,109 @@ test_mssql_bp = Blueprint('test_mssql', __name__)
 
 @test_mssql_bp.route('/testing')
 def testing():
+    print("DEBUG: ===== TESTING ROUTE STARTED =====")
     try:
-        # Get current user (simplified for now)
-        user_id = 1  # TODO: Implement proper user authentication
+        # Get current user - find noahw user instead of hardcoded 1
+        # DEBUG: Let's see all users first (Username column doesn't exist, use only Name)
+        all_users = mssql_db.execute_query("""
+            SELECT [UserID], [Name] FROM [user] ORDER BY [UserID]
+        """, fetch_all=True)
+        print(f"DEBUG: All users in database: {all_users}")
+        
+        # Try to find noahw user
+        noahw_user = mssql_db.execute_query("""
+            SELECT [UserID], [Name] FROM [user] 
+            WHERE [Name] LIKE '%noahw%' OR [Name] LIKE '%noah%'
+        """, fetch_one=True)
+        
+        if noahw_user:
+            user_id = noahw_user[0]
+            print(f"DEBUG: Found noahw user: {noahw_user}, using UserID: {user_id}")
+        else:
+            user_id = 1  # Fallback
+            print(f"DEBUG: Noahw user not found, using fallback user_id: {user_id}")
         
         # Get active tests (only for current user)
-        active_tests_results = mssql_db.execute_query("""
-            SELECT 
-                t.[TestID],
-                t.[TestNo],
-                t.[TestName],
-                t.[Description],
-                t.[Status],
-                t.[CreatedDate],
-                u.[Name] as UserName,
-                COUNT(tu.[TestUsageID]) as SampleCount
-            FROM [test] t
-            LEFT JOIN [user] u ON t.[UserID] = u.[UserID]
-            LEFT JOIN [testusage] tu ON t.[TestID] = tu.[TestID]
-            WHERE t.[UserID] = ? AND t.[Status] IN ('Created', 'In Progress', 'Active')
-            GROUP BY t.[TestID], t.[TestNo], t.[TestName], t.[Description], t.[Status], t.[CreatedDate], u.[Name]
-            ORDER BY t.[CreatedDate] DESC
-        """, (user_id,), fetch_all=True)
+        print("DEBUG: Fetching active tests...")
+        
+        # First, let's check what tests exist in the database at all
+        all_tests_results = mssql_db.execute_query("""
+            SELECT [TestID], [TestNo], [TestName], [Status], [UserID]
+            FROM [test] 
+            ORDER BY [CreatedDate] DESC
+        """, fetch_all=True)
+        print(f"DEBUG: Total tests in database: {len(all_tests_results) if all_tests_results else 0}")
+        if all_tests_results:
+            for test in all_tests_results:
+                print(f"DEBUG: Test - ID: {test[0]}, No: {test[1]}, Name: {test[2]}, Status: {test[3]}, UserID: {test[4]}")
+        
+        try:
+            # TEMPORARY FIX: Show all active tests regardless of user for debugging
+            active_tests_results = mssql_db.execute_query("""
+                SELECT 
+                    t.[TestID],
+                    t.[TestNo],
+                    t.[TestName],
+                    t.[Description],
+                    t.[Status],
+                    t.[CreatedDate],
+                    u.[Name] as UserName,
+                    COUNT(tsu.[UsageID]) as SampleCount,
+                    t.[UserID] as TestUserID
+                FROM [test] t
+                LEFT JOIN [user] u ON t.[UserID] = u.[UserID]
+                LEFT JOIN [testsampleusage] tsu ON t.[TestID] = tsu.[TestID]
+                WHERE t.[Status] IN ('Created', 'In Progress', 'Active')
+                GROUP BY t.[TestID], t.[TestNo], t.[TestName], t.[Description], t.[Status], t.[CreatedDate], u.[Name], t.[UserID]
+                ORDER BY t.[CreatedDate] DESC
+            """, fetch_all=True)
+            print(f"DEBUG: Active tests query success - found {len(active_tests_results) if active_tests_results else 0} tests")
+            if active_tests_results:
+                for test in active_tests_results:
+                    print(f"DEBUG: Active test - ID: {test[0]}, No: {test[1]}, Name: {test[2]}, Status: {test[4]}, TestUserID: {test[8]}")
+            print(f"DEBUG: Current user_id: {user_id}, showing all active tests for debugging")
+        except Exception as e:
+            print(f"ERROR: Active tests query failed: {e}")
+            active_tests_results = []
         
         active_tests = []
         for row in active_tests_results:
             active_tests.append({
-                'TestID': row[0],
-                'TestNo': row[1],
-                'TestName': row[2],
-                'Description': row[3],
-                'Status': row[4],
-                'CreatedDate': row[5],
-                'UserName': row[6],
-                'SampleCount': row[7]
+                'id': row[0],  # Template expects 'id' for test.id
+                'test_id': row[0],  # Also provide test_id for API calls
+                'test_no': row[1],  # Template expects 'test_no' for test.test_no
+                'test_name': row[2],  # Template expects 'test_name' for test.test_name
+                'description': row[3],  # Template expects 'description' for test.description
+                'status': row[4],  # Template expects 'status' for test.status
+                'created_date': row[5],  # Template expects 'created_date' for test.created_date
+                'user_name': row[6],  # Template expects 'user_name' for test.user_name
+                'sample_count': row[7],  # Template expects 'sample_count' for test.sample_count
+                'active_sample_count': row[7],  # Template also expects this field
+                'test_user_id': row[8]  # Added for debugging
             })
         
         # Get available samples for test creation
-        samples_results = mssql_db.execute_query("""
-            SELECT 
-                s.[SampleID], 
-                s.[Description], 
-                s.[PartNumber],
-                ISNULL(ss.[AmountRemaining], s.[Amount]) as AmountAvailable,
-                sl.[LocationName],
-                s.[Status]
-            FROM [sample] s
-            LEFT JOIN [samplestorage] ss ON s.[SampleID] = ss.[SampleID]
-            LEFT JOIN [storagelocation] sl ON ss.[LocationID] = sl.[LocationID]
-            WHERE s.[Status] = 'In Storage'
-            AND ISNULL(ss.[AmountRemaining], s.[Amount]) > 0
-            ORDER BY s.[Description]
-        """, fetch_all=True)
+        print("DEBUG: Fetching available samples...")
+        try:
+            samples_results = mssql_db.execute_query("""
+                SELECT 
+                    s.[SampleID], 
+                    s.[Description], 
+                    s.[PartNumber],
+                    ISNULL(ss.[AmountRemaining], s.[Amount]) as AmountAvailable,
+                    sl.[LocationName],
+                    s.[Status]
+                FROM [sample] s
+                LEFT JOIN [samplestorage] ss ON s.[SampleID] = ss.[SampleID]
+                LEFT JOIN [storagelocation] sl ON ss.[LocationID] = sl.[LocationID]
+                WHERE s.[Status] = 'In Storage'
+                AND ISNULL(ss.[AmountRemaining], s.[Amount]) > 0
+                ORDER BY s.[Description]
+            """, fetch_all=True)
+            print(f"DEBUG: Samples query success - found {len(samples_results) if samples_results else 0} samples")
+        except Exception as e:
+            print(f"ERROR: Samples query failed: {e}")
+            samples_results = []
         
         samples = []
         for row in samples_results:
@@ -72,31 +123,72 @@ def testing():
             })
         
         # Get users
-        users_results = mssql_db.execute_query("""
-            SELECT [UserID], [Name] FROM [user] ORDER BY [Name]
-        """, fetch_all=True)
-        users = [{'UserID': row[0], 'Name': row[1]} for row in users_results]
+        print("DEBUG: Fetching users...")
+        try:
+            users_results = mssql_db.execute_query("""
+                SELECT [UserID], [Name] FROM [user] ORDER BY [Name]
+            """, fetch_all=True)
+            print(f"DEBUG: Users query success - found {len(users_results) if users_results else 0} users")
+            users = [{'UserID': row[0], 'Name': row[1]} for row in users_results]
+        except Exception as e:
+            print(f"ERROR: Users query failed: {e}")
+            users = []
         
         # Get active tasks for test creation
-        tasks_results = mssql_db.execute_query("""
-            SELECT [TaskID], [TaskNumber], [TaskName], [Status] 
-            FROM [task] 
-            WHERE [Status] IN ('Planning', 'Active', 'On Hold')
-            ORDER BY [TaskNumber] DESC
-        """, fetch_all=True)
-        tasks = [{'TaskID': row[0], 'TaskNumber': row[1], 'TaskName': row[2], 'Status': row[3]} for row in tasks_results]
+        print("DEBUG: Fetching tasks for test creation...")
+        try:
+            tasks_results = mssql_db.execute_query("""
+                SELECT [TaskID], 'TASK' + CAST([TaskID] AS NVARCHAR) as TaskNumber, [TaskName], [Status] 
+                FROM [task] 
+                WHERE [Status] IN ('Planning', 'Active', 'On Hold')
+                ORDER BY [TaskID] DESC
+            """, fetch_all=True)
+            print(f"DEBUG: Raw tasks query result: {tasks_results}")
+            tasks = [{'TaskID': row[0], 'TaskNumber': row[1], 'TaskName': row[2], 'Status': row[3]} for row in tasks_results]
+            print(f"DEBUG: Processed tasks for template: {tasks}")
+        except Exception as e:
+            print(f"ERROR: Tasks query failed: {e}")
+            import traceback
+            traceback.print_exc()
+            tasks = []
         
-        return render_template('sections/testing.html', 
-                            active_tests=active_tests, 
-                            samples=samples,
-                            users=users,
-                            tasks=tasks)
+        print(f"DEBUG: Final data summary:")
+        print(f"  - Active tests: {len(active_tests)}")
+        print(f"  - Samples: {len(samples)}")
+        print(f"  - Users: {len(users)}")
+        print(f"  - Tasks: {len(tasks)}")
+        
+        print("DEBUG: About to render template...")
+        
+        try:
+            template_result = render_template('sections/testing.html', 
+                                active_tests=active_tests, 
+                                samples=samples,
+                                users=users,
+                                tasks=tasks)
+            print("DEBUG: Template rendered successfully!")
+            return template_result
+        except Exception as template_error:
+            print(f"ERROR: Template rendering failed: {template_error}")
+            import traceback
+            traceback.print_exc()
+            raise
+            
     except Exception as e:
-        print(f"Error loading testing: {e}")
+        print(f"ERROR: Main testing route exception: {e}")
         import traceback
         traceback.print_exc()
+        
+        print("DEBUG: Returning error template...")
         return render_template('sections/testing.html', 
-                            error="Error loading test administration")
+                            error="Error loading test administration",
+                            active_tests=[],
+                            samples=[],
+                            users=[],
+                            tasks=[])
+    
+    finally:
+        print("DEBUG: ===== TESTING ROUTE FINISHED =====")
 
 @test_mssql_bp.route('/api/tests', methods=['GET'])
 def get_tests():
@@ -116,10 +208,10 @@ def get_tests():
                 t.[Status],
                 t.[CreatedDate],
                 u.[Name] as UserName,
-                COUNT(tu.[TestUsageID]) as SampleCount
+                COUNT(tsu.[UsageID]) as SampleCount
             FROM [test] t
             LEFT JOIN [user] u ON t.[UserID] = u.[UserID]
-            LEFT JOIN [testusage] tu ON t.[TestID] = tu.[TestID]
+            LEFT JOIN [testsampleusage] tsu ON t.[TestID] = tsu.[TestID]
             WHERE t.[UserID] = ?
         """
         params = [user_id]
@@ -138,14 +230,16 @@ def get_tests():
         tests = []
         for row in tests_results:
             tests.append({
-                'TestID': row[0],
-                'TestNo': row[1],
-                'TestName': row[2],
-                'Description': row[3],
-                'Status': row[4],
-                'CreatedDate': row[5],
-                'UserName': row[6],
-                'SampleCount': row[7]
+                'id': row[0],
+                'test_id': row[0],
+                'test_no': row[1],
+                'test_name': row[2],
+                'description': row[3],
+                'status': row[4],
+                'created_date': row[5],
+                'user_name': row[6],
+                'sample_count': row[7],
+                'active_sample_count': row[7]
             })
         
         return jsonify({
@@ -165,7 +259,19 @@ def get_tests():
 def create_test():
     try:
         data = request.json
-        user_id = 1  # TODO: Implement proper user authentication
+        
+        # Get current user - find noahw user instead of hardcoded 1
+        noahw_user = mssql_db.execute_query("""
+            SELECT [UserID], [Name] FROM [user] 
+            WHERE [Name] LIKE '%noahw%' OR [Name] LIKE '%noah%'
+        """, fetch_one=True)
+        
+        if noahw_user:
+            user_id = noahw_user[0]
+        else:
+            user_id = 1  # Fallback
+        
+        print(f"DEBUG CREATE TEST: Received data: {data}")
         
         # Generate test number
         current_year = datetime.now().year
@@ -178,29 +284,58 @@ def create_test():
         next_number = test_no_result[0] if test_no_result and test_no_result[0] else 1
         test_no = f"TST{current_year}{next_number:04d}"
         
-        # Create test
-        result = mssql_db.execute_query("""
-            INSERT INTO [test] (
-                [TestNo], 
-                [TestName], 
-                [Description], 
-                [Status], 
-                [CreatedDate], 
-                [UserID],
-                [TaskID]
-            ) 
-            OUTPUT INSERTED.TestID
-            VALUES (?, ?, ?, 'Created', GETDATE(), ?, ?)
-        """, (
-            test_no,
-            data.get('test_name'),
-            data.get('description', ''),
-            user_id,
-            data.get('task_id')
-        ), fetch_one=True)
+        print(f"DEBUG CREATE TEST: Generated test_no: {test_no}")
+        
+        # Create test using database connection with explicit transaction
+        print("DEBUG CREATE TEST: About to insert test into database")
+        try:
+            with mssql_db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Insert test
+                cursor.execute("""
+                    INSERT INTO [test] (
+                        [TestNo], 
+                        [TestName], 
+                        [Description], 
+                        [Status], 
+                        [CreatedDate], 
+                        [UserID],
+                        [TaskID]
+                    ) 
+                    OUTPUT INSERTED.TestID
+                    VALUES (?, ?, ?, 'Created', GETDATE(), ?, ?)
+                """, (
+                    test_no,
+                    data.get('testName'),
+                    data.get('description', ''),
+                    user_id,
+                    data.get('task_id')
+                ))
+                
+                result = cursor.fetchone()
+                print(f"DEBUG CREATE TEST: Insert result: {result}")
+                
+                # IMPORTANT: Must commit the transaction for INSERT with OUTPUT
+                conn.commit()
+                print("DEBUG CREATE TEST: Transaction committed")
+                
+        except Exception as insert_error:
+            print(f"DEBUG CREATE TEST: Insert failed with error: {insert_error}")
+            raise
         
         if result:
             test_id = result[0]
+            
+            print(f"DEBUG CREATE TEST: Successfully created test with ID: {test_id}")
+            
+            # Verify the test was created correctly
+            verify_result = mssql_db.execute_query("""
+                SELECT [TestID], [TestNo], [TestName], [Status], [UserID], [TaskID] 
+                FROM [test] WHERE [TestID] = ?
+            """, (test_id,), fetch_one=True)
+            
+            print(f"DEBUG CREATE TEST: Verification query result: {verify_result}")
             
             # Log activity
             mssql_db.execute_query("""
@@ -213,7 +348,7 @@ def create_test():
                 VALUES (GETDATE(), 'Test created', ?, ?)
             """, (
                 user_id,
-                f"Test '{data.get('test_name')}' created with number {test_no}"
+                f"Test '{data.get('testName')}' created with number {test_no}"
             ))
             
             return jsonify({
@@ -262,15 +397,15 @@ def add_samples_to_test(test_id):
             
             # Create test usage record
             usage_result = mssql_db.execute_query("""
-                INSERT INTO [testusage] (
+                INSERT INTO [testsampleusage] (
                     [TestID], 
                     [SampleID], 
                     [AmountUsed], 
                     [Status], 
-                    [AssignedDate], 
+                    [CreatedDate], 
                     [Notes]
                 ) 
-                OUTPUT INSERTED.TestUsageID
+                OUTPUT INSERTED.UsageID
                 VALUES (?, ?, ?, 'Active', GETDATE(), ?)
             """, (test_id, sample_id, amount, notes), fetch_one=True)
             
@@ -328,36 +463,36 @@ def get_test_samples(test_id):
     try:
         samples_results = mssql_db.execute_query("""
             SELECT 
-                tu.[TestUsageID],
+                tu.[UsageID],
                 tu.[SampleID],
                 s.[Description],
                 s.[PartNumber],
                 tu.[AmountUsed],
                 tu.[Status],
-                tu.[AssignedDate],
+                tu.[CreatedDate] as UsageCreatedDate,
                 tu.[CompletedDate],
                 tu.[Notes],
                 u.[UnitName],
                 sl.[LocationName]
-            FROM [testusage] tu
+            FROM [testsampleusage] tu
             JOIN [sample] s ON tu.[SampleID] = s.[SampleID]
             LEFT JOIN [unit] u ON s.[UnitID] = u.[UnitID]
             LEFT JOIN [samplestorage] ss ON s.[SampleID] = ss.[SampleID]
             LEFT JOIN [storagelocation] sl ON ss.[LocationID] = sl.[LocationID]
             WHERE tu.[TestID] = ?
-            ORDER BY tu.[AssignedDate] DESC
+            ORDER BY tu.[CreatedDate] DESC
         """, (test_id,), fetch_all=True)
         
         samples = []
         for row in samples_results:
             samples.append({
-                'TestUsageID': row[0],
+                'UsageID': row[0],
                 'SampleID': row[1],
                 'Description': row[2],
                 'PartNumber': row[3],
                 'AmountUsed': row[4],
                 'Status': row[5],
-                'AssignedDate': row[6],
+                'CreatedDate': row[6],
                 'CompletedDate': row[7],
                 'Notes': row[8],
                 'UnitName': row[9] or 'pcs',
@@ -451,9 +586,9 @@ def complete_test(test_id):
             
             # Update test usage
             mssql_db.execute_query("""
-                UPDATE [testusage] 
+                UPDATE [testsampleusage] 
                 SET [Status] = ?, [CompletedDate] = GETDATE(), [Notes] = ?
-                WHERE [TestUsageID] = ?
+                WHERE [UsageID] = ?
             """, (status, notes, usage_id))
         
         # Log activity
@@ -520,13 +655,13 @@ def get_test_details(test_id):
         # Get samples
         samples_results = mssql_db.execute_query("""
             SELECT 
-                tu.[TestUsageID],
+                tu.[UsageID],
                 tu.[SampleID],
                 s.[Description],
                 s.[PartNumber],
                 tu.[AmountUsed],
                 tu.[Status],
-                tu.[AssignedDate],
+                tu.[CreatedDate] as UsageCreatedDate,
                 tu.[CompletedDate],
                 tu.[Notes],
                 CASE
@@ -535,25 +670,25 @@ def get_test_details(test_id):
                     ELSE u.[UnitName]
                 END as UnitName,
                 sl.[LocationName]
-            FROM [testusage] tu
+            FROM [testsampleusage] tu
             JOIN [sample] s ON tu.[SampleID] = s.[SampleID]
             LEFT JOIN [unit] u ON s.[UnitID] = u.[UnitID]
             LEFT JOIN [samplestorage] ss ON s.[SampleID] = ss.[SampleID]
             LEFT JOIN [storagelocation] sl ON ss.[LocationID] = sl.[LocationID]
             WHERE tu.[TestID] = ?
-            ORDER BY tu.[AssignedDate] DESC
+            ORDER BY tu.[CreatedDate] DESC
         """, (test_id,), fetch_all=True)
         
         samples = []
         for row in samples_results:
             samples.append({
-                'TestUsageID': row[0],
+                'UsageID': row[0],
                 'SampleID': row[1],
                 'Description': row[2],
                 'PartNumber': row[3],
                 'AmountUsed': row[4],
                 'Status': row[5],
-                'AssignedDate': row[6],
+                'CreatedDate': row[6],
                 'CompletedDate': row[7],
                 'Notes': row[8],
                 'UnitName': row[9],
@@ -666,12 +801,12 @@ def move_sample_to_test(sample_id):
         
         # Create test usage record
         usage_result = mssql_db.execute_query("""
-            INSERT INTO [testusage] (
+            INSERT INTO [testsampleusage] (
                 [TestID], 
                 [SampleID], 
                 [AmountUsed], 
                 [Status], 
-                [AssignedDate], 
+                [CreatedDate], 
                 [Notes]
             ) 
             OUTPUT INSERTED.TestUsageID

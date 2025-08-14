@@ -77,7 +77,7 @@ window.loadSampleDetails = function(sampleId) {
                 
                 // Update storage information
                 document.getElementById('sample-location').textContent = sample.Location || '-';
-                document.getElementById('sample-container').textContent = sample.ContainerID ? `Container ${sample.ContainerID}` : 'None';
+                document.getElementById('sample-container').textContent = sample.ContainerName || (sample.ContainerID ? `Container ${sample.ContainerID}` : 'None');
                 document.getElementById('sample-tracking-number').textContent = sample.TrackingNumber || '-';
                 document.getElementById('sample-supplier').textContent = sample.SupplierName || '-';
                 document.getElementById('sample-units').textContent = sample.Unit || '-';

@@ -623,109 +623,109 @@ def create_sample():
                     print(f"DEBUG: Starting container creation transaction with count={container_count}")
                     
                     # Use single database transaction for both container type and container creation
-                with mssql_db.get_connection() as conn:
-                    cursor = conn.cursor()
-                    try:
-                        print(f"DEBUG: Transaction started successfully")
-                        
-                        # Create new container type if needed within this transaction
-                        if new_container_type:
-                            print(f"DEBUG: Creating new container type in transaction: {new_container_type}")
+                    with mssql_db.get_connection() as conn:
+                        cursor = conn.cursor()
+                        try:
+                            print(f"DEBUG: Transaction started successfully")
                             
-                            cursor.execute("""
-                                INSERT INTO [containertype] ([TypeName], [Description], [DefaultCapacity])
-                                OUTPUT INSERTED.ContainerTypeID
-                                VALUES (?, ?, ?)
-                            """, (
-                                new_container_type.get('typeName'),
-                                new_container_type.get('description', ''),
-                                int(new_container_type.get('capacity', 50))
-                            ))
-                            
-                            type_result = cursor.fetchone()
-                            if type_result:
-                                container_type_id = type_result[0]
-                                print(f"DEBUG: Created new container type with ID: {container_type_id}")
+                            # Create new container type if needed within this transaction
+                            if new_container_type:
+                                print(f"DEBUG: Creating new container type in transaction: {new_container_type}")
                                 
-                                # Log the container type creation in same transaction
                                 cursor.execute("""
-                                    INSERT INTO [history] ([ActionType], [UserID], [Notes], [Timestamp])
-                                    VALUES (?, ?, ?, GETDATE())
+                                    INSERT INTO [containertype] ([TypeName], [Description], [DefaultCapacity])
+                                    OUTPUT INSERTED.ContainerTypeID
+                                    VALUES (?, ?, ?)
                                 """, (
-                                    'Container type created',
-                                    user_id,
-                                    f"Container type '{new_container_type.get('typeName')}' created"
+                                    new_container_type.get('typeName'),
+                                    new_container_type.get('description', ''),
+                                    int(new_container_type.get('capacity', 50))
                                 ))
-                            else:
-                                raise Exception('Failed to create new container type')
-                        
-                        print(f"DEBUG: About to create container with final container_type_id={container_type_id}")
-                        
-                        for i in range(container_count):
-                            print(f"DEBUG: Creating container {i+1} of {container_count}")
-                            # Generate unique container barcode
-                            container_barcode = f"CNT{datetime.now().strftime('%Y%m%d%H%M%S')}{str(i).zfill(3)}"
-                            
-                            # Get container capacity from container type
-                            cursor.execute("""
-                                SELECT [DefaultCapacity] FROM [containertype] WHERE [ContainerTypeID] = ?
-                            """, (container_type_id,))
-                            capacity_result = cursor.fetchone()
-                            container_capacity = capacity_result[0] if capacity_result else 50
-                            
-                            # Create container
-                            print(f"DEBUG: Creating container with barcode={container_barcode}, type_id={container_type_id}, capacity={container_capacity}")
-                            
-                            cursor.execute("""
-                                INSERT INTO [container] (
-                                    [Barcode], 
-                                    [ContainerTypeID], 
-                                    [Description], 
-                                    [LocationID],
-                                    [ContainerCapacity], 
-                                    [IsMixed],
-                                    [ContainerStatus]
-                                ) 
-                                OUTPUT INSERTED.ContainerID
-                                VALUES (?, ?, ?, ?, ?, ?, 'Active')
-                            """, (
-                                container_barcode,
-                                container_type_id,
-                                container_description,
-                                data.get('storageLocation', 1),
-                                container_capacity,
-                                data.get('containerIsMixed', False)
-                            ))
-                            
-                            container_result = cursor.fetchone()
-                            if container_result:
-                                container_id = container_result[0]
-                                container_ids.append(container_id)
-                                print(f"DEBUG: Successfully created container with ID: {container_id}")
                                 
-                                # Add sample to new container in same transaction
-                                cursor.execute("""
-                                    SELECT [StorageID] FROM [samplestorage] WHERE [SampleID] = ?
-                                """, (sample_id,))
-                                storage_result = cursor.fetchone()
+                                type_result = cursor.fetchone()
+                                if type_result:
+                                    container_type_id = type_result[0]
+                                    print(f"DEBUG: Created new container type with ID: {container_type_id}")
                                 
-                                if storage_result:
-                                    storage_id = storage_result[0]
+                                    # Log the container type creation in same transaction
                                     cursor.execute("""
-                                        INSERT INTO [containersample] ([ContainerID], [SampleStorageID], [Amount])
-                                        VALUES (?, ?, ?)
-                                    """, (container_id, storage_id, int(data.get('totalAmount', 1)) // container_count))
-                                    print(f"DEBUG: Added sample {sample_id} to container {container_id}")
+                                        INSERT INTO [history] ([ActionType], [UserID], [Notes], [Timestamp])
+                                        VALUES (?, ?, ?, GETDATE())
+                                    """, (
+                                        'Container type created',
+                                        user_id,
+                                        f"Container type '{new_container_type.get('typeName')}' created"
+                                    ))
                                 else:
-                                    print(f"ERROR: Could not find storage record for sample {sample_id}")
-                            else:
-                                print(f"ERROR: Container creation failed - no result returned")
-                        
-                        conn.commit()
-                    except Exception as e:
-                        conn.rollback()
-                        print(f"ERROR: Container creation transaction failed: {e}")
-                        raise
+                                    raise Exception('Failed to create new container type')
+                            
+                            print(f"DEBUG: About to create container with final container_type_id={container_type_id}")
+                            
+                            for i in range(container_count):
+                                print(f"DEBUG: Creating container {i+1} of {container_count}")
+                                # Generate unique container barcode
+                                container_barcode = f"CNT{datetime.now().strftime('%Y%m%d%H%M%S')}{str(i).zfill(3)}"
+                                
+                                # Get container capacity from container type
+                                cursor.execute("""
+                                    SELECT [DefaultCapacity] FROM [containertype] WHERE [ContainerTypeID] = ?
+                                """, (container_type_id,))
+                                capacity_result = cursor.fetchone()
+                                container_capacity = capacity_result[0] if capacity_result else 50
+                                
+                                # Create container
+                                print(f"DEBUG: Creating container with barcode={container_barcode}, type_id={container_type_id}, capacity={container_capacity}")
+                                
+                                cursor.execute("""
+                                    INSERT INTO [container] (
+                                        [Barcode], 
+                                        [ContainerTypeID], 
+                                        [Description], 
+                                        [LocationID],
+                                        [ContainerCapacity], 
+                                        [IsMixed],
+                                        [ContainerStatus]
+                                    ) 
+                                    OUTPUT INSERTED.ContainerID
+                                    VALUES (?, ?, ?, ?, ?, ?, 'Active')
+                                """, (
+                                    container_barcode,
+                                    container_type_id,
+                                    container_description,
+                                    data.get('storageLocation', 1),
+                                    container_capacity,
+                                    data.get('containerIsMixed', False)
+                                ))
+                                
+                                container_result = cursor.fetchone()
+                                if container_result:
+                                    container_id = container_result[0]
+                                    container_ids.append(container_id)
+                                    print(f"DEBUG: Successfully created container with ID: {container_id}")
+                                    
+                                    # Add sample to new container in same transaction
+                                    cursor.execute("""
+                                        SELECT [StorageID] FROM [samplestorage] WHERE [SampleID] = ?
+                                    """, (sample_id,))
+                                    storage_result = cursor.fetchone()
+                                    
+                                    if storage_result:
+                                        storage_id = storage_result[0]
+                                        cursor.execute("""
+                                            INSERT INTO [containersample] ([ContainerID], [SampleStorageID], [Amount])
+                                            VALUES (?, ?, ?)
+                                        """, (container_id, storage_id, int(data.get('totalAmount', 1)) // container_count))
+                                        print(f"DEBUG: Added sample {sample_id} to container {container_id}")
+                                    else:
+                                        print(f"ERROR: Could not find storage record for sample {sample_id}")
+                                else:
+                                    print(f"ERROR: Container creation failed - no result returned")
+                            
+                            conn.commit()
+                        except Exception as e:
+                            conn.rollback()
+                            print(f"ERROR: Container creation transaction failed: {e}")
+                            raise
             
             # Get additional data for frontend
             location_name = 'Unknown'
@@ -801,7 +801,7 @@ def delete_sample(sample_id):
         
         # Delete related records first (foreign key constraints)
         mssql_db.execute_query("DELETE FROM [history] WHERE [SampleID] = ?", (sample_id,))
-        mssql_db.execute_query("DELETE FROM [testusage] WHERE [SampleID] = ?", (sample_id,))
+        mssql_db.execute_query("DELETE FROM [testsampleusage] WHERE [SampleID] = ?", (sample_id,))
         mssql_db.execute_query("DELETE FROM [containersample] WHERE [SampleStorageID] IN (SELECT [StorageID] FROM [samplestorage] WHERE [SampleID] = ?)", (sample_id,))
         mssql_db.execute_query("DELETE FROM [samplestorage] WHERE [SampleID] = ?", (sample_id,))
         mssql_db.execute_query("DELETE FROM [sampleserialnumber] WHERE [SampleID] = ?", (sample_id,))
@@ -955,6 +955,7 @@ def get_sample_details(sample_id):
                 ss.[AmountRemaining] as Amount,
                 sl.[LocationName] as Location,
                 c.[ContainerID],
+                c.[Description] as ContainerName,
                 r.[TrackingNumber],
                 sp.[SupplierName],
                 r.[SourceType],
@@ -991,10 +992,11 @@ def get_sample_details(sample_id):
             'Amount': float(sample_result[9]) if sample_result[9] else 0.0,
             'Location': sample_result[10],
             'ContainerID': int(sample_result[11]) if sample_result[11] else None,
-            'TrackingNumber': sample_result[12],
-            'SupplierName': sample_result[13],
-            'SourceType': sample_result[14],
-            'ReceivedBy': sample_result[15]
+            'ContainerName': sample_result[12] if sample_result[12] else None,
+            'TrackingNumber': sample_result[13],
+            'SupplierName': sample_result[14],
+            'SourceType': sample_result[15],
+            'ReceivedBy': sample_result[16]
         }
         
         # Get serial numbers
@@ -1548,14 +1550,10 @@ def create_supplier():
         
         # Create new supplier
         supplier_result = mssql_db.execute_query("""
-            INSERT INTO [supplier] ([SupplierName], [ContactInfo], [Notes])
+            INSERT INTO [supplier] ([SupplierName])
             OUTPUT INSERTED.SupplierID
-            VALUES (?, ?, ?)
-        """, (
-            data['name'],
-            data.get('contact', ''),
-            data.get('notes', '')
-        ), fetch_one=True)
+            VALUES (?)
+        """, (data['name'],), fetch_one=True)
         
         supplier_id = supplier_result[0] if supplier_result else None
         
