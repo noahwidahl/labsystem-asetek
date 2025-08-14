@@ -76,9 +76,13 @@ class MSSQLConnection:
                     cursor.execute(query)
                 
                 if fetch_one:
-                    return cursor.fetchone()
+                    result = cursor.fetchone()
+                    conn.commit()  # Commit the transaction even when fetching results
+                    return result
                 elif fetch_all:
-                    return cursor.fetchall()
+                    result = cursor.fetchall()
+                    conn.commit()  # Commit the transaction even when fetching results
+                    return result
                 else:
                     conn.commit()
                     return cursor.rowcount

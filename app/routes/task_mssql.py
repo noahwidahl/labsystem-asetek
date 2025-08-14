@@ -31,7 +31,7 @@ def get_tasks():
         assigned_filter = request.args.get('assigned_to')
         search_term = request.args.get('search')
         
-        # Build base query using only existing columns
+        # Build base query using only existing columns - simplified to avoid potential JOIN issues
         query = """
             SELECT 
                 t.[TaskID],
@@ -45,21 +45,9 @@ def get_tasks():
                 NULL as CompletedDate,
                 NULL as AssignedToUserID,
                 'Unassigned' as AssignedToName,
-                ISNULL(sample_counts.SampleCount, 0) as SampleCount,
-                ISNULL(test_counts.TestCount, 0) as TestCount
+                0 as SampleCount,
+                0 as TestCount
             FROM [task] t
-            LEFT JOIN (
-                SELECT [TaskID], COUNT(*) as SampleCount
-                FROM [sample] 
-                WHERE [TaskID] IS NOT NULL
-                GROUP BY [TaskID]
-            ) sample_counts ON t.[TaskID] = sample_counts.[TaskID]
-            LEFT JOIN (
-                SELECT [TaskID], COUNT(*) as TestCount
-                FROM [test] 
-                WHERE [TaskID] IS NOT NULL
-                GROUP BY [TaskID]
-            ) test_counts ON t.[TaskID] = test_counts.[TaskID]
         """
         
         conditions = []
@@ -90,8 +78,22 @@ def get_tasks():
         
         tasks = []
         for row in tasks_results:
+            task_id = row[0]
+            
+            # Get sample count for this task separately
+            sample_count_result = mssql_db.execute_query("""
+                SELECT COUNT(*) FROM [sample] WHERE [TaskID] = ?
+            """, (task_id,), fetch_one=True)
+            sample_count = sample_count_result[0] if sample_count_result else 0
+            
+            # Get test count for this task separately  
+            test_count_result = mssql_db.execute_query("""
+                SELECT COUNT(*) FROM [test] WHERE [TaskID] = ?
+            """, (task_id,), fetch_one=True)
+            test_count = test_count_result[0] if test_count_result else 0
+            
             tasks.append({
-                'task_id': row[0],
+                'task_id': task_id,
                 'task_number': row[1],
                 'task_name': row[2],
                 'description': row[3],
@@ -102,8 +104,8 @@ def get_tasks():
                 'completed_date': row[8].isoformat() if row[8] else None,
                 'assigned_to_user_id': row[9],
                 'assigned_to_name': row[10],
-                'total_samples': row[11],
-                'total_tests': row[12]
+                'total_samples': sample_count,
+                'total_tests': test_count
             })
         
         return jsonify({
@@ -171,16 +173,15 @@ def create_task():
         
         user_id = 1  # TODO: Implement proper user authentication
         
-        # Generate task number
-        current_year = datetime.now().year
+        # Generate task number - use simpler format to match existing data
         task_no_result = mssql_db.execute_query("""
-            SELECT MAX(CAST(SUBSTRING([TaskNumber], 6, LEN([TaskNumber]) - 5) AS INT)) + 1
+            SELECT MAX(CAST(SUBSTRING([TaskNumber], 5, LEN([TaskNumber]) - 4) AS INT)) + 1
             FROM [task] 
-            WHERE [TaskNumber] LIKE ?
-        """, (f"TASK{current_year}%",), fetch_one=True)
+            WHERE [TaskNumber] LIKE 'TSK-%'
+        """, fetch_one=True)
         
         next_number = task_no_result[0] if task_no_result and task_no_result[0] else 1
-        task_number = f"TASK{current_year}{next_number:04d}"
+        task_number = f"TSK-{next_number:03d}"
         
         # Create task (include CreatedBy which is required)
         result = mssql_db.execute_query("""
@@ -395,10 +396,6 @@ def update_task(task_id):
         if 'status' in data:
             update_fields.append("[Status] = ?")
             params.append(data['status'])
-            
-            # If completing task, set completion date
-            if data['status'] == 'Completed':
-                update_fields.append("[CompletedDate] = GETDATE()")
         
         if 'priority' in data:
             update_fields.append("[Priority] = ?")
@@ -425,7 +422,7 @@ def update_task(task_id):
         # Update task
         update_query = f"""
             UPDATE [task] 
-            SET {', '.join(update_fields)}, [LastModified] = GETDATE()
+            SET {', '.join(update_fields)}
             WHERE [TaskID] = ?
         """
         
@@ -814,7 +811,7 @@ def assign_samples_to_task(task_id):
             # Update sample with task assignment
             mssql_db.execute_query("""
                 UPDATE [sample] 
-                SET [TaskID] = ?, [LastModified] = GETDATE()
+                SET [TaskID] = ?
                 WHERE [SampleID] = ?
             """, (task_id, sample_id))
             

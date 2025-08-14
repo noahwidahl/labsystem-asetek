@@ -534,7 +534,7 @@ def update_test_status(test_id):
         # Update test status
         mssql_db.execute_query("""
             UPDATE [test] 
-            SET [Status] = ?, [LastModified] = GETDATE()
+            SET [Status] = ?
             WHERE [TestID] = ?
         """, (new_status, test_id))
         
