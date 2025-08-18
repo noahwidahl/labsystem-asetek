@@ -26,6 +26,14 @@ def create_app():
     # Deaktivér cache for templates
     app.config['TEMPLATES_AUTO_RELOAD'] = True
     
+    # Flask secret key for sessions
+    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-change-in-production')
+    
+    # Azure/Entra ID configuration
+    app.config['AZURE_CLIENT_ID'] = os.getenv('AZURE_CLIENT_ID')
+    app.config['AZURE_CLIENT_SECRET'] = os.getenv('AZURE_CLIENT_SECRET') 
+    app.config['AZURE_TENANT_ID'] = os.getenv('AZURE_TENANT_ID')
+    
     # Set environment variables for mssql_db module
     os.environ['MSSQL_SERVER'] = app.config['MSSQL_SERVER']
     os.environ['MSSQL_DATABASE'] = app.config['MSSQL_DATABASE']
@@ -34,11 +42,21 @@ def create_app():
     os.environ['MSSQL_DRIVER'] = app.config['MSSQL_DRIVER']
     os.environ['MSSQL_TRUST_CERT'] = app.config['MSSQL_TRUST_CERT']
     
-    # Tilføj context processor for current_user (SQL Server version)
-    from app.utils.mssql_db import get_current_user_mssql
+    # Tilføj context processor for current_user (Entra ID + SQL Server version)
+    from app.utils.entra_auth import get_current_user_entra
+    from app.utils.mssql_db import mssql_db
+    
     @app.context_processor
     def inject_current_user():
-        return {'current_user': get_current_user_mssql()}
+        # Also inject Azure config for frontend
+        return {
+            'current_user': get_current_user_entra(mssql_db),
+            'azure_client_id': app.config.get('AZURE_CLIENT_ID', ''),
+            'azure_tenant_id': app.config.get('AZURE_TENANT_ID', '')
+        }
+    
+    # Registrer authentication blueprint
+    from app.routes.auth import auth_bp
     
     # Registrer SQL Server blueprints
     from app.routes.dashboard_mssql import dashboard_mssql_bp
@@ -52,6 +70,7 @@ def create_app():
     from app.routes.system_mssql import system_mssql_bp
     from app.routes.printer_mssql import printer_mssql_bp
     
+    app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_mssql_bp)
     app.register_blueprint(sample_mssql_bp)
     app.register_blueprint(container_mssql_bp)
@@ -62,6 +81,12 @@ def create_app():
     app.register_blueprint(barcode_mssql_bp)
     app.register_blueprint(system_mssql_bp)
     app.register_blueprint(printer_mssql_bp)
+    
+    # Root route - redirect to dashboard or login
+    @app.route('/')
+    def index():
+        from flask import redirect, url_for
+        return redirect(url_for('dashboard_mssql.dashboard'))
     
     # Registrer error handlers
     @app.errorhandler(404)

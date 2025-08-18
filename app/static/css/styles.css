@@ -74,11 +74,30 @@ body {
 }
 
 .user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
     text-align: right;
+    min-width: 0; /* Allow shrinking */
+}
+
+.user-details {
+    display: flex;
+    flex-direction: column;
+    min-width: 0; /* Allow shrinking */
 }
 
 .user-name {
     font-weight: 500;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px; /* Limit width */
+}
+
+.user-roles {
+    margin-top: 0.25rem;
 }
 
 .role-badge {

@@ -131,6 +131,7 @@ def get_current_user_mssql(user_login=None):
     """
     Gets or creates a user in SQL Server database based on Windows/domain authentication.
     Compatible with the existing get_current_user function.
+    DEPRECATED: Use get_current_user_entra from entra_auth instead for production.
     """
     # Default admin user as fallback
     default_user = {"UserID": 1, "Name": "System Admin", "WindowsLogin": "SYSTEM", "Role": "Admin"}
