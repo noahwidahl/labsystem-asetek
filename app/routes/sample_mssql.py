@@ -513,22 +513,10 @@ def create_sample():
         
         # Handle supplier ID - make sure it exists or use NULL
         supplier_id = data.get('supplier')
-        print(f"DEBUG: Original supplier ID from request: {supplier_id} (type: {type(supplier_id)})")
-        print(f"DEBUG: Full request data: {data}")
-        
-        # Also debug what suppliers exist in database
-        try:
-            all_suppliers = mssql_db.execute_query("""
-                SELECT TOP 5 [SupplierID], [SupplierName] FROM [supplier] ORDER BY [SupplierID]
-            """, fetch_all=True)
-            print(f"DEBUG: Available suppliers: {all_suppliers}")
-        except Exception as e:
-            print(f"DEBUG: Error checking suppliers: {e}")
         
         # Clean up supplier ID - handle empty strings, None, 0, etc.
         if supplier_id in [None, '', '0', 0, 'null', 'undefined']:
             supplier_id = None
-            print("DEBUG: Supplier ID set to None (empty/invalid)")
         else:
             try:
                 supplier_id = int(supplier_id)
@@ -537,18 +525,13 @@ def create_sample():
                     SELECT [SupplierID] FROM [supplier] WHERE [SupplierID] = ?
                 """, (supplier_id,), fetch_one=True)
                 if not supplier_check:
-                    print(f"DEBUG: Supplier ID {supplier_id} not found in database, setting to None")
                     supplier_id = None
-                else:
-                    print(f"DEBUG: Supplier ID {supplier_id} validated successfully")
             except (ValueError, TypeError):
-                print(f"DEBUG: Invalid supplier ID format: {supplier_id}, setting to None")
                 supplier_id = None
         
         # Pre-validate serial numbers before creating anything
         serial_numbers = data.get('serialNumbers', [])
         if serial_numbers and data.get('hasSerialNumbers'):
-            print(f"DEBUG: Pre-validating {len(serial_numbers)} serial numbers")
             for serial_number in serial_numbers:
                 if serial_number.strip():
                     existing_check = mssql_db.execute_query("""
@@ -557,14 +540,12 @@ def create_sample():
                     """, (serial_number.strip(),), fetch_one=True)
                     
                     if existing_check:
-                        print(f"ERROR: Serial number '{serial_number.strip()}' already exists in sample {existing_check[0]}")
                         return jsonify({
                             'success': False,
                             'error': f'Serial number "{serial_number.strip()}" already exists in the system'
                         }), 400
 
         # Use a single transaction for both reception and sample creation
-        print(f"DEBUG: About to create reception and sample in transaction with supplier_id={supplier_id}, user_id={user_id}")
         
         # Create everything in a single transaction
         with mssql_db.transaction() as cursor:
@@ -613,7 +594,6 @@ def create_sample():
                 raise Exception('Failed to create sample')
                 
             sample_id = sample_result[0]
-            print(f"DEBUG: Transaction completed - reception_id={reception_id}, sample_id={sample_id}")
         
         if sample_id:
             # Insert storage record
@@ -639,26 +619,21 @@ def create_sample():
             
             # Insert serial numbers if provided (already pre-validated)
             if serial_numbers and data.get('hasSerialNumbers'):
-                print(f"DEBUG: Inserting {len(serial_numbers)} pre-validated serial numbers for sample {sample_id}")
                 for serial_number in serial_numbers:
                     if serial_number.strip():  # Only insert non-empty serial numbers
                         mssql_db.execute_query("""
                             INSERT INTO [sampleserialnumber] ([SampleID], [SerialNumber], [CreatedDate], [IsActive])
                             VALUES (?, ?, GETDATE(), 1)
                         """, (sample_id, serial_number.strip()))
-                        print(f"DEBUG: Inserted serial number: {serial_number.strip()}")
             
             # Handle containers if requested
             container_ids = []
             create_containers = data.get('storageOption') == 'container'
             
             if create_containers:
-                print(f"DEBUG: Processing container creation")
-                
                 # Check if using existing container
                 if data.get('useExistingContainer') and data.get('existingContainerId'):
                     container_id = int(data.get('existingContainerId'))
-                    print(f"DEBUG: Using existing container with ID: {container_id}")
                     
                     # Check if existing container has enough capacity
                     capacity_result = mssql_db.execute_query("""
@@ -698,7 +673,6 @@ def create_sample():
                 
                 else:
                     # Create new containers
-                    print(f"DEBUG: Creating new containers")
                     container_count = int(data.get('containerCount', 1))
                     container_description = data.get('containerDescription', '')
                     
@@ -714,18 +688,12 @@ def create_sample():
                     if not container_type_id and not new_container_type:
                         return jsonify({'success': False, 'error': 'Container type is required'}), 400
                     
-                    print(f"DEBUG: Starting container creation transaction with count={container_count}")
-                    
                     # Use single database transaction for both container type and container creation
                     with mssql_db.get_connection() as conn:
                         cursor = conn.cursor()
                         try:
-                            print(f"DEBUG: Transaction started successfully")
-                            
                             # Create new container type if needed within this transaction
                             if new_container_type:
-                                print(f"DEBUG: Creating new container type in transaction: {new_container_type}")
-                                
                                 cursor.execute("""
                                     INSERT INTO [containertype] ([TypeName], [Description], [DefaultCapacity])
                                     OUTPUT INSERTED.ContainerTypeID
@@ -739,7 +707,6 @@ def create_sample():
                                 type_result = cursor.fetchone()
                                 if type_result:
                                     container_type_id = type_result[0]
-                                    print(f"DEBUG: Created new container type with ID: {container_type_id}")
                                 
                                     # Log the container type creation in same transaction
                                     cursor.execute("""
@@ -753,10 +720,7 @@ def create_sample():
                                 else:
                                     raise Exception('Failed to create new container type')
                             
-                            print(f"DEBUG: About to create container with final container_type_id={container_type_id}")
-                            
                             for i in range(container_count):
-                                print(f"DEBUG: Creating container {i+1} of {container_count}")
                                 # Generate unique container barcode
                                 container_barcode = f"CNT{datetime.now().strftime('%Y%m%d%H%M%S')}{str(i).zfill(3)}"
                                 
@@ -768,8 +732,6 @@ def create_sample():
                                 container_capacity = capacity_result[0] if capacity_result else 50
                                 
                                 # Create container
-                                print(f"DEBUG: Creating container with barcode={container_barcode}, type_id={container_type_id}, capacity={container_capacity}")
-                                
                                 cursor.execute("""
                                     INSERT INTO [container] (
                                         [Barcode], 
@@ -795,7 +757,6 @@ def create_sample():
                                 if container_result:
                                     container_id = container_result[0]
                                     container_ids.append(container_id)
-                                    print(f"DEBUG: Successfully created container with ID: {container_id}")
                                     
                                     # Add sample to new container in same transaction
                                     cursor.execute("""
@@ -809,16 +770,10 @@ def create_sample():
                                             INSERT INTO [containersample] ([ContainerID], [SampleStorageID], [Amount])
                                             VALUES (?, ?, ?)
                                         """, (container_id, storage_id, int(data.get('totalAmount', 1)) // container_count))
-                                        print(f"DEBUG: Added sample {sample_id} to container {container_id}")
-                                    else:
-                                        print(f"ERROR: Could not find storage record for sample {sample_id}")
-                                else:
-                                    print(f"ERROR: Container creation failed - no result returned")
                             
                             conn.commit()
                         except Exception as e:
                             conn.rollback()
-                            print(f"ERROR: Container creation transaction failed: {e}")
                             raise
             
             # Get additional data for frontend
@@ -871,12 +826,8 @@ def create_sample():
             }
             
             # Add container information if containers were created
-            if create_containers:
-                if container_ids:
-                    response_data['container_ids'] = container_ids
-                    print(f"DEBUG: Added container_ids to response: {container_ids}")
-                else:
-                    print(f"DEBUG: Containers were requested but none were created successfully")
+            if create_containers and container_ids:
+                response_data['container_ids'] = container_ids
             
             return jsonify(response_data)
         else:

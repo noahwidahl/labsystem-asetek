@@ -5,7 +5,6 @@ import os
 
 printer_mssql_bp = Blueprint('printer_mssql', __name__)
 
-print("DEBUG: MSSQL Printer blueprint created successfully")
 
 @printer_mssql_bp.route('/api/print/sample/<int:sample_id>', methods=['POST'])
 def print_sample_label_endpoint(sample_id):

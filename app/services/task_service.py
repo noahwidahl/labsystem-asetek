@@ -70,9 +70,7 @@ class TaskService:
         
         result, _ = self.db.execute_query(query, params)
         
-        print(f"DEBUG: Query returned {len(result)} tasks")
         for i, row in enumerate(result):
-            print(f"DEBUG: Task {i+1} - ID: {row[0]}, Samples: {row[17] if len(row) > 17 else 'N/A'}, Tests: {row[18] if len(row) > 18 else 'N/A'}")
         
         tasks = []
         for row in result:

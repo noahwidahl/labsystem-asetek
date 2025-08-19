@@ -1,3 +1,21 @@
+"""
+LabSystem Flask Application Factory (MSSQL Version)
+
+This is the main application factory for the Laboratory Management System.
+It configures Flask with Microsoft SQL Server as the database backend
+and Microsoft Entra ID for authentication.
+
+Key Components:
+- MSSQL database connection via pyodbc
+- Entra ID authentication for Microsoft 365 users
+- Blueprint-based route organization
+- Template and static file serving
+
+Required Environment Variables:
+- MSSQL_SERVER, MSSQL_DATABASE, MSSQL_USERNAME, MSSQL_PASSWORD
+- AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID
+- SECRET_KEY (for Flask sessions)
+"""
 from flask import Flask, render_template
 import os
 from dotenv import load_dotenv

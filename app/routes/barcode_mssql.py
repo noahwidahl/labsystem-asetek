@@ -9,29 +9,22 @@ def lookup_barcode(barcode):
     Universal barcode lookup endpoint for scanner functionality - MSSQL version.
     Handles containers (CNT-), samples (BC/SMP-), and test samples (TST-).
     """
-    print(f"🚀 DEBUG API: lookup_barcode called with: {barcode}")
     try:
         barcode = barcode.upper().strip()
-        print(f"🔍 DEBUG API: Processed barcode: {barcode}")
         
         # Determine barcode type and lookup accordingly
         if barcode.startswith('CNT-'):
-            print(f"📦 DEBUG API: Container barcode detected")
             return lookup_container_barcode(barcode)
         elif barcode.startswith('BC') or barcode.startswith('SMP-'):
-            print(f"🧪 DEBUG API: Sample barcode detected")
             return lookup_sample_barcode(barcode)
         else:
-            print(f"❌ DEBUG API: Unknown barcode format: {barcode}")
             return jsonify({
                 'success': False,
                 'error': f'Unknown barcode format: {barcode}'
             }), 400
             
     except Exception as e:
-        print(f"💥 DEBUG API: Error looking up barcode {barcode}: {e}")
         import traceback
-        print(f"🔥 DEBUG API: Full traceback:\n{traceback.format_exc()}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -39,13 +32,10 @@ def lookup_barcode(barcode):
 
 def lookup_container_barcode(barcode):
     """Lookup container by CNT- barcode - MSSQL version"""
-    print(f"📦 DEBUG API: lookup_container_barcode called with: {barcode}")
     # Extract container ID from CNT-123 format
     try:
         container_id = int(barcode.replace('CNT-', ''))
-        print(f"🔢 DEBUG API: Extracted container ID: {container_id}")
     except ValueError:
-        print(f"❌ DEBUG API: Invalid container barcode format: {barcode}")
         return jsonify({
             'success': False,
             'error': f'Invalid container barcode format: {barcode}'

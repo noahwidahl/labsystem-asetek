@@ -11,14 +11,11 @@ class Container:
     
     @classmethod
     def from_dict(cls, data):
-        # Debug data to track what values are being provided
-        print(f"DEBUG: Container.from_dict() called with: {data}")
+        # Parse data to create container object
         
         # Check for possible location ID field names
         location_id = data.get('locationId') or data.get('containerLocationId') or data.get('storageLocation')
         
-        # Log what location ID was found
-        print(f"DEBUG: Using location_id: {location_id}")
         
         return cls(
             description=data.get('description'),

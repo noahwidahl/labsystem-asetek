@@ -6,14 +6,11 @@ test_mssql_bp = Blueprint('test_mssql', __name__)
 
 @test_mssql_bp.route('/testing')
 def testing():
-    print("DEBUG: ===== TESTING ROUTE STARTED =====")
     try:
         # Get current user - find noahw user instead of hardcoded 1
-        # DEBUG: Let's see all users first (Username column doesn't exist, use only Name)
         all_users = mssql_db.execute_query("""
             SELECT [UserID], [Name] FROM [user] ORDER BY [UserID]
         """, fetch_all=True)
-        print(f"DEBUG: All users in database: {all_users}")
         
         # Try to find noahw user
         noahw_user = mssql_db.execute_query("""
@@ -23,27 +20,17 @@ def testing():
         
         if noahw_user:
             user_id = noahw_user[0]
-            print(f"DEBUG: Found noahw user: {noahw_user}, using UserID: {user_id}")
         else:
             user_id = 1  # Fallback
-            print(f"DEBUG: Noahw user not found, using fallback user_id: {user_id}")
         
         # Get active tests (only for current user)
-        print("DEBUG: Fetching active tests...")
-        
-        # First, let's check what tests exist in the database at all
         all_tests_results = mssql_db.execute_query("""
             SELECT [TestID], [TestNo], [TestName], [Status], [UserID]
             FROM [test] 
             ORDER BY [CreatedDate] DESC
         """, fetch_all=True)
-        print(f"DEBUG: Total tests in database: {len(all_tests_results) if all_tests_results else 0}")
-        if all_tests_results:
-            for test in all_tests_results:
-                print(f"DEBUG: Test - ID: {test[0]}, No: {test[1]}, Name: {test[2]}, Status: {test[3]}, UserID: {test[4]}")
         
         try:
-            # TEMPORARY FIX: Show all active tests regardless of user for debugging
             active_tests_results = mssql_db.execute_query("""
                 SELECT 
                     t.[TestID],
@@ -62,13 +49,7 @@ def testing():
                 GROUP BY t.[TestID], t.[TestNo], t.[TestName], t.[Description], t.[Status], t.[CreatedDate], u.[Name], t.[UserID]
                 ORDER BY t.[CreatedDate] DESC
             """, fetch_all=True)
-            print(f"DEBUG: Active tests query success - found {len(active_tests_results) if active_tests_results else 0} tests")
-            if active_tests_results:
-                for test in active_tests_results:
-                    print(f"DEBUG: Active test - ID: {test[0]}, No: {test[1]}, Name: {test[2]}, Status: {test[4]}, TestUserID: {test[8]}")
-            print(f"DEBUG: Current user_id: {user_id}, showing all active tests for debugging")
         except Exception as e:
-            print(f"ERROR: Active tests query failed: {e}")
             active_tests_results = []
         
         active_tests = []
@@ -88,7 +69,6 @@ def testing():
             })
         
         # Get available samples for test creation
-        print("DEBUG: Fetching available samples...")
         try:
             samples_results = mssql_db.execute_query("""
                 SELECT 
@@ -105,9 +85,7 @@ def testing():
                 AND ISNULL(ss.[AmountRemaining], s.[Amount]) > 0
                 ORDER BY s.[Description]
             """, fetch_all=True)
-            print(f"DEBUG: Samples query success - found {len(samples_results) if samples_results else 0} samples")
         except Exception as e:
-            print(f"ERROR: Samples query failed: {e}")
             samples_results = []
         
         samples = []
@@ -123,19 +101,16 @@ def testing():
             })
         
         # Get users
-        print("DEBUG: Fetching users...")
         try:
             users_results = mssql_db.execute_query("""
                 SELECT [UserID], [Name] FROM [user] ORDER BY [Name]
             """, fetch_all=True)
-            print(f"DEBUG: Users query success - found {len(users_results) if users_results else 0} users")
             users = [{'UserID': row[0], 'Name': row[1]} for row in users_results]
         except Exception as e:
             print(f"ERROR: Users query failed: {e}")
             users = []
         
         # Get active tasks for test creation
-        print("DEBUG: Fetching tasks for test creation...")
         try:
             tasks_results = mssql_db.execute_query("""
                 SELECT [TaskID], 'TASK' + CAST([TaskID] AS NVARCHAR) as TaskNumber, [TaskName], [Status] 
@@ -143,22 +118,18 @@ def testing():
                 WHERE [Status] IN ('Planning', 'Active', 'On Hold')
                 ORDER BY [TaskID] DESC
             """, fetch_all=True)
-            print(f"DEBUG: Raw tasks query result: {tasks_results}")
             tasks = [{'TaskID': row[0], 'TaskNumber': row[1], 'TaskName': row[2], 'Status': row[3]} for row in tasks_results]
-            print(f"DEBUG: Processed tasks for template: {tasks}")
         except Exception as e:
             print(f"ERROR: Tasks query failed: {e}")
             import traceback
             traceback.print_exc()
             tasks = []
         
-        print(f"DEBUG: Final data summary:")
         print(f"  - Active tests: {len(active_tests)}")
         print(f"  - Samples: {len(samples)}")
         print(f"  - Users: {len(users)}")
         print(f"  - Tasks: {len(tasks)}")
         
-        print("DEBUG: About to render template...")
         
         try:
             template_result = render_template('sections/testing.html', 
@@ -166,7 +137,6 @@ def testing():
                                 samples=samples,
                                 users=users,
                                 tasks=tasks)
-            print("DEBUG: Template rendered successfully!")
             return template_result
         except Exception as template_error:
             print(f"ERROR: Template rendering failed: {template_error}")
@@ -179,7 +149,6 @@ def testing():
         import traceback
         traceback.print_exc()
         
-        print("DEBUG: Returning error template...")
         return render_template('sections/testing.html', 
                             error="Error loading test administration",
                             active_tests=[],
@@ -188,7 +157,7 @@ def testing():
                             tasks=[])
     
     finally:
-        print("DEBUG: ===== TESTING ROUTE FINISHED =====")
+        pass  # Cleanup handled elsewhere
 
 @test_mssql_bp.route('/api/tests', methods=['GET'])
 def get_tests():
@@ -271,7 +240,6 @@ def create_test():
         else:
             user_id = 1  # Fallback
         
-        print(f"DEBUG CREATE TEST: Received data: {data}")
         
         # Generate test number - use simple sequential format
         # Only count base test numbers (not iterations like TST-001-1)
@@ -285,10 +253,8 @@ def create_test():
         next_number = test_no_result[0] if test_no_result and test_no_result[0] else 1
         test_no = f"TST-{next_number:03d}"
         
-        print(f"DEBUG CREATE TEST: Generated test_no: {test_no}")
         
         # Create test using database connection with explicit transaction
-        print("DEBUG CREATE TEST: About to insert test into database")
         try:
             with mssql_db.get_connection() as conn:
                 cursor = conn.cursor()
@@ -315,20 +281,16 @@ def create_test():
                 ))
                 
                 result = cursor.fetchone()
-                print(f"DEBUG CREATE TEST: Insert result: {result}")
                 
                 # IMPORTANT: Must commit the transaction for INSERT with OUTPUT
                 conn.commit()
-                print("DEBUG CREATE TEST: Transaction committed")
                 
         except Exception as insert_error:
-            print(f"DEBUG CREATE TEST: Insert failed with error: {insert_error}")
             raise
         
         if result:
             test_id = result[0]
             
-            print(f"DEBUG CREATE TEST: Successfully created test with ID: {test_id}")
             
             # Verify the test was created correctly
             verify_result = mssql_db.execute_query("""
@@ -336,7 +298,6 @@ def create_test():
                 FROM [test] WHERE [TestID] = ?
             """, (test_id,), fetch_one=True)
             
-            print(f"DEBUG CREATE TEST: Verification query result: {verify_result}")
             
             # Log activity
             mssql_db.execute_query("""

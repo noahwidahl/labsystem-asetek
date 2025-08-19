@@ -72,14 +72,7 @@ def get_tasks():
         
         query += " ORDER BY t.[CreatedDate] DESC"
         
-        print(f"DEBUG: Task query: {query}")
-        print(f"DEBUG: Task params: {params}")
-        
         tasks_results = mssql_db.execute_query(query, params, fetch_all=True)
-        
-        print(f"DEBUG: Found {len(tasks_results) if tasks_results else 0} tasks")
-        if tasks_results:
-            print(f"DEBUG: First task: {tasks_results[0] if tasks_results else 'None'}")
         
         tasks = []
         for row in tasks_results:
@@ -138,8 +131,6 @@ def debug_tasks():
             FROM [task]
             ORDER BY [TaskID]
         """, fetch_all=True)
-        
-        print(f"DEBUG: Raw tasks from database: {simple_tasks}")
         
         tasks = []
         for row in simple_tasks:

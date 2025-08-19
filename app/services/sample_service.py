@@ -169,7 +169,6 @@ class SampleService:
         return Sample.from_db_row(result[0])
     
     def create_sample(self, sample_data, user_id):
-        print(f"DEBUG: create_sample called with data: {sample_data}")
         with self.db.transaction() as cursor:
             # Handling supplier
             supplier_id = None
@@ -302,12 +301,10 @@ class SampleService:
             create_containers = sample_data.get('storageOption') == 'container'
             
             if create_containers:
-                print(f"DEBUG: Processing container creation")
                 
                 # Check if using existing container
                 if sample_data.get('useExistingContainer') and sample_data.get('existingContainerId'):
                     container_id = sample_data.get('existingContainerId')
-                    print(f"DEBUG: Using existing container with ID: {container_id}")
                     
                     # First check if existing container has enough capacity
                     cursor.execute("""
@@ -358,7 +355,6 @@ class SampleService:
                     
                     # Use the main location selected in step 4 for the container
                     container_location_id = location_id
-                    print(f"DEBUG: Using main location ID {container_location_id} for new container")
                     
                     container_data = {
                         'description': sample_data.get('containerDescription') or description,
@@ -401,7 +397,6 @@ class SampleService:
                     if result.get('success'):
                         container_id = result.get('container_id')
                         container_ids.append(container_id)
-                        print(f"DEBUG: Created new container with ID: {container_id}")
                         
                         # Add sample to new container (this will also check capacity again)
                         add_result = container_service.add_sample_to_container(
@@ -460,7 +455,6 @@ class SampleService:
                     'task_id': sample_data.get('task'),
                     'sample_id': sample_id
                 }
-                print(f"DEBUG: Sample {sample_id} assigned to task {sample_data.get('task')} during registration")
             
             # Log the activity
             cursor.execute("""
@@ -481,7 +475,6 @@ class SampleService:
             
             # Automatic label printing is disabled - all printing handled by frontend
             print_results = []
-            print(f"DEBUG: Automatic printing disabled - all label printing will be handled by frontend print confirmation")
             
             # Get serial numbers if they were added
             serial_numbers = []

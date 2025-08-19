@@ -15,16 +15,9 @@ def login():
     azure_client_id = os.environ.get('AZURE_CLIENT_ID', '')
     azure_tenant_id = os.environ.get('AZURE_TENANT_ID', '')
     
-    # Check if in development mode
-    is_development = (
-        not all([azure_client_id, azure_tenant_id]) or
-        any(val.startswith('dummy') for val in [azure_client_id, azure_tenant_id] if val)
-    )
-    
     return render_template('login.html', 
                          azure_client_id=azure_client_id, 
-                         azure_tenant_id=azure_tenant_id,
-                         is_development=is_development)
+                         azure_tenant_id=azure_tenant_id)
 
 @auth_bp.route('/auth/callback')
 def auth_callback():

@@ -1,3 +1,23 @@
+"""
+Microsoft Entra ID Authentication Module for LabSystem
+
+This module provides authentication services using Microsoft Entra ID (formerly Azure AD).
+It handles JWT token validation, user creation, and integration with the MSSQL database.
+
+Key Features:
+- JWT token validation using Microsoft's public keys
+- Automatic user creation based on Microsoft 365 accounts
+- Development mode fallback for testing without valid credentials
+- Integration with Microsoft Graph API for user information
+
+Environment Variables Required:
+- AZURE_CLIENT_ID: Application (client) ID from Azure portal
+- AZURE_CLIENT_SECRET: Client secret value from Azure portal  
+- AZURE_TENANT_ID: Directory (tenant) ID from Azure portal
+
+The system automatically creates users in the database when they first log in
+with their Microsoft 365 account.
+"""
 import os
 import jwt
 import requests
@@ -16,21 +36,6 @@ class EntraIDAuth:
         self.client_secret = client_secret or os.environ.get('AZURE_CLIENT_SECRET')
         self.tenant_id = tenant_id or os.environ.get('AZURE_TENANT_ID')
         
-        # Development mode check
-        self.is_development = (
-            not all([self.client_id, self.client_secret, self.tenant_id]) or
-            any(val.startswith('dummy') for val in [self.client_id, self.client_secret, self.tenant_id] if val)
-        )
-        
-        if self.is_development:
-            logger.warning("Running in development mode without valid Azure credentials. Authentication will not work.")
-            self.authority = None
-            self.scopes = ["User.Read"]
-            self.msal_app = None
-            self._jwt_keys_cache = None
-            self._jwt_keys_expires = None
-            return
-        
         if not all([self.client_id, self.client_secret, self.tenant_id]):
             raise ValueError("Missing Azure/Entra ID configuration. Set AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, and AZURE_TENANT_ID environment variables.")
         
@@ -38,16 +43,11 @@ class EntraIDAuth:
         self.scopes = ["User.Read"]
         
         # MSAL instance for server-side token validation
-        try:
-            self.msal_app = msal.ConfidentialClientApplication(
-                self.client_id,
-                authority=self.authority,
-                client_credential=self.client_secret,
-            )
-        except Exception as e:
-            logger.error(f"Failed to initialize MSAL: {e}")
-            self.is_development = True
-            self.msal_app = None
+        self.msal_app = msal.ConfidentialClientApplication(
+            self.client_id,
+            authority=self.authority,
+            client_credential=self.client_secret,
+        )
         
         # Cache for JWT signing keys
         self._jwt_keys_cache = None
@@ -74,10 +74,6 @@ class EntraIDAuth:
     
     def validate_token(self, access_token):
         """Validate JWT token from Microsoft Entra ID"""
-        if self.is_development:
-            logger.warning("Development mode: Skipping token validation")
-            return None
-            
         try:
             # Decode token header to get key ID
             header = jwt.get_unverified_header(access_token)
@@ -168,12 +164,7 @@ def get_current_user_entra(mssql_db=None, access_token=None):
     Gets the current user from Entra ID token and database.
     Compatible with existing get_current_user function signature.
     """
-    default_user = {"UserID": 1, "Name": "Development User", "WindowsLogin": "dev@localhost", "Role": "Admin"}
-    
-    # Development mode fallback
-    if entra_auth.is_development:
-        logger.info("Development mode: Using default user")
-        return default_user
+    default_user = {"UserID": 1, "Name": "System Admin", "WindowsLogin": "SYSTEM", "Role": "Admin"}
     
     try:
         # Get access token from request headers or parameter
@@ -182,21 +173,21 @@ def get_current_user_entra(mssql_db=None, access_token=None):
             if auth_header.startswith('Bearer '):
                 access_token = auth_header[7:]
             else:
-                logger.warning("No access token provided")
-                return default_user
+                logger.error("No access token provided - authentication required")
+                return None
         
         # Get user info from token
         user_info = entra_auth.get_user_info_from_token(access_token)
         if not user_info:
-            logger.warning("Failed to get user info from token")
-            return default_user
+            logger.error("Failed to get user info from token")
+            return None
         
         user_email = user_info.get('email')
         user_name = user_info.get('name', user_email)
         
         if not user_email:
-            logger.warning("No email found in token")
-            return default_user
+            logger.error("No email found in token")
+            return None
         
         # Look up or create user in database
         if mssql_db:

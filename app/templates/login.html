@@ -85,22 +85,18 @@
             
             <div id="error-message" class="error-message" style="display: none;"></div>
             
-            {% if is_development %}
-            <div class="alert alert-warning mb-3">
-                <i class="fas fa-exclamation-triangle"></i>
-                <strong>Development Mode:</strong> Azure credentials ikke konfigureret.
+            <div id="redirect-uri-info" class="alert alert-info mb-3">
+                <strong>Testing Redirect URI:</strong> <span id="current-uri"></span>
             </div>
             
-            <button id="development-login" class="microsoft-btn" style="background: #28a745;">
-                <i class="fas fa-code"></i>
-                Development Login (Bypass)
-            </button>
-            {% else %}
             <button id="microsoft-login" class="microsoft-btn">
                 <i class="fab fa-microsoft"></i>
                 Login med Microsoft 365
             </button>
-            {% endif %}
+            
+            <button id="try-next-uri" class="btn btn-secondary mt-2" style="width: 100%;">
+                Try Next Redirect URI
+            </button>
             
             <div class="loading-spinner">
                 <i class="fas fa-spinner fa-spin"></i>
@@ -117,11 +113,30 @@
         console.log('Login page script starting...');
         
         // MSAL Configuration
+        // Common redirect URIs to test
+        const possibleRedirectUris = [
+            'http://localhost:5000/auth/callback',
+            'http://localhost:5000',
+            'https://localhost:5000/auth/callback', 
+            'https://localhost:5000',
+            window.location.origin + '/auth/callback',
+            window.location.origin,
+            window.location.href,
+            'http://localhost:8080/auth/callback',
+            'http://localhost:3000/auth/callback'
+        ];
+
+        let currentUriIndex = 0;
+        
+        function getCurrentRedirectUri() {
+            return possibleRedirectUris[currentUriIndex];
+        }
+
         const msalConfig = {
             auth: {
                 clientId: '{{ azure_client_id }}',
                 authority: 'https://login.microsoftonline.com/{{ azure_tenant_id }}',
-                redirectUri: window.location.origin + '/auth/callback'
+                redirectUri: getCurrentRedirectUri()
             },
             cache: {
                 cacheLocation: "localStorage",
@@ -134,19 +149,25 @@
             scopes: ["User.Read"]
         };
 
+        // Update URI display
+        function updateUriDisplay() {
+            document.getElementById('current-uri').textContent = getCurrentRedirectUri();
+            console.log('Current redirect URI:', getCurrentRedirectUri());
+        }
+
         // Initialize login functionality
         function initializeLogin() {
             console.log('Initializing login...');
             
             const loginButton = document.getElementById('microsoft-login');
-            const developmentLoginButton = document.getElementById('development-login');
+            const tryNextUriButton = document.getElementById('try-next-uri');
             const errorDiv = document.getElementById('error-message');
             const loadingSpinner = document.querySelector('.loading-spinner');
             
-            console.log('Buttons found:', {
-                loginButton: !!loginButton,
-                developmentLoginButton: !!developmentLoginButton
-            });
+            // Update URI display
+            updateUriDisplay();
+            
+            console.log('Login button found:', !!loginButton);
 
             function showError(message) {
                 errorDiv.textContent = message;
@@ -155,40 +176,28 @@
 
             function showLoading() {
                 if (loginButton) loginButton.disabled = true;
-                if (developmentLoginButton) developmentLoginButton.disabled = true;
                 loadingSpinner.style.display = 'block';
             }
 
             function hideLoading() {
                 if (loginButton) loginButton.disabled = false;
-                if (developmentLoginButton) developmentLoginButton.disabled = false;
                 loadingSpinner.style.display = 'none';
             }
 
-            // Development login handler
-            if (developmentLoginButton) {
-                console.log('Adding development login handler');
-                developmentLoginButton.addEventListener('click', function(e) {
+            // Try next URI handler
+            if (tryNextUriButton) {
+                tryNextUriButton.addEventListener('click', function(e) {
                     e.preventDefault();
-                    console.log('Development login clicked!');
+                    currentUriIndex = (currentUriIndex + 1) % possibleRedirectUris.length;
+                    updateUriDisplay();
                     
-                    showLoading();
-                    errorDiv.style.display = 'none';
+                    // Update MSAL config with new URI
+                    msalConfig.auth.redirectUri = getCurrentRedirectUri();
                     
-                    try {
-                        localStorage.setItem('access_token', 'development-token');
-                        localStorage.setItem('user_info', JSON.stringify({
-                            name: 'Development User',
-                            username: 'dev@localhost'
-                        }));
-                        
-                        console.log('Tokens stored, redirecting...');
-                        window.location.href = '/dashboard';
-                    } catch (error) {
-                        console.error('Development login error:', error);
-                        showError('Development login fejlede.');
-                        hideLoading();
-                    }
+                    showError('Redirect URI changed to: ' + getCurrentRedirectUri());
+                    setTimeout(() => {
+                        errorDiv.style.display = 'none';
+                    }, 3000);
                 });
             }
 
@@ -230,7 +239,7 @@
             const logoutMessage = document.createElement('div');
             logoutMessage.className = 'alert alert-info';
             logoutMessage.textContent = 'Du er nu logget ud.';
-            document.querySelector('.login-card').insertBefore(logoutMessage, document.querySelector('.alert, #development-login, #microsoft-login'));
+            document.querySelector('.login-card').insertBefore(logoutMessage, document.getElementById('microsoft-login'));
             
             setTimeout(() => {
                 logoutMessage.remove();

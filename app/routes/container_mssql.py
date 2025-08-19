@@ -190,7 +190,6 @@ def create_container():
             try:
                 # Create new container type if needed within this transaction
                 if new_container_type:
-                    print(f"DEBUG: Creating new container type: {new_container_type}")
                     
                     cursor.execute("""
                         INSERT INTO [containertype] ([TypeName], [Description], [DefaultCapacity])
@@ -205,7 +204,6 @@ def create_container():
                     type_result = cursor.fetchone()
                     if type_result:
                         container_type_id = type_result[0]
-                        print(f"DEBUG: Created new container type with ID: {container_type_id}")
                         
                         # Log the container type creation
                         cursor.execute("""

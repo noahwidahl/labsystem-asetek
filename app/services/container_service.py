@@ -7,17 +7,14 @@ class ContainerService:
         self.db = DatabaseManager(mysql)
     
     def get_all_containers(self):
-        print("DEBUG: Fetching containers...")
         try:
             # Table name is already known to be 'container'
             cursor = self.mysql.connection.cursor()
             cursor.execute("SHOW TABLES LIKE 'container'")
             table_exists = cursor.fetchone() is not None
             
-            print(f"DEBUG: container table exists: {table_exists}")
             
             if not table_exists:
-                print("DEBUG: No container table exists!")
                 cursor.close()
                 return []
             
@@ -39,11 +36,9 @@ class ContainerService:
             """
             
             result, _ = self.db.execute_query(query)
-            print(f"DEBUG: Container query returned {len(result) if result else 0} rows")
             
             # If no results, return empty list
             if not result:
-                print("DEBUG: No containers found in database")
                 return []
             
             containers = []
@@ -56,18 +51,15 @@ class ContainerService:
                     
                     containers.append(container)
                 except Exception as e:
-                    print(f"DEBUG: Error creating container object: {e}")
                     continue
             
             return containers
         except Exception as e:
-            print(f"DEBUG: Error in get_all_containers: {e}")
             import traceback
             traceback.print_exc()
             return []
             
     def get_container_by_id(self, container_id):
-        print(f"DEBUG: Getting container with ID {container_id}")
         try:
             query = f"""
                 SELECT 
@@ -85,7 +77,6 @@ class ContainerService:
             result, _ = self.db.execute_query(query, (container_id,))
             
             if not result or len(result) == 0:
-                print(f"DEBUG: No container found with ID {container_id}")
                 return None
             
             container = Container.from_db_row(result[0])
@@ -95,7 +86,6 @@ class ContainerService:
             
             return container
         except Exception as e:
-            print(f"DEBUG: Error in get_container_by_id: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -124,7 +114,6 @@ class ContainerService:
             
             return location
         except Exception as e:
-            print(f"DEBUG: Error in get_container_location: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -173,11 +162,9 @@ class ContainerService:
                 containers.append(container_dict)
             
             cursor.close()
-            print(f"DEBUG: Returning {len(containers)} available containers")
             
             return containers
         except Exception as e:
-            print(f"DEBUG: Error in get_available_containers: {e}")
             import traceback
             traceback.print_exc()
             return []
@@ -237,7 +224,6 @@ class ContainerService:
             
             return container
         except Exception as e:
-            print(f"DEBUG: Error in _add_container_info: {e}")
             # Make sure we still return the container object even with errors
             container.type_name = 'Standard'
             container.sample_count = 0
@@ -271,20 +257,16 @@ class ContainerService:
             exists = cursor.fetchone()[0] > 0
             
             if not exists:
-                print(f"DEBUG: Generated unique container barcode: {candidate_barcode}")
                 return candidate_barcode
             
-            print(f"DEBUG: Barcode {candidate_barcode} already exists, trying next candidate")
             attempt += 1
         
         # If we couldn't find a unique barcode after max_attempts, use timestamp fallback
         import time
         timestamp_barcode = f"CNT-{int(time.time())}"
-        print(f"DEBUG: Using timestamp-based barcode as fallback: {timestamp_barcode}")
         return timestamp_barcode
     
     def create_container(self, container_data, user_id):
-        print(f"DEBUG: create_container called with data: {container_data}")
         # Extract key data for debugging
         debug_info = {
             'description': container_data.get('description'),
@@ -294,7 +276,6 @@ class ContainerService:
             'containerTypeId': container_data.get('containerTypeId'),
             'newContainerType': container_data.get('newContainerType')
         }
-        print(f"DEBUG: Key container data: {debug_info}")
         try:
             with self.db.transaction() as cursor:
                 # Use 'container' table
@@ -308,15 +289,12 @@ class ContainerService:
                         'error': 'Container table does not exist'
                     }
                 
-                print(f"DEBUG: Using table name: {table_name}")
                 container = Container.from_dict(container_data)
                 
                 # Print container object
-                print(f"DEBUG: Container object created: {container.__dict__}")
                 
                 # Get a location ID from various potential field names
                 location_id = container_data.get('locationId') or container_data.get('containerLocationId') or container_data.get('storageLocation')
-                print(f"DEBUG: Looking for location ID in data: {location_id}")
                 
                 if not location_id:
                     # Try to find the default location (1.1.1)
@@ -328,14 +306,11 @@ class ContainerService:
                     result = cursor.fetchone()
                     if result:
                         location_id = result[0]
-                        print(f"DEBUG: Using default location ID: {location_id}")
                     else:
-                        print("DEBUG: No default location found. This might cause container creation to fail.")
                 
                 # Check if we need to create a new container type
                 new_container_type = container_data.get('newContainerType')
                 if new_container_type:
-                    print(f"DEBUG: Creating new container type: {new_container_type}")
                     
                     # Insert the new container type
                     cursor.execute("""
@@ -353,7 +328,6 @@ class ContainerService:
                     
                     # Get the new container type ID
                     container_type_id = cursor.lastrowid
-                    print(f"DEBUG: Created new container type with ID: {container_type_id}")
                     
                     # Update the container object with the new type ID
                     container.container_type_id = container_type_id
@@ -361,7 +335,6 @@ class ContainerService:
                     # IMPORTANT: Always use the new container type's capacity for the container
                     # This fixes the issue where capacity validation was preventing progression
                     container.capacity = new_container_type.get('capacity')
-                    print(f"DEBUG: Using capacity {container.capacity} from new container type")
                     
                     # Log the activity
                     cursor.execute("""
@@ -398,11 +371,9 @@ class ContainerService:
                         type_result = cursor.fetchone()
                         if type_result and type_result[0]:
                             capacity = type_result[0]
-                            print(f"DEBUG: Using default capacity {capacity} from existing container type {container.container_type_id}")
                         else:
                             # If no default capacity is found, use a reasonable default
                             capacity = 100
-                            print(f"DEBUG: No DefaultCapacity found for container type {container.container_type_id}, using standard default {capacity}")
                     
                     # Verify capacity is a valid number and greater than zero
                     try:
@@ -410,13 +381,10 @@ class ContainerService:
                             capacity = int(capacity)
                             if capacity <= 0:
                                 capacity = 100
-                                print(f"DEBUG: Invalid capacity value ({capacity}), using standard default 100")
                         else:
                             capacity = 100
-                            print(f"DEBUG: No capacity specified, using standard default 100")
                     except (ValueError, TypeError):
                         capacity = 100
-                        print(f"DEBUG: Non-numeric capacity value, using standard default 100")
                     
                     # Generate unique container barcode
                     container_barcode = self._generate_unique_container_barcode(cursor)
@@ -451,17 +419,14 @@ class ContainerService:
                     # If no capacity is specified, use a reasonable default
                     if capacity is None or capacity == 0:
                         capacity = 100
-                        print(f"DEBUG: No container type or capacity specified, using standard default capacity {capacity}")
                     
                     # Verify capacity is a valid number and greater than zero
                     try:
                         capacity = int(capacity)
                         if capacity <= 0:
                             capacity = 100
-                            print(f"DEBUG: Invalid capacity value ({capacity}), using standard default 100")
                     except (ValueError, TypeError):
                         capacity = 100
-                        print(f"DEBUG: Non-numeric capacity value, using standard default 100")
                     
                     # Generate unique container barcode
                     container_barcode = self._generate_unique_container_barcode(cursor)
@@ -489,7 +454,6 @@ class ContainerService:
                     ))
                 
                 container_id = cursor.lastrowid
-                print(f"DEBUG: Container created with ID: {container_id}")
                 
                 # Log the activity
                 cursor.execute("""
@@ -507,7 +471,6 @@ class ContainerService:
                 ))
                 
                 # Automatic printing is disabled - all printing handled by frontend
-                print(f"DEBUG: Container {container_id} created, automatic printing disabled")
                 
                 result = {
                     'success': True,
@@ -516,7 +479,6 @@ class ContainerService:
                 
                 return result
         except Exception as e:
-            print(f"DEBUG: Error in create_container: {e}")
             import traceback
             traceback.print_exc()
             return {
@@ -525,7 +487,6 @@ class ContainerService:
             }
             
     def add_sample_to_container(self, container_id, sample_id, amount=1, user_id=None, force_add=False, source=''):
-        print(f"DEBUG: add_sample_to_container called with container_id={container_id}, sample_id={sample_id}, amount={amount}, force_add={force_add}")
         # Note: This function now MOVES samples to containers rather than adding them
         try:
             with self.db.transaction() as cursor:
@@ -623,7 +584,6 @@ class ContainerService:
                     cursor.execute("""
                         UPDATE container SET LocationID = %s WHERE ContainerID = %s
                     """, (sample_location_id, container_id))
-                    print(f"DEBUG: Updated container {container_id} location to {sample_location_id}")
                 
                 # For container details "add" functionality, prevent moving between containers
                 # Only allow adding samples from direct storage
@@ -639,12 +599,10 @@ class ContainerService:
                         DELETE FROM containersample 
                         WHERE SampleStorageID = %s AND ContainerID = %s
                     """, (storage_id, original_container_id))
-                    print(f"DEBUG: Removed sample from original container {original_container_id}")
                 
                 # Check if containersample table exists, create if it doesn't
                 cursor.execute("SHOW TABLES LIKE 'containersample'")
                 if cursor.fetchone() is None:
-                    print("DEBUG: Creating containersample table")
                     cursor.execute("""
                         CREATE TABLE containersample (
                             ContainerSampleID INT AUTO_INCREMENT PRIMARY KEY,
@@ -682,7 +640,6 @@ class ContainerService:
                         WHERE StorageID = %s
                     """, (container_id, storage_id))
                     
-                    print(f"DEBUG: Sample moved to container {container_id} (all units). Updated location to match container.")
                 else:
                     # Moving SOME items - create a new sample and reduce the original
                     # First, reduce the amount in both sample and samplestorage tables
@@ -764,7 +721,6 @@ class ContainerService:
                         WHERE ContainerSampleID = %s
                     """, (new_storage_id, container_sample_id))
                     
-                    print(f"DEBUG: Created new sample {new_sample_id} for {amount} units moved to container {container_id}")
                     
                 # Legacy comment for context:
                 # IMPORTANT: We now DO reduce the sample amount when splitting. This ensures accurate tracking
@@ -801,9 +757,7 @@ class ContainerService:
                     """, (original_container_id,))
                     remaining_samples = cursor.fetchone()[0]
                     original_container_has_samples = remaining_samples > 0
-                    print(f"DEBUG: Original container {original_container_id} has {remaining_samples} samples remaining, has_samples={original_container_has_samples}")
                 else:
-                    print(f"DEBUG: No original container or same container (original={original_container_id}, new={container_id})")
                 
                 # Note: Container label printing is now handled by frontend prompt
                 # This allows user to choose whether to print or skip
@@ -815,11 +769,9 @@ class ContainerService:
                     'original_container_id': original_container_id,
                     'original_container_has_samples': original_container_has_samples
                 }
-                print(f"DEBUG: Returning move result: {result}")
                 return result
                 
         except Exception as e:
-            print(f"DEBUG: Error in add_sample_to_container: {e}")
             import traceback
             traceback.print_exc()
             return {
@@ -829,7 +781,6 @@ class ContainerService:
             
     def delete_container(self, container_id, user_id):
         try:
-            print(f"DEBUG: Deleting container {container_id}")
             
             # Check if the container exists
             cursor = self.mysql.connection.cursor()
@@ -892,7 +843,6 @@ class ContainerService:
                 'message': f'Container {container_id} deleted successfully'
             }
         except Exception as e:
-            print(f"DEBUG: Error in delete_container: {e}")
             import traceback
             traceback.print_exc()
             return {
@@ -902,7 +852,6 @@ class ContainerService:
             
     def delete_container_type(self, container_type_id, user_id):
         try:
-            print(f"DEBUG: Deleting container type {container_type_id}")
             
             # First check if the container type exists
             cursor = self.mysql.connection.cursor()
@@ -1002,7 +951,6 @@ class ContainerService:
                 'message': f'Container type "{type_name}" deleted successfully'
             }
         except Exception as e:
-            print(f"DEBUG: Error in delete_container_type: {e}")
             import traceback
             traceback.print_exc()
             return {
